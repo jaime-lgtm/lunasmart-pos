@@ -227,7 +227,33 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 @media print{ body *{visibility:hidden;} #printArea,#printArea *{visibility:visible;} #printArea{position:absolute;left:0;top:0;width:100%;padding:20px;} }
 
 .det-list{margin:10px 0;max-height:320px;overflow:auto}.det-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(0,0,0,.08)}.det-q{font-weight:700;color:var(--terracota);min-width:34px}.det-n{flex:1}.det-note{font-size:.8rem;color:#8a7a68;font-style:italic;margin-top:2px}.det-p{font-weight:600;white-space:nowrap}.det-tot{display:flex;justify-content:space-between;padding:5px 0;font-size:.95rem}.det-grand{font-weight:800;font-size:1.15rem;border-top:2px solid var(--cafe-medio);margin-top:6px;padding-top:10px}
-/* ===== KDS / Monitor de estacion ===== */.kds-filter{display:flex;gap:8px;margin:10px 0 16px;flex-wrap:wrap}.kds-f{padding:9px 18px;border-radius:20px;background:var(--beige-claro);color:var(--cafe-medio);font-weight:600;font-size:14px;border:1px solid var(--linea)}.kds-f.on{background:var(--terracota);color:#fff;border-color:var(--terracota)}.kds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.kds-card{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px;border-top:5px solid var(--gris)}.kds-card.barra{border-top-color:#2f6f9e}.kds-card.cocina{border-top-color:var(--terracota)}.kdc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}.kdc-folio{font-weight:800;font-size:1.15rem;color:var(--cafe)}.kdc-area{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:10px;background:var(--beige-claro);color:var(--cafe-medio)}.kdc-meta{font-size:.82rem;color:var(--gris);margin-bottom:10px}.kdc-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)}.kdc-q{font-weight:800;color:var(--terracota);min-width:30px}.kdc-n{flex:1;font-weight:600}.kdc-note{font-size:.78rem;color:#8a7a68;font-style:italic;font-weight:400}.kdc-btn{margin-top:12px;width:100%;padding:12px;border-radius:10px;background:var(--verde-ok);color:#fff;font-weight:700;font-size:15px}</style>
+/* ===== KDS / Monitor de estacion ===== */.kds-filter{display:flex;gap:8px;margin:10px 0 16px;flex-wrap:wrap}.kds-f{padding:9px 18px;border-radius:20px;background:var(--beige-claro);color:var(--cafe-medio);font-weight:600;font-size:14px;border:1px solid var(--linea)}.kds-f.on{background:var(--terracota);color:#fff;border-color:var(--terracota)}.kds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.kds-card{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px;border-top:5px solid var(--gris)}.kds-card.barra{border-top-color:#2f6f9e}.kds-card.cocina{border-top-color:var(--terracota)}.kdc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}.kdc-folio{font-weight:800;font-size:1.15rem;color:var(--cafe)}.kdc-area{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:10px;background:var(--beige-claro);color:var(--cafe-medio)}.kdc-meta{font-size:.82rem;color:var(--gris);margin-bottom:10px}.kdc-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)}.kdc-q{font-weight:800;color:var(--terracota);min-width:30px}.kdc-n{flex:1;font-weight:600}.kdc-note{font-size:.78rem;color:#8a7a68;font-style:italic;font-weight:400}.kdc-btn{margin-top:12px;width:100%;padding:12px;border-radius:10px;background:var(--verde-ok);color:#fff;font-weight:700;font-size:15px}
+/* --- descripcion en tiles --- */
+.prod-btn{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
+.prod-btn .pd{ font-size:11px; color:#7a6650; line-height:1.2; margin:2px 0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.prod-btn .pmods{ font-size:10px; color:var(--terracota); font-weight:600; }
+.cart-line .cmods{ font-size:11px; color:var(--terracota); margin-top:2px; }
+.kdc-mods{ font-size:12px; color:#b14618; font-weight:600; margin-top:2px; }
+/* --- modal de modificadores --- */
+.mods-backdrop{ position:fixed; inset:0; background:rgba(28,18,10,.55); display:none; align-items:flex-end; justify-content:center; z-index:9000; }
+.mods-backdrop.show{ display:flex; }
+.mods-box{ background:#fff; width:100%; max-width:520px; max-height:88vh; border-radius:18px 18px 0 0; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 -8px 30px rgba(0,0,0,.3); }
+@media(min-width:600px){ .mods-backdrop{ align-items:center; } .mods-box{ border-radius:18px; } }
+.mods-head{ padding:18px 20px 12px; background:var(--cafe); color:var(--beige); }
+.mods-head .mh-t{ font-size:19px; font-weight:700; }
+.mods-head .mh-d{ font-size:13px; opacity:.85; margin-top:4px; }
+.mods-body{ padding:8px 20px; overflow-y:auto; flex:1; }
+.mgroup{ padding:12px 0; border-bottom:1px solid #eee; }
+.mg-l{ font-weight:700; color:var(--cafe-medio); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.mg-l .req{ font-size:10px; background:var(--terracota); color:#fff; padding:2px 7px; border-radius:10px; font-weight:600; }
+.mg-l .opc{ font-size:10px; background:#e8d6b9; color:var(--cafe-medio); padding:2px 7px; border-radius:10px; font-weight:600; }
+.mopt{ display:flex; justify-content:space-between; align-items:center; padding:9px 0; font-size:15px; cursor:pointer; }
+.mopt input{ margin-right:9px; transform:scale(1.2); accent-color:var(--terracota); }
+.mopt .op{ color:var(--terracota); font-weight:600; font-size:14px; }
+.mods-foot{ padding:14px 20px calc(14px + env(safe-area-inset-bottom)); border-top:1px solid #eee; display:flex; gap:10px; }
+.mods-foot .btn-ghost{ flex:0 0 auto; padding:14px 18px; border:1px solid #ccc; background:#fff; border-radius:12px; font-size:15px; }
+.mods-foot .btn-primary{ flex:1; padding:14px; background:var(--terracota); color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:700; }
+</style>
 </head>
 <body>
 <div id="toast"></div>
@@ -321,6 +347,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 </div>
 
 <div id="modalHost"></div>
+<div id="modsBackdrop" class="mods-backdrop"><div id="modsBox" class="mods-box"></div></div>
 
 <script>
 /* ============================================================
@@ -339,16 +366,50 @@ var SUCURSALES = [
 
 var CATALOG = {
   cafeteria:[
-    {id:'c1',name:'Espresso',menu:'Bebidas',sub:'Cafe Caliente',price:38},
-    {id:'c2',name:'Americano',menu:'Bebidas',sub:'Cafe Caliente',price:42},
-    {id:'c3',name:'Capuccino',menu:'Bebidas',sub:'Cafe Caliente',price:55},
-    {id:'c4',name:'Latte',menu:'Bebidas',sub:'Cafe Caliente',price:58},
-    {id:'c5',name:'Frappe Moka',menu:'Bebidas',sub:'Frappes',price:72},
-    {id:'c6',name:'Cold Brew',menu:'Bebidas',sub:'Cafe Frio',price:60},
-    {id:'c7',name:'Chai Latte',menu:'Bebidas',sub:'Especiales',price:62},
-    {id:'c8',name:'Rebanada de pastel',menu:'Alimentos',sub:'Reposteria',price:75},
-    {id:'c9',name:'Galleta artesanal',menu:'Alimentos',sub:'Reposteria',price:35},
-    {id:'c10',name:'Sandwich jamon y queso',menu:'Alimentos',sub:'Salados',price:85}
+    {id:'cc1',name:'Espresso',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Shot concentrado de café de especialidad. Grano Veracruz tostado artesanalmente.',price:35,sized:true,prices:{'Sencillo':35,'Doble':50}},
+    {id:'cc2',name:'Espresso Americano',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Espresso con balance perfecto de agua caliente.',price:45,sized:true,prices:{'Chico':45,'Mayor':50},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Sin leche',p:0},{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Tipo de grano',req:true,type:'single',opts:[{l:'Espresso',p:0},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc3',name:'Cappuccino',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Espresso con leche vaporizada y espuma cremosa.',price:60,sized:true,prices:{'Chico':60,'Mayor':70},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Sabor / Jarabe',req:false,type:'single',opts:[{l:'Sin jarabe',p:0},{l:'Avellana',p:15},{l:'Coconut',p:15},{l:'Crema Irlandesa',p:15},{l:'Vainilla',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc4',name:'Latte',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Espresso suave con leche cremosa. El clásico que nunca falla.',price:60,sized:true,prices:{'Chico':60,'Mayor':70},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Sabor / Jarabe',req:false,type:'single',opts:[{l:'Sin jarabe',p:0},{l:'Avellana',p:15},{l:'Coconut',p:15},{l:'Crema Irlandesa',p:15},{l:'Vainilla',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc5',name:'Mocha',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Espresso con chocolate premium y leche cremosa.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc6',name:'Caramel Macchiato',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Capas de vainilla, leche, espresso y caramelo.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc7',name:'Iced Caramel Macchiato',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Caramel Macchiato sobre hielo. Refrescante.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc8',name:'Iced Mocha',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Mocha sobre hielo. Chocolate, espresso y leche fría.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc9',name:'Iced Espresso',menu:'Bebidas',sub:'Cafés',area:'barra',desc:'Espresso sobre hielo. Refrescante y con carácter.',price:70,sized:true,prices:{'Chico':70,'Mayor':80},mods:[{label:'Leche',req:false,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Sabor / Jarabe',req:false,type:'single',opts:[{l:'Sin jarabe',p:0},{l:'Avellana',p:15},{l:'Coconut',p:15},{l:'Crema Irlandesa',p:15},{l:'Vainilla',p:15}]},{label:'Tipo de grano',req:true,type:'single',opts:[{l:'Espresso',p:0},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc10',name:'Frappé Clásico',menu:'Bebidas',sub:'Frappés',area:'barra',desc:'Cajeta · Capuccino · Caramel Macchiato · Milky Way · Snickers · Oreo · White Mocha · M&Ms',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Sabor',req:true,type:'single',opts:[{l:'Cajeta',p:0},{l:'Capuccino',p:0},{l:'Caramel Macchiato',p:0},{l:'Milky Way',p:0},{l:'Snickers',p:0},{l:'Oreo',p:0},{l:'White Mocha',p:0},{l:'M&Ms',p:0}]},{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Con cafeína?',req:true,type:'single',opts:[{l:'Con café',p:0},{l:'Descafeinado',p:0},{l:'Sin cafeína',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc11',name:'Frappé Premium',menu:'Bebidas',sub:'Frappés',area:'barra',desc:'Brownie · Nutella · Mazapán · Ferrero Rocher · Gansito',price:94,sized:true,prices:{'Chico':94,'Mayor':104},mods:[{label:'Sabor',req:true,type:'single',opts:[{l:'Brownie',p:0},{l:'Nutella',p:0},{l:'Mazapán',p:0},{l:'Ferrero Rocher',p:0},{l:'Gansito',p:0}]},{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Con cafeína?',req:true,type:'single',opts:[{l:'Con café',p:0},{l:'Descafeinado',p:0},{l:'Sin cafeína',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc12',name:'Frappé Sin Cafeína',menu:'Bebidas',sub:'Frappés',area:'barra',desc:'Spiced Chai · Chai sin azúcar · Vainilla Chai · Green Tea Matcha · Taro',price:85,sized:true,prices:{'Chico':85,'Mayor':95},mods:[{label:'Sabor',req:true,type:'single',opts:[{l:'Spiced Chai',p:0},{l:'Chai sin azúcar',p:0},{l:'Vainilla Chai',p:0},{l:'Green Tea Matcha',p:0},{l:'Taro',p:0}]},{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc13',name:'Smoothie Mango',menu:'Bebidas',sub:'Smoothies',area:'barra',desc:'Mango natural. El toque norteño con chamoy y tajín.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Topping',req:false,type:'single',opts:[{l:'No gracias',p:0},{l:'Chamoy y Tajín',p:0},{l:'Solo Chamoy',p:0},{l:'Solo Tajín',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc14',name:'Smoothie Berries',menu:'Bebidas',sub:'Smoothies',area:'barra',desc:'Mix de frutos rojos naturales.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Topping',req:false,type:'single',opts:[{l:'No gracias',p:0},{l:'Chamoy y Tajín',p:0},{l:'Solo Chamoy',p:0},{l:'Solo Tajín',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc15',name:'Smoothie Fresa',menu:'Bebidas',sub:'Smoothies',area:'barra',desc:'Fresa natural.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Topping',req:false,type:'single',opts:[{l:'No gracias',p:0},{l:'Chamoy y Tajín',p:0},{l:'Solo Chamoy',p:0},{l:'Solo Tajín',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc16',name:'Malteada Cookies & Cream',menu:'Bebidas',sub:'Malteadas',area:'barra',desc:'Cremosa con galleta Oreo integrada.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc17',name:'Malteada Chocolate',menu:'Bebidas',sub:'Malteadas',area:'barra',desc:'Rich, cremosa y con todo el sabor.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc18',name:'Malteada Fresa',menu:'Bebidas',sub:'Malteadas',area:'barra',desc:'Fresa natural en forma de malteada.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc19',name:'Malteada Vainilla',menu:'Bebidas',sub:'Malteadas',area:'barra',desc:'Suave, cremosa y reconfortante.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc20',name:'Banana Cherry',menu:'Bebidas',sub:'Tisanas',area:'barra',desc:'Cerezas y plátano. Refrescante y frutal.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'¿Cómo deseas la bebida?',req:true,type:'single',opts:[{l:'Helada',p:0},{l:'Caliente',p:0}]}]},
+    {id:'cc21',name:'Locura de Moras',menu:'Bebidas',sub:'Tisanas',area:'barra',desc:'Frutos rojos. Infusión color vino tinto.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'¿Cómo deseas la bebida?',req:true,type:'single',opts:[{l:'Helada',p:0},{l:'Caliente',p:0}]}]},
+    {id:'cc22',name:'Maracuya',menu:'Bebidas',sub:'Tisanas',area:'barra',desc:'Manzana, maracuyá, papaya y mango.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'¿Cómo deseas la bebida?',req:true,type:'single',opts:[{l:'Helada',p:0},{l:'Caliente',p:0}]}]},
+    {id:'cc23',name:'Fresa Kiwi',menu:'Bebidas',sub:'Tisanas',area:'barra',desc:'Fresa, kiwi, manzana, jamaica y grosella.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'¿Cómo deseas la bebida?',req:true,type:'single',opts:[{l:'Helada',p:0},{l:'Caliente',p:0}]}]},
+    {id:'cc24',name:'Té Manzanilla',menu:'Bebidas',sub:'Tés',area:'barra',desc:'Herbal de manzanilla Euro Téa.',price:65,sized:true,prices:{'Chico':65,'Mayor':75},mods:[{label:'¿Cómo deseas la bebida?',req:true,type:'single',opts:[{l:'Helada',p:0},{l:'Caliente',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc25',name:'Té Negro',menu:'Bebidas',sub:'Tés',area:'barra',desc:'Assam, Ceilán y Kenia. Robusto.',price:65,sized:true,prices:{'Chico':65,'Mayor':75},mods:[{label:'¿Cómo deseas la bebida?',req:true,type:'single',opts:[{l:'Helada',p:0},{l:'Caliente',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc26',name:'Té Verde',menu:'Bebidas',sub:'Tés',area:'barra',desc:'Camelia Sinensis tradicional.',price:65,sized:true,prices:{'Chico':65,'Mayor':75},mods:[{label:'¿Cómo deseas la bebida?',req:true,type:'single',opts:[{l:'Helada',p:0},{l:'Caliente',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
+    {id:'cc27',name:'Soda Italiana',menu:'Bebidas',sub:'Sodas Italianas',area:'barra',desc:'Cereza · Fresa · Kiwi · Mango · Limón · Sandía',price:73,sized:true,prices:{'Chico':73,'Mayor':78},mods:[{label:'Sabor',req:true,type:'single',opts:[{l:'Cereza',p:0},{l:'Fresa',p:0},{l:'Kiwi',p:0},{l:'Mango',p:0},{l:'Limón',p:0},{l:'Sandía',p:0}]}]},
+    {id:'cc28',name:'Chilaquiles',menu:'Alimentos',sub:'Desayuno',area:'cocina',desc:'Salsa verde o roja, queso panela, crema, cebolla, cilantro. Con pollo +$15.',price:95,sized:false,prices:{'Único':95},mods:[{label:'Acompañamientos',req:false,type:'multi',opts:[{l:'Queso panela',p:0},{l:'Crema',p:0},{l:'Cebolla',p:0},{l:'Cilantro',p:0}]},{label:'Salsa',req:true,type:'single',opts:[{l:'Verde',p:0},{l:'Roja',p:0}]},{label:'Con pollo',req:false,type:'single',opts:[{l:'Sin pollo',p:0},{l:'Con pollo',p:15}]}]},
+    {id:'cc29',name:'Waffles',menu:'Alimentos',sub:'Desayuno',area:'cocina',desc:'Fresa o plátano, nuez, azúcar glass y topping.',price:89,sized:false,prices:{'Único':89},mods:[{label:'Topping / Salsa',req:false,type:'single',opts:[{l:'Miel de maple',p:0},{l:'Lechera',p:0},{l:'Nutella',p:0},{l:'Chocolate',p:0},{l:'Cajeta',p:0}]},{label:'Fruta',req:true,type:'single',opts:[{l:'Fresa',p:0},{l:'Plátano',p:0}]}]},
+    {id:'cc30',name:'Waffles Lotus',menu:'Alimentos',sub:'Desayuno',area:'cocina',desc:'Waffle esponjoso con crema de Lotus Biscoff, fresas, plátano y chispas de galleta. Una experiencia dulce única.',price:119,sized:false,prices:{'Único':119},mods:[{label:'Fruta',req:true,type:'single',opts:[{l:'Fresa',p:0},{l:'Plátano',p:0},{l:'Ambas',p:0}]}]},
+    {id:'cc31',name:'Croissbait o Bisqbite',menu:'Alimentos',sub:'Desayuno',area:'cocina',desc:'Croissant o biscuit con carne, huevo y queso + papas hash brown.',price:85,sized:false,prices:{'Único':85},mods:[{label:'¿Deseas aderezo?',req:false,type:'single',opts:[{l:'Sin aderezo',p:0},{l:'Ranch',p:0},{l:'Chipotle',p:0}]},{label:'Tipo de pan',req:true,type:'single',opts:[{l:'Croissbait (Croissant)',p:0},{l:'Bisqbite (Biscuit)',p:0}]}]},
+    {id:'cc32',name:'Ensalada César',menu:'Alimentos',sub:'Snacks',area:'cocina',desc:'Lechugas, pollo, queso parmesano y crutones.',price:139,sized:false,prices:{'Único':139},mods:[{label:'Aderezo',req:true,type:'single',opts:[{l:'Ranch',p:0},{l:'Chipotle',p:0}]}]},
+    {id:'cc33',name:'Ensalada Chainis',menu:'Alimentos',sub:'Snacks',area:'cocina',desc:'Lechugas, arándanos, nuez tostada, queso feta y manzana verde.',price:154,sized:false,prices:{'Único':154},mods:[{label:'Aderezo',req:true,type:'single',opts:[{l:'Ranch',p:0},{l:'Chipotle',p:0}]}]},
+    {id:'cc34',name:'Ensalada Ranch-ito',menu:'Alimentos',sub:'Snacks',area:'cocina',desc:'Lechugas, tocino, arándanos, nuez caramelizada y queso de cabra.',price:154,sized:false,prices:{'Único':154},mods:[{label:'Aderezo',req:true,type:'single',opts:[{l:'Ranch',p:0},{l:'Chipotle',p:0}]}]},
+    {id:'cc35',name:'Panini Clásico',menu:'Alimentos',sub:'Snacks',area:'cocina',desc:'Jamón de pavo ahumado, queso manchego, lechuga, tomate y cebolla + papas Lays.',price:139,sized:false,prices:{'Único':139},mods:[{label:'Aderezo',req:false,type:'single',opts:[{l:'Sin aderezo',p:0},{l:'Ranch',p:0},{l:'Chipotle',p:0}]}]},
+    {id:'cc36',name:'Pizzanini',menu:'Alimentos',sub:'Snacks',area:'cocina',desc:'Salsa de tomate, pepperoni, queso manchego + papas Lays.',price:149,sized:false,prices:{'Único':149},mods:[{label:'Aderezo',req:false,type:'single',opts:[{l:'Sin aderezo',p:0},{l:'Ranch',p:0},{l:'Chipotle',p:0}]}]},
+    {id:'cc37',name:'Baguette',menu:'Alimentos',sub:'Snacks',area:'cocina',desc:'Ranch o chipotle, lechuga, tomate, cebolla, jamón de pavo y queso manchego.',price:79,sized:false,prices:{'Único':79},mods:[{label:'Aderezo',req:true,type:'single',opts:[{l:'Ranch',p:0},{l:'Chipotle',p:0}]}]},
+    {id:'cc38',name:'Mini Pizza',menu:'Alimentos',sub:'Snacks',area:'cocina',desc:'Pizza de pepperoni, quesos o carne.',price:50,sized:false,prices:{'Único':50},mods:[{label:'Topping',req:true,type:'single',opts:[{l:'Pepperoni',p:0},{l:'Quesos',p:0},{l:'Carne',p:0}]}]},
+    {id:'cc39',name:'Café + Croissbait',menu:'Alimentos',sub:'Combos',area:'cocina',desc:'Americano del día + Croissbait o Bisqbite + papa hash brown.',price:115,sized:false,prices:{'Único':115},mods:[{label:'Complemento Café',req:false,type:'multi',opts:[{l:'Azúcar refinada',p:0},{l:'Stevia',p:0},{l:'Splenda',p:0},{l:'Crema',p:0}]},{label:'¿Deseas aderezo?',req:false,type:'single',opts:[{l:'Sin aderezo',p:0},{l:'Ranch',p:0},{l:'Chipotle',p:0}]}]},
+    {id:'cc40',name:'Café + Waffle',menu:'Alimentos',sub:'Combos',area:'cocina',desc:'Americano + waffle + mantequilla y miel.',price:120,sized:false,prices:{'Único':120},mods:[{label:'Complemento Café',req:false,type:'multi',opts:[{l:'Azúcar refinada',p:0},{l:'Stevia',p:0},{l:'Splenda',p:0},{l:'Crema',p:0}]},{label:'Topping Waffle',req:false,type:'single',opts:[{l:'Miel de maple',p:0},{l:'Lechera',p:0},{l:'Nutella',p:0},{l:'Chocolate',p:0},{l:'Cajeta',p:0}]},{label:'Fruta Waffle',req:true,type:'single',opts:[{l:'Fresa',p:0},{l:'Plátano',p:0},{l:'Ambas',p:0}]}]},
+    {id:'cc41',name:'Café + Chilaquiles',menu:'Alimentos',sub:'Combos',area:'cocina',desc:'Americano + chilaquiles salsa verde o roja.',price:130,sized:false,prices:{'Único':130},mods:[{label:'Complemento Café',req:false,type:'multi',opts:[{l:'Azúcar refinada',p:0},{l:'Stevia',p:0},{l:'Splenda',p:0},{l:'Crema',p:0}]},{label:'Complementos Chilaquiles',req:false,type:'multi',opts:[{l:'Crema',p:0},{l:'Cebolla',p:0},{l:'Cilantro',p:0}]},{label:'Salsa',req:true,type:'single',opts:[{l:'Verde',p:0},{l:'Roja',p:0}]}]},
+    {id:'cc42',name:'Muffin de Plátano',menu:'Alimentos',sub:'Postres',area:'cocina',desc:'Esponjoso muffin de plátano con streusel de nuez. Perfecto para acompañar tu café.',price:45,sized:false,prices:{'Único':45}},
+    {id:'cc43',name:'Galleta Chispas de Chocolate',menu:'Alimentos',sub:'Postres',area:'cocina',desc:'Galleta artesanal con chispas de chocolate semi-amargo. Crujiente por fuera, suave por dentro.',price:37,sized:false,prices:{'Único':37}},
+    {id:'cc44',name:'Crepa',menu:'Alimentos',sub:'Postres',area:'cocina',desc:'Deliciosa crepa con fruta a elegir y topping de tu preferencia.',price:88,sized:false,prices:{'Único':88},mods:[{label:'Topping Fruta',req:true,type:'single',opts:[{l:'Plátano',p:0},{l:'Fresa',p:0},{l:'Ambas',p:0}]},{label:'Topping Salsa',req:true,type:'single',opts:[{l:'Nutella',p:0},{l:'Cajeta',p:0},{l:'Lechera',p:0},{l:'Chocolate',p:0}]}]}
   ],
   grano:[
     {id:'g1',name:'Cafe Piedras Negras 250g',menu:'Cafe en Grano',sub:'Grano',price:150},
@@ -557,6 +618,85 @@ function addToCart(p){
   if(l){ l.qty++; } else { state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:p.price,qty:1,note:'',area:areaDe(p)}); }
   renderTopbar(); renderCart();
 }
+
+var _modP=null, _modSize=null, _modSel={};
+function openMods(p){
+  _modP=p; _modSel={}; _modSize=null;
+  if(p.sized && p.prices){ _modSize=Object.keys(p.prices)[0]; }
+  (p.mods||[]).forEach(function(g,gi){
+    if(g.req && g.opts && g.opts.length){ _modSel[gi]= (g.type==='multi')? [0] : 0; }
+    else { _modSel[gi]= (g.type==='multi')? [] : -1; }
+  });
+  renderMods();
+  document.getElementById('modsBackdrop').classList.add('show');
+}
+function closeMods(){ document.getElementById('modsBackdrop').classList.remove('show'); _modP=null; }
+function modsTotal(){
+  var p=_modP; if(!p) return 0;
+  var base = (p.sized && p.prices && _modSize!=null)? p.prices[_modSize] : p.price;
+  var extra=0;
+  (p.mods||[]).forEach(function(g,gi){
+    var sel=_modSel[gi];
+    if(g.type==='multi'){ (sel||[]).forEach(function(oi){ extra+= (g.opts[oi]&&g.opts[oi].p)||0; }); }
+    else if(sel>-1 && g.opts[sel]){ extra+= g.opts[sel].p||0; }
+  });
+  return base+extra;
+}
+function renderMods(){
+  var p=_modP; if(!p) return;
+  var h='<div class="mods-head"><div class="mh-t">'+esc(p.name)+'</div>'+(p.desc?'<div class="mh-d">'+esc(p.desc)+'</div>':'')+'</div>';
+  h+='<div class="mods-body">';
+  if(p.sized && p.prices){
+    h+='<div class="mgroup"><div class="mg-l">Tama&ntilde;o<span class="req">Requerido</span></div>';
+    Object.keys(p.prices).forEach(function(sn){
+      h+='<label class="mopt"><span><input type="radio" name="msize" data-sz="'+esc(sn)+'"'+(_modSize===sn?' checked':'')+'> '+esc(sn)+'</span><span class="op">'+money(p.prices[sn])+'</span></label>';
+    });
+    h+='</div>';
+  }
+  (p.mods||[]).forEach(function(g,gi){
+    h+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
+    (g.opts||[]).forEach(function(o,oi){
+      var checked;
+      if(g.type==='multi'){ checked=(_modSel[gi]||[]).indexOf(oi)>-1; }
+      else { checked=_modSel[gi]===oi; }
+      var inp = g.type==='multi'?'checkbox':'radio';
+      var extra = o.p? '<span class="op">+'+money(o.p)+'</span>':'';
+      h+='<label class="mopt"><span><input type="'+inp+'" name="mg'+gi+'" data-gi="'+gi+'" data-oi="'+oi+'"'+(checked?' checked':'')+'> '+esc(o.l)+'</span>'+extra+'</label>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  h+='<div class="mods-foot"><button class="btn-ghost" id="modsCancel">Cancelar</button><button class="btn-primary" id="modsAdd">Agregar &middot; <span id="modsTot">'+money(modsTotal())+'</span></button></div>';
+  var box=document.getElementById('modsBox'); box.innerHTML=h;
+  box.querySelectorAll('input[name="msize"]').forEach(function(r){ r.addEventListener('change',function(){ _modSize=r.dataset.sz; document.getElementById('modsTot').textContent=money(modsTotal()); }); });
+  (p.mods||[]).forEach(function(g,gi){
+    box.querySelectorAll('input[name="mg'+gi+'"]').forEach(function(inp){
+      inp.addEventListener('change',function(){
+        var oi=parseInt(inp.dataset.oi,10);
+        if(g.type==='multi'){ var a=_modSel[gi]||[]; var k=a.indexOf(oi); if(inp.checked){ if(k<0)a.push(oi);} else { if(k>-1)a.splice(k,1);} _modSel[gi]=a; }
+        else { _modSel[gi]=oi; }
+        document.getElementById('modsTot').textContent=money(modsTotal());
+      });
+    });
+  });
+  document.getElementById('modsCancel').addEventListener('click',closeMods);
+  document.getElementById('modsAdd').addEventListener('click',confirmMods);
+}
+function confirmMods(){
+  var p=_modP; if(!p) return;
+  var parts=[]; if(_modSize) parts.push(_modSize);
+  var missing=false;
+  (p.mods||[]).forEach(function(g,gi){
+    var sel=_modSel[gi];
+    if(g.type==='multi'){ (sel||[]).forEach(function(oi){ if(g.opts[oi]) parts.push(g.opts[oi].l); }); if(g.req && (!sel||!sel.length)) missing=true; }
+    else { if(sel>-1 && g.opts[sel]) parts.push(g.opts[sel].l); else if(g.req) missing=true; }
+  });
+  if(missing){ alert('Selecciona las opciones requeridas'); return; }
+  var price=modsTotal();
+  var label=parts.join(' \u00b7 ');
+  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:1,note:'',mods:label,area:areaDe(p)});
+  renderTopbar(); renderCart(); closeMods();
+}
 function changeQty(uid,d){
   var l=state.cart.filter(function(x){return x.uid==uid;})[0]; if(!l) return; l.qty+=d;
   if(l.qty<=0){ state.cart=state.cart.filter(function(x){return x.uid!=uid;}); }
@@ -587,8 +727,13 @@ function renderPos(){
 function renderProducts(){
   var grid=document.getElementById('prodGrid'); var prods=currentProducts();
   if(!prods.length){ grid.innerHTML='<div class="cart-empty">Sin art&iacute;culos</div>'; return; }
-  grid.innerHTML=prods.map(function(p){ return '<button class="prod-btn" data-id="'+p.id+'"><span class="pn">'+esc(p.name)+'</span><span class="pp">'+money(p.price)+'</span></button>'; }).join('');
-  grid.querySelectorAll('.prod-btn').forEach(function(b){ b.addEventListener('click',function(){ var p=(CATALOG[state.sucursal]||[]).filter(function(x){return x.id===b.dataset.id;})[0]; if(p) addToCart(p); }); });
+  grid.innerHTML=prods.map(function(p){
+    var d = p.desc ? '<span class="pd">'+esc(p.desc)+'</span>' : '';
+    var pr = (p.sized && p.prices) ? ('desde '+money(p.price)) : money(p.price);
+    var badge = (p.mods&&p.mods.length)||p.sized ? '<span class="pmods">+ opciones</span>' : '';
+    return '<button class="prod-btn" data-id="'+p.id+'"><span class="pn">'+esc(p.name)+'</span>'+d+'<span class="pp">'+pr+'</span>'+badge+'</button>';
+  }).join('');
+  grid.querySelectorAll('.prod-btn').forEach(function(b){ b.addEventListener('click',function(){ var p=(CATALOG[state.sucursal]||[]).filter(function(x){return x.id===b.dataset.id;})[0]; if(!p) return; if((p.mods&&p.mods.length)||p.sized){ openMods(p); } else { addToCart(p); } }); });
 }
 function renderCart(){
   var host=document.getElementById('cartLines');
@@ -596,6 +741,7 @@ function renderCart(){
   else{
     host.innerHTML=state.cart.map(function(l){
       return '<div class="cart-line"><div class="info"><div class="n">'+esc(l.name)+'</div><div class="u">'+money(l.price)+' c/u</div>'+
+        (l.mods?'<div class="cmods">'+esc(l.mods)+'</div>':'')+
         (l.note?'<div class="note">&#9998; '+esc(l.note)+'</div>':'')+'</div>'+
         '<div class="qty"><button data-uid="'+l.uid+'" data-d="-1">&minus;</button><span class="q">'+l.qty+'</span><button data-uid="'+l.uid+'" data-d="1">&plus;</button></div>'+
         '<div class="sub">'+money(l.price*l.qty)+'</div></div>';
@@ -732,7 +878,7 @@ function renderKds(){
       if(!estado||estado==='listo') return;
       var its=(p.items||[]).filter(function(l){return (l.area||'barra')===ar;});
       if(!its.length) return;
-      var rows=its.map(function(l){ return '<div class="kdc-item"><span class="kdc-q">'+l.qty+'x</span><span class="kdc-n">'+esc(l.name)+(l.note?'<div class="kdc-note">'+esc(l.note)+'</div>':'')+'</span></div>'; }).join('');
+      var rows=its.map(function(l){ return '<div class="kdc-item"><span class="kdc-q">'+l.qty+'x</span><span class="kdc-n">'+esc(l.name)+(l.mods?'<div class="kdc-mods">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="kdc-note">'+esc(l.note)+'</div>':'')+'</span></div>'; }).join('');
       cards+='<div class="kds-card '+ar+'"><div class="kdc-top"><span class="kdc-folio">'+esc(p.id)+'</span><span class="kdc-area">'+AREA_LABEL[ar]+'</span></div><div class="kdc-meta">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(p.hora)+'</div>'+rows+'<button class="kdc-btn" onclick="kdsMarcarListo('+ix+',\''+ar+'\')">Marcar listo</button></div>';
     });
   });
