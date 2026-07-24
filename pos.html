@@ -195,7 +195,8 @@ input,select,textarea{font-family:inherit;font-size:16px;}
   .to-card{width:150px;height:150px;}
 }
 @media print{ body *{visibility:hidden;} #printArea,#printArea *{visibility:visible;} #printArea{position:absolute;left:0;top:0;width:100%;padding:20px;} }
-</style>
+
+.det-list{margin:10px 0;max-height:320px;overflow:auto}.det-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(0,0,0,.08)}.det-q{font-weight:700;color:var(--terracota);min-width:34px}.det-n{flex:1}.det-note{font-size:.8rem;color:#8a7a68;font-style:italic;margin-top:2px}.det-p{font-weight:600;white-space:nowrap}.det-tot{display:flex;justify-content:space-between;padding:5px 0;font-size:.95rem}.det-grand{font-weight:800;font-size:1.15rem;border-top:2px solid var(--cafe-medio);margin-top:6px;padding-top:10px}</style>
 </head>
 <body>
 <div id="toast"></div>
@@ -295,6 +296,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 var CONFIG = { API_URL:'', SHEET_ID:'1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk', IVA_RATE:0.16 };
 
 var SUCURSALES = [
+  {id:'cafeteria', nombre:'Casa de la Cultura',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:true},
   {id:'grano',    nombre:'Venta cafe en grano',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:false},
   {id:'helfy',    nombre:'Helfy Fu',              tipoVenta:'HELFY FU',   inventario:'CASA DE LA CULTURA', mesas:false},
   {id:'eventos',  nombre:'Sueno de Luna Eventos', tipoVenta:'EVENTOS',    inventario:'EVENTOS',           mesas:true},
@@ -302,6 +304,18 @@ var SUCURSALES = [
 ];
 
 var CATALOG = {
+  cafeteria:[
+    {id:'c1',name:'Espresso',menu:'Bebidas',sub:'Cafe Caliente',price:38},
+    {id:'c2',name:'Americano',menu:'Bebidas',sub:'Cafe Caliente',price:42},
+    {id:'c3',name:'Capuccino',menu:'Bebidas',sub:'Cafe Caliente',price:55},
+    {id:'c4',name:'Latte',menu:'Bebidas',sub:'Cafe Caliente',price:58},
+    {id:'c5',name:'Frappe Moka',menu:'Bebidas',sub:'Frappes',price:72},
+    {id:'c6',name:'Cold Brew',menu:'Bebidas',sub:'Cafe Frio',price:60},
+    {id:'c7',name:'Chai Latte',menu:'Bebidas',sub:'Especiales',price:62},
+    {id:'c8',name:'Rebanada de pastel',menu:'Alimentos',sub:'Reposteria',price:75},
+    {id:'c9',name:'Galleta artesanal',menu:'Alimentos',sub:'Reposteria',price:35},
+    {id:'c10',name:'Sandwich jamon y queso',menu:'Alimentos',sub:'Salados',price:85}
+  ],
   grano:[
     {id:'g1',name:'Cafe Piedras Negras 250g',menu:'Cafe en Grano',sub:'Grano',price:150},
     {id:'g2',name:'Cafe Piedras Negras 500g',menu:'Cafe en Grano',sub:'Grano',price:280},
@@ -358,6 +372,7 @@ var CONFIG_ITEMS = [
   {ic:'&#11088;', t:'Favoritos', badge:'', badgeClass:''},
   {ic:'&#127859;', t:'Areas de cocina', badge:'', badgeClass:''},
   {ic:'&#128225;', t:'Integraciones', badge:'', badgeClass:''},
+  {ic:'&#128666;', t:'Pedidos en linea', badge:'Proximamente', badgeClass:'err'},
   {ic:'&#9881;', t:'Ajustes', badge:'', badgeClass:''},
   {ic:'&#127760;', t:'Wi-Fi principal', badge:'OK', badgeClass:'ok'}
 ];
@@ -387,6 +402,15 @@ function showToast(msg){var t=document.getElementById('toast');t.textContent=msg
 function closeModal(){ document.getElementById('modalHost').innerHTML=''; }
 
 /* ============ === API === stubs backend ============ */
+/* === INTEGRACION FUTURA: pedidos.suenodeluna.com.mx ===
+   Objetivo: recibir pedidos en linea (web) directamente en el POS.
+   Arquitectura preparada (NO implementada aun):
+     PEDIDOS_ONLINE.enabled    -> activar/desactivar la integracion
+     PEDIDOS_ONLINE.endpoint   -> URL del Apps Script / API de pedidos.suenodeluna.com.mx
+     PEDIDOS_ONLINE.poll(fn)   -> consultar nuevos pedidos y volcarlos en state.pedidos
+   Cuando se conecte, los pedidos en linea apareceran en la pestana 'Pedidos'
+   con estado 'nuevo' y sonara la alarma configurada. */
+var PEDIDOS_ONLINE = { enabled:false, endpoint:'', poll:function(cb){ /* TODO backend */ } };
 var API = {
   login: function(pin,suc){ return Promise.resolve(USERS_MOCK[pin]||null); },
   getProductosPorSucursal: function(suc){ return Promise.resolve(CATALOG[suc]||[]); },
@@ -435,9 +459,9 @@ function doLogin(){
 }
 function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; renderPinDisplay(); showScreen('scLogin'); }
 function seedPedidos(){ /* MOCK historial */ return [
-  {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12'},
-  {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45'},
-  {id:'#1044',tipo:'domicilio',metodo:'rappi',total:265,estado:'abierto',hora:'11:03'}
+  {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:''},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez'},{name:'Espresso',qty:1,price:38,note:''}]},
+  {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45',mesa:3,descuento:{tipo:null,valor:0},items:[{name:'Latte',qty:2,price:58,note:'deslactosado'},{name:'Rebanada de pastel',qty:2,price:75,note:''},{name:'Sandwich jamon y queso',qty:1,price:85,note:''},{name:'Cold Brew',qty:1,price:59,note:''}]},
+  {id:'#1044',tipo:'domicilio',metodo:'rappi',total:265,estado:'abierto',hora:'11:03',mesa:null,descuento:{tipo:'pct',valor:10},items:[{name:'Frappe Moka',qty:2,price:72,note:''},{name:'Chai Latte',qty:1,price:62,note:'extra caliente'},{name:'Galleta artesanal',qty:2,price:35,note:''}]}
 ];}
 
 /* ============ NAV ============ */
@@ -624,7 +648,7 @@ function confirmSale(){
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
   var nid='#'+(1044+state.turnoSales.length+1);
-  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})});
+  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note};})});
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.mesa=null;
   renderTopbar(); renderCart(); closeModal();
@@ -655,11 +679,26 @@ function selectMesa(n){
 
 /* ============ PEDIDOS (historial) ============ */
 function renderPedidos(){
-  var html='<h2>Historial de pedidos</h2><div class="sub">Pedidos del turno actual</div><div class="card">';
+  var html='<h2>Historial de pedidos</h2><div class="sub">Toca un pedido para ver el detalle</div><div class="card">';
   if(!state.pedidos.length){ html+='<div class="cart-empty">Sin pedidos</div>'; }
-  else{ html+=state.pedidos.map(function(p){ return '<div class="ped-row"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+'</div><div class="pm">'+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
+  else{ html+=state.pedidos.map(function(p,ix){ return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+'</div><div class="pm">'+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
   html+='</div>';
   document.getElementById('pedidosContent').innerHTML=html;
+}
+function verPedido(ix){
+  var p=state.pedidos[ix]; if(!p) return;
+  var items=(p.items||[]);
+  var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'? subtotal*(p.descuento.valor/100) : p.descuento.valor; }
+  var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
+    '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div>'+
+    '<div class="det-list">'+rows+'</div>'+
+    '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
+    (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
+    '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Reimprimir ticket</button></div></div></div>';
+  bindModal(function(){ showToast('Reimprimiendo ticket '+p.id+'...'); closeModal(); });
 }
 
 /* ============ CONFIGURACION ============ */
