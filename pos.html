@@ -189,14 +189,45 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 
 @media(max-width:860px){
   .pos-wrap{flex-direction:column;}
-  .pos-right{max-width:none;border-left:none;border-top:1px solid var(--linea);max-height:46vh;}
+  .pos-left{flex:none;padding:12px;overflow:visible;}
+  .pos-right{max-width:none;border-left:none;border-top:2px solid var(--linea);max-height:48vh;flex:none;}
   .prod-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));}
   .pay-summary{grid-template-columns:1fr 1fr;}
   .to-card{width:150px;height:150px;}
+  .panel{padding:16px;}
+  .cfg-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;}
+  .kds-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));}
+}
+@media(max-width:600px){
+  .topbar{flex-wrap:nowrap;overflow-x:auto;height:auto;padding:6px 8px;gap:0;-webkit-overflow-scrolling:touch;}
+  .topbar::-webkit-scrollbar{display:none;}
+  .brand{font-size:14px;margin-right:4px;flex-shrink:0;}
+  .nav-tab{padding:12px 10px;font-size:14px;flex-shrink:0;}
+  .spacer{display:none;}
+  .suc-pill{font-size:11px;padding:5px 9px;flex-shrink:0;}
+  #tbUser{display:none;}
+  .logout{flex-shrink:0;font-size:13px;}
+  .pos-left{padding:8px;}
+  .prod-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;}
+  .pos-right{max-height:52vh;}
+  .pay-summary{grid-template-columns:1fr;}
+  .to-card{width:44vw;max-width:200px;height:130px;}
+  .scTipoOrden,#scTipoOrden{flex-direction:column;}
+  .panel{padding:12px;}
+  h2{font-size:1.2rem;}
+  .cfg-grid{grid-template-columns:1fr 1fr;gap:10px;}
+  .mesa-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;}
+  .kds-grid{grid-template-columns:1fr;}
+  .cart-actions{flex-wrap:wrap;}
+  .keypad{gap:10px;}
+  .key{height:58px;font-size:22px;}
+  .modal{width:94vw;max-width:none;padding:16px;}
+  .det-list{max-height:44vh;}
 }
 @media print{ body *{visibility:hidden;} #printArea,#printArea *{visibility:visible;} #printArea{position:absolute;left:0;top:0;width:100%;padding:20px;} }
 
-.det-list{margin:10px 0;max-height:320px;overflow:auto}.det-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(0,0,0,.08)}.det-q{font-weight:700;color:var(--terracota);min-width:34px}.det-n{flex:1}.det-note{font-size:.8rem;color:#8a7a68;font-style:italic;margin-top:2px}.det-p{font-weight:600;white-space:nowrap}.det-tot{display:flex;justify-content:space-between;padding:5px 0;font-size:.95rem}.det-grand{font-weight:800;font-size:1.15rem;border-top:2px solid var(--cafe-medio);margin-top:6px;padding-top:10px}</style>
+.det-list{margin:10px 0;max-height:320px;overflow:auto}.det-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(0,0,0,.08)}.det-q{font-weight:700;color:var(--terracota);min-width:34px}.det-n{flex:1}.det-note{font-size:.8rem;color:#8a7a68;font-style:italic;margin-top:2px}.det-p{font-weight:600;white-space:nowrap}.det-tot{display:flex;justify-content:space-between;padding:5px 0;font-size:.95rem}.det-grand{font-weight:800;font-size:1.15rem;border-top:2px solid var(--cafe-medio);margin-top:6px;padding-top:10px}
+/* ===== KDS / Monitor de estacion ===== */.kds-filter{display:flex;gap:8px;margin:10px 0 16px;flex-wrap:wrap}.kds-f{padding:9px 18px;border-radius:20px;background:var(--beige-claro);color:var(--cafe-medio);font-weight:600;font-size:14px;border:1px solid var(--linea)}.kds-f.on{background:var(--terracota);color:#fff;border-color:var(--terracota)}.kds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.kds-card{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px;border-top:5px solid var(--gris)}.kds-card.barra{border-top-color:#2f6f9e}.kds-card.cocina{border-top-color:var(--terracota)}.kdc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}.kdc-folio{font-weight:800;font-size:1.15rem;color:var(--cafe)}.kdc-area{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:10px;background:var(--beige-claro);color:var(--cafe-medio)}.kdc-meta{font-size:.82rem;color:var(--gris);margin-bottom:10px}.kdc-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)}.kdc-q{font-weight:800;color:var(--terracota);min-width:30px}.kdc-n{flex:1;font-weight:600}.kdc-note{font-size:.78rem;color:#8a7a68;font-style:italic;font-weight:400}.kdc-btn{margin-top:12px;width:100%;padding:12px;border-radius:10px;background:var(--verde-ok);color:#fff;font-weight:700;font-size:15px}</style>
 </head>
 <body>
 <div id="toast"></div>
@@ -224,6 +255,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
     <span class="brand">luna<span>smart</span></span>
     <button class="nav-tab active" data-view="menu">Men&uacute;</button>
     <button class="nav-tab" data-view="mesas">Mesas</button>
+    <button class="nav-tab" data-view="kds">Estaci&oacute;n<span class="badge" id="badgeKds">0</span></button>
     <button class="nav-tab" data-view="pedidos">Pedidos<span class="badge" id="badgePedidos">0</span></button>
     <button class="nav-tab" data-view="config">Configuraci&oacute;n</button>
     <button class="nav-tab" data-view="caja">Cajas</button>
@@ -275,6 +307,8 @@ input,select,textarea{font-family:inherit;font-size:16px;}
       </div>
     </div>
   </div>
+
+  <div class="screen" id="scKds" style="flex:1;"><div class="panel" id="kdsContent"></div></div>
 
   <!-- MESAS -->
   <div class="screen" id="scMesas" style="flex:1;"><div class="panel" id="mesasContent"></div></div>
@@ -365,12 +399,13 @@ var MESAS_MOCK = {
 
 /* MOCK: config modulos (estilo Parrot) */
 var CONFIG_ITEMS = [
-  {ic:'&#128424;', t:'Impresoras', badge:'Barra: error', badgeClass:'err'},
+  {ic:'&#128421;', t:'Monitores de estacion', badge:'Barra y Cocina', badgeClass:'ok'},
+  {ic:'&#127860;', t:'Areas de preparacion', badge:'2 areas', badgeClass:'ok'},
   {ic:'&#128276;', t:'Alarmas', badge:'Activas', badgeClass:'ok'},
   {ic:'&#128273;', t:'Lector de huella', badge:'Conectado', badgeClass:'ok'},
   {ic:'&#128241;', t:'Doble pantalla', badge:'Off', badgeClass:'err'},
   {ic:'&#11088;', t:'Favoritos', badge:'', badgeClass:''},
-  {ic:'&#127859;', t:'Areas de cocina', badge:'', badgeClass:''},
+  {ic:'&#128424;', t:'Impresoras (opcional)', badge:'', badgeClass:''},
   {ic:'&#128225;', t:'Integraciones', badge:'', badgeClass:''},
   {ic:'&#128666;', t:'Pedidos en linea', badge:'Proximamente', badgeClass:'err'},
   {ic:'&#9881;', t:'Ajustes', badge:'', badgeClass:''},
@@ -378,9 +413,9 @@ var CONFIG_ITEMS = [
 ];
 
 var PERMISOS = {
-  cajero:     {menu:true, mesas:true, pedidos:true, config:false, caja:false},
-  supervisor: {menu:true, mesas:true, pedidos:true, config:true,  caja:true },
-  admin:      {menu:true, mesas:true, pedidos:true, config:true,  caja:true }
+  cajero:     {menu:true, mesas:true, kds:true, pedidos:true, config:false, caja:false},
+  supervisor: {menu:true, mesas:true, kds:true, pedidos:true, config:true,  caja:true },
+  admin:      {menu:true, mesas:true, kds:true, pedidos:true, config:true,  caja:true }
 };
 var USERS_MOCK = { '1234':{nombre:'Cajero Demo',rol:'cajero'}, '2580':{nombre:'Supervisor Demo',rol:'supervisor'}, '0000':{nombre:'Admin Demo',rol:'admin'} };
 
@@ -388,12 +423,14 @@ var state = {
   logged:false, sucursal:null, role:'cajero', user:'', pin:'',
   view:'menu', tipoOrden:null, mesa:null,
   menu:null, sub:null, search:'',
-  cart:[], descuento:{tipo:null,valor:0}, turnoSales:[], pedidos:[],
+  cart:[], descuento:{tipo:null,valor:0}, turnoSales:[], pedidos:[], kdsArea:'todas',
   checkoutOpen:false, metodoPago:'efectivo', cashReceived:0,
   cajaInicial:892, cajaAbierta:true
 };
 
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aqui'};
+var AREA_LABEL={barra:'Barra', cocina:'Cocina'};
+function areaDe(p){ if(p && p.area) return p.area; if(p && p.menu==='Alimentos') return 'cocina'; return 'barra'; }
 var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia', rappi:'Rappi/Uber'};
 
 function money(n){ return '$'+Number(n||0).toFixed(2); }
@@ -422,7 +459,7 @@ var API = {
 
 function showScreen(id){ ['scLogin','scApp'].forEach(function(s){ document.getElementById(s).classList.toggle('active', s===id); }); }
 function showAppView(v){
-  var map={tipo:'scTipoOrden',pos:'scPos',mesas:'scMesas',pedidos:'scPedidos',config:'scConfig',caja:'scCaja'};
+  var map={tipo:'scTipoOrden',pos:'scPos',mesas:'scMesas',kds:'scKds',pedidos:'scPedidos',config:'scConfig',caja:'scCaja'};
   Object.keys(map).forEach(function(k){ document.getElementById(map[k]).classList.toggle('active', k===v); });
 }
 
@@ -459,9 +496,9 @@ function doLogin(){
 }
 function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; renderPinDisplay(); showScreen('scLogin'); }
 function seedPedidos(){ /* MOCK historial */ return [
-  {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:''},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez'},{name:'Espresso',qty:1,price:38,note:''}]},
-  {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45',mesa:3,descuento:{tipo:null,valor:0},items:[{name:'Latte',qty:2,price:58,note:'deslactosado'},{name:'Rebanada de pastel',qty:2,price:75,note:''},{name:'Sandwich jamon y queso',qty:1,price:85,note:''},{name:'Cold Brew',qty:1,price:59,note:''}]},
-  {id:'#1044',tipo:'domicilio',metodo:'rappi',total:265,estado:'abierto',hora:'11:03',mesa:null,descuento:{tipo:'pct',valor:10},items:[{name:'Frappe Moka',qty:2,price:72,note:''},{name:'Chai Latte',qty:1,price:62,note:'extra caliente'},{name:'Galleta artesanal',qty:2,price:35,note:''}]}
+  {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:'',area:'barra'},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez',area:'cocina'},{name:'Espresso',qty:1,price:38,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'pendiente'},
+  {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45',mesa:3,descuento:{tipo:null,valor:0},items:[{name:'Latte',qty:2,price:58,note:'deslactosado',area:'barra'},{name:'Rebanada de pastel',qty:2,price:75,note:'',area:'cocina'},{name:'Sandwich jamon y queso',qty:1,price:85,note:'',area:'cocina'},{name:'Cold Brew',qty:1,price:59,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'listo'},
+  {id:'#1044',tipo:'domicilio',metodo:'rappi',total:265,estado:'abierto',hora:'11:03',mesa:null,descuento:{tipo:'pct',valor:10},items:[{name:'Frappe Moka',qty:2,price:72,note:'',area:'barra'},{name:'Chai Latte',qty:1,price:62,note:'extra caliente',area:'barra'},{name:'Galleta artesanal',qty:2,price:35,note:'',area:'cocina'}],estadoBarra:'pendiente',estadoCocina:'pendiente'}
 ];}
 
 /* ============ NAV ============ */
@@ -470,6 +507,8 @@ function renderTopbar(){
   document.getElementById('tbSucursal').textContent=suc?suc.nombre:'--';
   document.getElementById('tbUser').textContent=state.user+' ('+state.role+')';
   document.getElementById('badgePedidos').textContent=state.pedidos.length;
+  var pend=state.pedidos.filter(function(p){return p.estadoBarra==='pendiente'||p.estadoCocina==='pendiente';}).length;
+  var bk=document.getElementById('badgeKds'); if(bk) bk.textContent=pend;
   document.querySelectorAll('#scApp .nav-tab').forEach(function(t){
     var v=t.dataset.view;
     t.classList.toggle('active', v===state.view);
@@ -483,6 +522,7 @@ function switchView(v){
   state.view=v; renderTopbar();
   if(v==='menu'){ goMenu(); }
   else if(v==='mesas'){ showAppView('mesas'); renderMesas(); }
+  else if(v==='kds'){ showAppView('kds'); renderKds(); }
   else if(v==='pedidos'){ showAppView('pedidos'); renderPedidos(); }
   else if(v==='config'){ showAppView('config'); renderConfig(); }
   else if(v==='caja'){ showAppView('caja'); renderCaja(); }
@@ -514,7 +554,7 @@ function selectMenu(m){ state.menu=m; state.sub=null; renderPos(); }
 function selectSub(s){ state.sub=s; renderPos(); }
 function addToCart(p){
   var l=state.cart.filter(function(x){return x.id===p.id&&!x.note;})[0];
-  if(l){ l.qty++; } else { state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:p.price,qty:1,note:''}); }
+  if(l){ l.qty++; } else { state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:p.price,qty:1,note:'',area:areaDe(p)}); }
   renderTopbar(); renderCart();
 }
 function changeQty(uid,d){
@@ -648,7 +688,7 @@ function confirmSale(){
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
   var nid='#'+(1044+state.turnoSales.length+1);
-  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note};})});
+  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,area:l.area||'barra'};}),estadoBarra:'pendiente',estadoCocina:'pendiente'});
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.mesa=null;
   renderTopbar(); renderCart(); closeModal();
@@ -670,6 +710,35 @@ function renderMesas(){
   html+='</div>';
   document.getElementById('mesasContent').innerHTML=html;
   document.querySelectorAll('#mesasContent .mesa').forEach(function(b){ b.addEventListener('click',function(){ selectMesa(parseInt(b.dataset.n,10)); }); });
+}
+function kdsSetArea(a){ state.kdsArea=a; renderKds(); }
+function kdsMarcarListo(ix,area){
+  var p=state.pedidos[ix]; if(!p) return;
+  if(area==='cocina') p.estadoCocina='listo'; else p.estadoBarra='listo';
+  showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista');
+  renderTopbar(); renderKds();
+}
+function renderKds(){
+  var area=state.kdsArea||'todas';
+  var tabs='<div class="kds-filter">'+
+    ['todas','barra','cocina'].map(function(a){ return '<button class="kds-f'+(area===a?' on':'')+'" onclick="kdsSetArea(\''+a+'\')">'+(a==='todas'?'Todas':AREA_LABEL[a])+'</button>'; }).join('')+'</div>';
+  var pedidosAbiertos=state.pedidos.filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
+  var cards='';
+  pedidosAbiertos.forEach(function(p){
+    var ix=state.pedidos.indexOf(p);
+    ['barra','cocina'].forEach(function(ar){
+      if(area!=='todas'&&area!==ar) return;
+      var estado=ar==='cocina'?p.estadoCocina:p.estadoBarra;
+      if(!estado||estado==='listo') return;
+      var its=(p.items||[]).filter(function(l){return (l.area||'barra')===ar;});
+      if(!its.length) return;
+      var rows=its.map(function(l){ return '<div class="kdc-item"><span class="kdc-q">'+l.qty+'x</span><span class="kdc-n">'+esc(l.name)+(l.note?'<div class="kdc-note">'+esc(l.note)+'</div>':'')+'</span></div>'; }).join('');
+      cards+='<div class="kds-card '+ar+'"><div class="kdc-top"><span class="kdc-folio">'+esc(p.id)+'</span><span class="kdc-area">'+AREA_LABEL[ar]+'</span></div><div class="kdc-meta">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(p.hora)+'</div>'+rows+'<button class="kdc-btn" onclick="kdsMarcarListo('+ix+',\''+ar+'\')">Marcar listo</button></div>';
+    });
+  });
+  if(!cards) cards='<div class="cart-empty">Sin comandas pendientes</div>';
+  var html='<h2>Monitor de estaci&oacute;n</h2><div class="sub">Comandas por elaborar (sustituye la impresi&oacute;n de tickets)</div>'+tabs+'<div class="kds-grid">'+cards+'</div>';
+  document.getElementById('kdsContent').innerHTML=html;
 }
 function selectMesa(n){
   state.mesa=n; state.tipoOrden='aqui'; state.view='menu';
