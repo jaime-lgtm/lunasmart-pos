@@ -510,6 +510,7 @@ var MESAS_MOCK = {
 
 /* MOCK: config modulos (estilo Parrot) */
 var CONFIG_ITEMS = [
+  {t:'Mesas',ic:'\uD83E\uDE91'},
   {ic:'&#128421;', t:'Monitores de estacion', badge:'Barra y Cocina', badgeClass:'ok'},
   {ic:'&#127860;', t:'Areas de preparacion', badge:'2 areas', badgeClass:'ok'},
   {ic:'&#128276;', t:'Alarmas', badge:'Activas', badgeClass:'ok'},
@@ -642,7 +643,30 @@ function goMenu(){
   state.view='menu'; renderTopbar();
   if(!state.tipoOrden){ showAppView('tipo'); } else { showAppView('pos'); renderPos(); }
 }
+function pedirDatosDomicilio(){
+  var c=state.cliente||{};
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Datos de entrega</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Servicio a domicilio</div>'+
+    '<div class="field"><label>Nombre *</label><input id="dNombre" value="'+esc(c.nombre||'')+'" placeholder="Nombre del cliente"></div>'+
+    '<div class="field"><label>Tel\u00e9fono *</label><input id="dTel" type="tel" inputmode="tel" value="'+esc(c.telefono||'')+'" placeholder="10 d\u00edgitos"></div>'+
+    '<div class="field"><label>Direcci\u00f3n</label><input id="dDir" value="'+esc(c.direccion||'')+'" placeholder="Calle, n\u00famero, colonia"></div>'+
+    '<div class="field"><label>Referencia</label><input id="dRef" value="'+esc(c.referencia||'')+'" placeholder="Entre calles, color de casa..."></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Continuar</button></div></div></div>';
+  bindModal(function(){
+    var nombre=document.getElementById('dNombre').value.trim();
+    var tel=document.getElementById('dTel').value.trim();
+    if(!nombre){ showToast('Captura el nombre del cliente'); return; }
+    if(!tel){ showToast('Captura el tel\u00e9fono del cliente'); return; }
+    state.cliente={nombre:nombre,telefono:tel,direccion:document.getElementById('dDir').value.trim(),referencia:document.getElementById('dRef').value.trim()};
+    state.tipoOrden='domicilio';
+    var prods=CATALOG[state.sucursal]||[];
+    state.menu=prods.length?menusOf(prods)[0]:null; state.sub=null; state.search='';
+    closeModal(); showAppView('pos'); renderPos();
+  });
+}
 function selectTipoOrden(tipo){
+  if(tipo==='domicilio'){ pedirDatosDomicilio(); return; }
+  state.cliente=null;
   state.tipoOrden=tipo;
   var prods=CATALOG[state.sucursal]||[];
   state.menu = prods.length? menusOf(prods)[0] : null; state.sub=null; state.search='';
@@ -901,8 +925,30 @@ function procesarInventario(lines,suc){
 }
 
 /* ============ MESAS ============ */
+function numMesasConfig(suc){ try{ var v=localStorage.getItem('lsNumMesas_'+suc); if(v!==null) return parseInt(v,10)||0; }catch(e){} var base=MESAS_MOCK[suc]||[]; return base.length; }
+function setNumMesas(suc,n){ try{ localStorage.setItem('lsNumMesas_'+suc, String(Math.max(0,n|0))); }catch(e){} }
+function getMesas(suc){
+  var n=numMesasConfig(suc);
+  var base=MESAS_MOCK[suc]||[];
+  var byN={}; base.forEach(function(m){ byN[m.n]=m; });
+  var arr=[];
+  for(var i=1;i<=n;i++){ arr.push(byN[i]?byN[i]:{n:i,estado:'libre'}); }
+  return arr;
+}
+function configMesas(){
+  var suc=state.sucursal; var actual=numMesasConfig(suc);
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Configurar mesas</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Define cu\u00e1ntas mesas tiene esta sucursal. Las mesas ocupadas se conservan.</div>'+
+    '<div class="field"><label>N\u00famero de mesas</label><input id="cfgNumMesas" type="number" inputmode="numeric" min="0" max="200" value="'+actual+'"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  bindModal(function(){
+    var n=parseInt(document.getElementById('cfgNumMesas').value,10);
+    if(isNaN(n)||n<0){ showToast('N\u00famero inv\u00e1lido'); return; }
+    setNumMesas(suc,n); closeModal(); showToast('Mesas configuradas: '+n);
+  });
+}
 function renderMesas(){
-  var mesas=MESAS_MOCK[state.sucursal]||[];
+  var mesas=getMesas(state.sucursal);
   var html='<h2>Mapa de mesas</h2><div class="sub">Toca una mesa para tomar o continuar su orden</div><div class="mesa-grid">';
   html+=mesas.map(function(m){ return '<button class="mesa '+m.estado+'" data-n="'+m.n+'"><div class="mn">Mesa '+m.n+'</div><div class="ms">'+(m.estado==='libre'?'Disponible':'Ocupada')+'</div>'+(m.total?'<div class="mt">'+money(m.total)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
@@ -974,7 +1020,7 @@ function renderConfig(){
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ showToast(b.dataset.t+' -- pendiente de configurar'); }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t==='Mesas'){ configMesas(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 
 /* ============ CAJA / CORTE ============ */
