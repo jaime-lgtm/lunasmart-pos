@@ -253,6 +253,41 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .mods-foot{ padding:14px 20px calc(14px + env(safe-area-inset-bottom)); border-top:1px solid #eee; display:flex; gap:10px; }
 .mods-foot .btn-ghost{ flex:0 0 auto; padding:14px 18px; border:1px solid #ccc; background:#fff; border-radius:12px; font-size:15px; }
 .mods-foot .btn-primary{ flex:1; padding:14px; background:var(--terracota); color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:700; }
+
+/* ===== Parrot-style modal cards (override) ===== */
+.mods-body .mgroup{margin-bottom:18px;}
+.mods-body .mg-l{font-size:16px;font-weight:800;color:var(--cafe);margin-bottom:2px;display:flex;align-items:center;gap:8px;}
+.mods-body .mg-l .req{background:var(--terracota);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.3px;}
+.mods-body .mg-sub{font-size:12px;color:var(--gris);margin-bottom:10px;}
+.mods-body .mopts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.mods-body label.mopt{display:flex!important;flex-direction:column;justify-content:space-between;align-items:flex-start;gap:14px;border:1.5px solid var(--linea);border-radius:14px;padding:14px;min-height:74px;cursor:pointer;transition:.12s;background:#fff;margin:0!important;}
+.mods-body label.mopt:hover{border-color:var(--terracota-claro);}
+.mods-body label.mopt.sel{border-color:var(--terracota);background:#fdf3ee;box-shadow:0 0 0 1px var(--terracota) inset;}
+.mods-body label.mopt input{position:absolute;opacity:0;width:0;height:0;pointer-events:none;}
+.mods-body label.mopt > span:first-child{font-size:15px;font-weight:700;color:var(--cafe);display:block;line-height:1.25;}
+.mods-body label.mopt .op{font-size:14px;font-weight:800;color:var(--terracota);}
+
+/* ===== Ojito disponibilidad ===== */
+.prod-btn{position:relative;}
+.prod-eye{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(255,255,255,.85);border:1px solid var(--linea);z-index:3;line-height:1;}
+.prod-eye:hover{background:#fff;border-color:var(--terracota-claro);}
+.prod-btn.agotado{opacity:.5;filter:grayscale(.4);}
+.prod-btn.agotado .pp,.prod-btn.agotado .pmods{visibility:hidden;}
+.prod-badge-ago{position:absolute;left:10px;bottom:10px;background:var(--rojo);color:#fff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;letter-spacing:.4px;z-index:2;}
+.avail-overlay{position:fixed;inset:0;background:rgba(28,18,10,.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;}
+.avail-box{background:#fff;border-radius:18px;width:100%;max-width:560px;max-height:82vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px var(--sombra);}
+.avail-head{padding:16px 20px;border-bottom:1px solid var(--linea);display:flex;align-items:center;justify-content:space-between;}
+.avail-head .t{font-size:18px;font-weight:800;color:var(--cafe);}
+.avail-body{overflow-y:auto;padding:8px 12px;}
+.avail-row{display:flex;align-items:center;justify-content:space-between;padding:11px 10px;border-bottom:1px solid var(--linea);}
+.avail-row .an{font-weight:600;color:var(--cafe);font-size:15px;}
+.avail-row .as{font-size:12px;color:var(--gris);}
+.avail-toggle{width:52px;height:30px;border-radius:20px;background:var(--verde-ok);position:relative;transition:.15s;flex-shrink:0;cursor:pointer;}
+.avail-toggle.off{background:#c9bfb0;}
+.avail-toggle:after{content:'';position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.15s;}
+.avail-toggle.off:after{left:25px;}
+.avail-foot{padding:14px 20px;border-top:1px solid var(--linea);display:flex;justify-content:flex-end;gap:10px;}
+
 </style>
 </head>
 <body>
@@ -375,20 +410,24 @@ var CATALOG = {
     {id:'cc7',name:'Iced Caramel Macchiato',menu:'Bebidas',sub:'Cafés Fríos',area:'barra',desc:'Caramel Macchiato sobre hielo. Refrescante.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
     {id:'cc8',name:'Iced Mocha',menu:'Bebidas',sub:'Cafés Fríos',area:'barra',desc:'Mocha sobre hielo. Chocolate, espresso y leche fría.',price:75,sized:true,prices:{'Chico':75,'Mayor':85},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Shot extra',req:false,type:'single',opts:[{l:'Sin shot extra',p:0},{l:'Espresso',p:15},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
     {id:'cc9',name:'Iced Espresso',menu:'Bebidas',sub:'Cafés Fríos',area:'barra',desc:'Espresso sobre hielo. Refrescante y con carácter.',price:70,sized:true,prices:{'Chico':70,'Mayor':80},mods:[{label:'Leche',req:false,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'Sabor / Jarabe',req:false,type:'single',opts:[{l:'Sin jarabe',p:0},{l:'Avellana',p:15},{l:'Coconut',p:15},{l:'Crema Irlandesa',p:15},{l:'Vainilla',p:15}]},{label:'Tipo de grano',req:true,type:'single',opts:[{l:'Espresso',p:0},{l:'Descafeinado',p:15}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
-    {id:'cc100',name:'Oreo Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Oreo',price:83,sized:true,prices:{Chico:83,Mayor:93},fav:true,mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc101',name:'Milky Way Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Milky Way',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc102',name:'Snickers Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Snickers',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc103',name:'Cajeta Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Cajeta',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc104',name:'Capuccino Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Capuccino',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc105',name:'Caramel Macchiato Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Caramel Macchiato',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc106',name:'White Mocha Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor White Mocha',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc107',name:'M&Ms Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor M&Ms',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc108',name:'Brownie Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Brownie',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc109',name:'Nutella Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Nutella',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc110',name:'Mazapán Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Mazapán',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc111',name:'Ferrero Rocher Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Ferrero Rocher',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc112',name:'Gansito Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Gansito',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'\u00bfCon cafe\u00edna?',req:true,type:'single',opts:[{l:'Con caf\u00e9',p:0},{l:'Descafeinado',p:0},{l:'Sin cafe\u00edna',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
-    {id:'cc12',name:'Frappé Sin Cafeína',menu:'Bebidas',sub:'Sin Cafeína',area:'barra',desc:'Spiced Chai · Chai sin azúcar · Vainilla Chai · Green Tea Matcha · Taro',price:85,sized:true,prices:{'Chico':85,'Mayor':95},mods:[{label:'Sabor',req:true,type:'single',opts:[{l:'Spiced Chai',p:0},{l:'Chai sin azúcar',p:0},{l:'Vainilla Chai',p:0},{l:'Green Tea Matcha',p:0},{l:'Taro',p:0}]},{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'¿Deseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Sí, por favor',p:0}]}]},
+    {id:'cc100',name:'Oreo Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Oreo',price:83,sized:true,prices:{Chico:83,Mayor:93},fav:true,mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc101',name:'Milky Way Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Milky Way',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc102',name:'Snickers Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Snickers',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc103',name:'Cajeta Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Cajeta',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc104',name:'Capuccino Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Capuccino',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc105',name:'Caramel Macchiato Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Caramel Macchiato',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc106',name:'White Mocha Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor White Mocha',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc107',name:'M&Ms Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor M&Ms',price:83,sized:true,prices:{Chico:83,Mayor:93},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc108',name:'Brownie Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Brownie',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc109',name:'Nutella Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Nutella',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc110',name:'Mazapán Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Mazapán',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc111',name:'Ferrero Rocher Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Ferrero Rocher',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc112',name:'Gansito Frappé',menu:'Bebidas',sub:'Frapp\u00e9s',area:'barra',desc:'Frapp\u00e9 sabor Gansito',price:94,sized:true,prices:{Chico:94,Mayor:104},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc120',name:'Spiced Chai',menu:'Bebidas',sub:'Sin Cafe\u00edna',area:'barra',desc:'Bebida sin cafe\u00edna sabor Spiced Chai',price:85,sized:true,prices:{Chico:85,Mayor:95},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc121',name:'Chai sin az\u00facar',menu:'Bebidas',sub:'Sin Cafe\u00edna',area:'barra',desc:'Bebida sin cafe\u00edna sabor Chai sin az\u00facar',price:85,sized:true,prices:{Chico:85,Mayor:95},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc122',name:'Vainilla Chai',menu:'Bebidas',sub:'Sin Cafe\u00edna',area:'barra',desc:'Bebida sin cafe\u00edna sabor Vainilla Chai',price:85,sized:true,prices:{Chico:85,Mayor:95},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc123',name:'Green Tea Matcha',menu:'Bebidas',sub:'Sin Cafe\u00edna',area:'barra',desc:'Bebida sin cafe\u00edna sabor Green Tea Matcha',price:85,sized:true,prices:{Chico:85,Mayor:95},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
+    {id:'cc124',name:'Taro',menu:'Bebidas',sub:'Sin Cafe\u00edna',area:'barra',desc:'Bebida sin cafe\u00edna sabor Taro',price:85,sized:true,prices:{Chico:85,Mayor:95},mods:[{label:'Leche',req:true,type:'single',opts:[{l:'Entera',p:0},{l:'Deslactosada',p:15},{l:'Deslactosada Light',p:15},{l:'Almendra',p:15},{l:'Soya',p:15}]},{label:'T\u00f3malo a tu manera',req:true,type:'single',opts:[{l:'Caliente',p:0},{l:'Frappe',p:0},{l:'Helado',p:0}]},{label:'\u00bfDeseas crema batida?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'S\u00ed, por favor',p:0}]}]},
     {id:'cc13',name:'Smoothie Mango',menu:'Bebidas',sub:'Smoothies',area:'barra',desc:'Mango natural. El toque norteño con chamoy y tajín.',price:83,sized:true,fav:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Topping',req:false,type:'single',opts:[{l:'No gracias',p:0},{l:'Chamoy y Tajín',p:0},{l:'Solo Chamoy',p:0},{l:'Solo Tajín',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
     {id:'cc14',name:'Smoothie Berries',menu:'Bebidas',sub:'Smoothies',area:'barra',desc:'Mix de frutos rojos naturales.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Topping',req:false,type:'single',opts:[{l:'No gracias',p:0},{l:'Chamoy y Tajín',p:0},{l:'Solo Chamoy',p:0},{l:'Solo Tajín',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
     {id:'cc15',name:'Smoothie Fresa',menu:'Bebidas',sub:'Smoothies',area:'barra',desc:'Fresa natural.',price:83,sized:true,prices:{'Chico':83,'Mayor':93},mods:[{label:'Topping',req:false,type:'single',opts:[{l:'No gracias',p:0},{l:'Chamoy y Tajín',p:0},{l:'Solo Chamoy',p:0},{l:'Solo Tajín',p:0}]},{label:'¿Deseas endulzante?',req:false,type:'single',opts:[{l:'No, gracias',p:0},{l:'Refinada',p:0},{l:'Splenda',p:0},{l:'Stevia',p:0}]}]},
@@ -993,6 +1032,99 @@ function initApp(){
   document.querySelectorAll('#scTipoOrden .to-card').forEach(function(c){ c.addEventListener('click',function(){ selectTipoOrden(c.dataset.tipo); }); });
 }
 document.addEventListener('DOMContentLoaded',initApp);
+
+/* ===== Parrot-modal enhancer (non-invasive) ===== */
+(function(){
+  function enhanceGroup(g){
+    if(g.__enh){ syncSel(g); return; }
+    g.__enh=true;
+    var lbl=g.querySelector('.mg-l');
+    if(lbl){
+      var req=g.querySelector('.req');
+      var sub=document.createElement('div'); sub.className='mg-sub';
+      sub.textContent = req ? 'Obligatoria \u00b7 Elige 1' : 'Opcional';
+      lbl.insertAdjacentElement('afterend', sub);
+    }
+    var opts=[].slice.call(g.querySelectorAll('label.mopt'));
+    if(opts.length){
+      var grid=document.createElement('div'); grid.className='mopts-grid';
+      opts[0].parentNode.insertBefore(grid, opts[0]);
+      opts.forEach(function(o){ grid.appendChild(o); });
+    }
+    g.addEventListener('change', function(){ syncSel(g); });
+    syncSel(g);
+  }
+  function syncSel(g){
+    g.querySelectorAll('label.mopt').forEach(function(o){
+      var inp=o.querySelector('input');
+      if(inp && inp.checked) o.classList.add('sel'); else o.classList.remove('sel');
+    });
+  }
+  function scan(){ var box=document.getElementById('modsBox'); if(!box) return; box.querySelectorAll('.mgroup').forEach(enhanceGroup); }
+  var mo=new MutationObserver(function(){ scan(); });
+  document.addEventListener('DOMContentLoaded', function(){ mo.observe(document.body,{childList:true,subtree:true}); scan(); });
+})();
+
+/* ===== Ojito disponibilidad ===== */
+(function(){
+  var LSKEY='luna_agotados';
+  function getAgo(){ try{ return JSON.parse(localStorage.getItem(LSKEY)||'{}'); }catch(e){ return {}; } }
+  function setAgo(m){ try{ localStorage.setItem(LSKEY, JSON.stringify(m)); }catch(e){} }
+  function isAgo(id){ return !!getAgo()[id]; }
+  function toggle(id){ var m=getAgo(); if(m[id]) delete m[id]; else m[id]=1; setAgo(m); applyGrid(); }
+  function decorate(btn){
+    var id=btn.getAttribute('data-id'); if(!id) return;
+    if(!btn.__eye){
+      var eye=document.createElement('span'); eye.className='prod-eye';
+      eye.addEventListener('click', function(ev){ ev.stopPropagation(); ev.preventDefault(); toggle(id); });
+      btn.appendChild(eye); btn.__eye=eye;
+      var badge=document.createElement('span'); badge.className='prod-badge-ago'; badge.textContent='AGOTADO'; badge.style.display='none';
+      btn.appendChild(badge); btn.__badge=badge;
+    }
+    var ago=isAgo(id);
+    btn.classList.toggle('agotado', ago);
+    btn.__eye.textContent = ago ? '\u{1F6AB}' : '\u{1F441}';
+    btn.__eye.title = ago ? 'Marcar disponible' : 'Agotar art\u00edculo';
+    btn.__badge.style.display = ago ? 'block' : 'none';
+  }
+  function applyGrid(){ var grid=document.getElementById('prodGrid'); if(!grid) return; grid.querySelectorAll('.prod-btn').forEach(decorate); }
+  document.addEventListener('click', function(ev){
+    var btn=ev.target.closest && ev.target.closest('.prod-btn');
+    if(btn && btn.classList.contains('agotado') && !(ev.target.closest && ev.target.closest('.prod-eye'))){
+      ev.stopPropagation(); ev.preventDefault();
+      if(window.toast) window.toast('Art\u00edculo agotado');
+    }
+  }, true);
+  function openPanel(){
+    var prods=(window.CATALOG && CATALOG[state.sucursal])||[];
+    var ago=getAgo();
+    var rows=prods.map(function(p){ var on=!ago[p.id];
+      return '<div class="avail-row"><div><div class="an">'+p.name+'</div><div class="as">'+p.sub+'</div></div><div class="avail-toggle'+(on?'':' off')+'" data-pid="'+p.id+'"></div></div>'; }).join('');
+    var ov=document.createElement('div'); ov.className='avail-overlay';
+    ov.innerHTML='<div class="avail-box"><div class="avail-head"><div class="t">Disponibilidad de art\u00edculos</div><button class="btn-ghost" id="availClose">Cerrar</button></div><div class="avail-body">'+rows+'</div><div class="avail-foot"><button class="btn-ghost" id="availAllOn">Activar todo</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(ev){
+      if(ev.target===ov || ev.target.id==='availClose'){ ov.remove(); return; }
+      var tg=ev.target.closest('.avail-toggle');
+      if(tg){ toggle(tg.getAttribute('data-pid')); tg.classList.toggle('off'); }
+      if(ev.target.id==='availAllOn'){ setAgo({}); applyGrid(); ov.querySelectorAll('.avail-toggle').forEach(function(t){ t.classList.remove('off'); }); }
+    });
+  }
+  var mo=new MutationObserver(function(){ applyGrid(); });
+  document.addEventListener('DOMContentLoaded', function(){
+    var g=document.getElementById('prodGrid'); if(g) mo.observe(g,{childList:true}); applyGrid();
+    try{
+      var tb=document.querySelector('.topbar');
+      var logout=tb && (tb.querySelector('.logout')||tb.querySelector('[class*=logout]'));
+      if(tb && !document.getElementById('availBtn')){
+        var b=document.createElement('button'); b.id='availBtn'; b.className='logout'; b.style.cursor='pointer';
+        b.textContent='\u{1F441} Disponibilidad'; b.addEventListener('click', openPanel);
+        if(logout) tb.insertBefore(b, logout); else tb.appendChild(b);
+      }
+    }catch(e){}
+  });
+})();
+
 </script>
 </body>
 </html>
