@@ -288,6 +288,9 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .avail-toggle.off:after{left:25px;}
 .avail-foot{padding:14px 20px;border-top:1px solid var(--linea);display:flex;justify-content:flex-end;gap:10px;}
 
+.det-cliente{background:var(--beige-claro);border-radius:12px;padding:12px 14px;margin:8px 0}.det-cliente .dc-t{font-size:12px;font-weight:800;color:var(--gris);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}.det-cliente .dc-l{font-size:14px;margin:2px 0}.det-cliente .dc-ref{color:var(--azul);font-style:italic}
+#printHost{position:absolute;left:-9999px;top:0}
+@media print{ #printHost{left:0 !important;} .tk{width:280px;margin:0 auto;color:#000;font-family:'Courier New',monospace} .tk-logo{margin-bottom:8px} .tk-biz{text-align:center;font-size:12px;line-height:1.4;margin-bottom:10px} .tk-meta{text-align:center;font-size:11px;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:6px 0;margin-bottom:8px} .tk-cli{font-size:12px;line-height:1.5;margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:8px} .tk-cli .tk-sec{font-weight:800;font-size:11px;margin-bottom:2px} .tk-items{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px} .tk-items td{padding:3px 0;vertical-align:top} .tk-items .tq{width:32px;font-weight:700} .tk-items .tp{text-align:right;white-space:nowrap} .tk-items .tnote{font-size:10px;font-style:italic;color:#333} .tk-tot{display:flex;justify-content:space-between;font-size:12px;padding:2px 0} .tk-grand{font-size:16px;font-weight:800;border-top:1px dashed #000;margin-top:4px;padding-top:6px} .tk-thanks{text-align:center;font-size:12px;margin-top:12px;font-weight:700} }
 </style>
 </head>
 <body>
@@ -910,9 +913,9 @@ function confirmSale(){
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
   var nid='#'+(1044+state.turnoSales.length+1);
-  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,area:l.area||'barra'};}),estadoBarra:'pendiente',estadoCocina:'pendiente'});
+  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,area:l.area||'barra'};}),cliente:state.cliente||null,estadoBarra:'pendiente',estadoCocina:'pendiente'});
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
-  state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.mesa=null;
+  if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.mesa=null;
   renderTopbar(); renderCart(); closeModal();
   showToast(change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total)));
 }
@@ -927,12 +930,18 @@ function procesarInventario(lines,suc){
 /* ============ MESAS ============ */
 function numMesasConfig(suc){ try{ var v=localStorage.getItem('lsNumMesas_'+suc); if(v!==null) return parseInt(v,10)||0; }catch(e){} var base=MESAS_MOCK[suc]||[]; return base.length; }
 function setNumMesas(suc,n){ try{ localStorage.setItem('lsNumMesas_'+suc, String(Math.max(0,n|0))); }catch(e){} }
+function mesaStateKey(suc){ return 'lsMesaEstado_'+suc; }
+function loadMesaEstados(suc){ try{ return JSON.parse(localStorage.getItem(mesaStateKey(suc))||'{}')||{}; }catch(e){ return {}; } }
+function saveMesaEstados(suc,obj){ try{ localStorage.setItem(mesaStateKey(suc), JSON.stringify(obj)); }catch(e){} }
+function marcarMesaOcupada(suc,n,total){ var e=loadMesaEstados(suc); e[n]={estado:'ocupada',total:total||0}; saveMesaEstados(suc,e); }
+function liberarMesa(suc,n){ var e=loadMesaEstados(suc); e[n]={estado:'libre'}; saveMesaEstados(suc,e); }
 function getMesas(suc){
   var n=numMesasConfig(suc);
   var base=MESAS_MOCK[suc]||[];
   var byN={}; base.forEach(function(m){ byN[m.n]=m; });
   var arr=[];
-  for(var i=1;i<=n;i++){ arr.push(byN[i]?byN[i]:{n:i,estado:'libre'}); }
+  var ov=loadMesaEstados(suc);
+  for(var i=1;i<=n;i++){ var m=byN[i]?Object.assign({},byN[i]):{n:i,estado:'libre'}; if(ov[i]){ m.estado=ov[i].estado; if(ov[i].estado==='ocupada'){ m.total=ov[i].total; } else { delete m.total; } } arr.push(m); }
   return arr;
 }
 function configMesas(){
@@ -986,6 +995,7 @@ function renderKds(){
 }
 function selectMesa(n){
   state.mesa=n; state.tipoOrden='aqui'; state.view='menu';
+  marcarMesaOcupada(state.sucursal,n,0);
   var prods=CATALOG[state.sucursal]||[]; state.menu=menusOf(prods)[0]; state.sub=null;
   renderTopbar(); showAppView('pos'); renderPos(); showToast('Mesa '+n+' seleccionada');
 }
@@ -998,6 +1008,29 @@ function renderPedidos(){
   html+='</div>';
   document.getElementById('pedidosContent').innerHTML=html;
 }
+var NEGOCIO={nombre:'Sue\u00f1o de Luna',sucursal:'Suc. Casa de la Cultura',dir1:'Adolfo Lopez Mateo 1334 Col. Roma',dir2:'Piedras Negras, Coahuila',wa:'WhatsApp (878) 133 3237'};
+function logoSVG(){ return '<svg viewBox="0 0 300 200" width="150" height="100" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">'+'<text x="150" y="90" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="72" letter-spacing="-2" fill="#000">SUE\u00d1O</text>'+'<text x="150" y="170" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="72" letter-spacing="-2" fill="#000">DE LUNA</text>'+'</svg>'; }
+function imprimirTicket(p){
+  var items=(p.items||[]);
+  var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
+  var rows=items.map(function(l){ return '<tr><td class="tq">'+l.qty+'x</td><td class="tn">'+esc(l.name)+(l.note?'<div class="tnote">'+esc(l.note)+'</div>':'')+'</td><td class="tp">'+money(l.price*l.qty)+'</td></tr>'; }).join('');
+  var cli=p.cliente?('<div class="tk-cli"><div class="tk-sec">DATOS DE ENTREGA</div>'+'<div>'+esc(p.cliente.nombre||'')+'</div>'+'<div>Tel: '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div>'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div>Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>'):'';
+  var host=document.getElementById('printHost')||(function(){ var d=document.createElement('div'); d.id='printHost'; document.body.appendChild(d); return d; })();
+  host.innerHTML='<div id="printArea"><div class="tk">'+
+    '<div class="tk-logo">'+logoSVG()+'</div>'+
+    '<div class="tk-biz">'+esc(NEGOCIO.nombre)+' '+esc(NEGOCIO.sucursal)+'<br>'+esc(NEGOCIO.dir1)+'<br>'+esc(NEGOCIO.dir2)+'<br>'+esc(NEGOCIO.wa)+'</div>'+
+    '<div class="tk-meta">Ticket '+esc(p.id)+' \u00b7 '+esc(p.hora||'')+'<br>'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' \u00b7 Mesa '+esc(p.mesa):'')+' \u00b7 '+esc(PAGO_LABEL[p.metodo]||p.metodo)+'</div>'+
+    cli+
+    '<table class="tk-items">'+rows+'</table>'+
+    '<div class="tk-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
+    (desc>0?'<div class="tk-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
+    '<div class="tk-tot tk-grand"><span>TOTAL</span><span>'+money(p.total)+'</span></div>'+
+    '<div class="tk-thanks">\u00a1Gracias por tu compra!</div>'+
+  '</div></div>';
+  window.print();
+  showToast('Ticket '+p.id+' enviado a impresi\u00f3n');
+}
 function verPedido(ix){
   var p=state.pedidos[ix]; if(!p) return;
   var items=(p.items||[]);
@@ -1006,12 +1039,12 @@ function verPedido(ix){
   var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
     '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div>'+
-    '<div class="det-list">'+rows+'</div>'+
+    (p.cliente?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b> \u00b7 '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':'')+'<div class="det-list">'+rows+'</div>'+
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
     (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Reimprimir ticket</button></div></div></div>';
-  bindModal(function(){ showToast('Reimprimiendo ticket '+p.id+'...'); closeModal(); });
+  bindModal(function(){ imprimirTicket(p); });
 }
 
 /* ============ CONFIGURACION ============ */
