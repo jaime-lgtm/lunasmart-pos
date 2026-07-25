@@ -1000,9 +1000,39 @@ function renderCaja(){
   document.getElementById('btnPrint').addEventListener('click',function(){ window.print(); });
   document.getElementById('btnCerrarTurno').addEventListener('click',closeTurno);
 }
+function hacerCorte(){
+  var tm=totalesPorMetodo(); var esperado=state.cajaInicial+tm.efectivo;
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Realizar corte de caja</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Registra y verifica el efectivo actual al cambiar de turno.</div>'+
+    '<div class="caja-info"><div><div class="l">Efectivo esperado</div><div class="v">'+money(esperado)+'</div></div><div><div class="l">Ventas del turno</div><div class="v">'+state.turnoSales.length+'</div></div></div>'+
+    '<div class="field"><label>Efectivo contado</label><input id="corteMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+    '<div class="field" id="corteDifWrap" style="display:none"><label>Diferencia</label><div id="corteDif" class="v"></div></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Confirmar corte</button></div></div></div>';
+  var inp=document.getElementById('corteMonto');
+  inp.addEventListener('input',function(){ var c=parseFloat(inp.value)||0; var d=c-esperado; document.getElementById('corteDifWrap').style.display='block'; document.getElementById('corteDif').textContent=(d>=0?'+':'')+money(d)+(d===0?' (cuadra)':(d>0?' (sobra)':' (falta)')); });
+  bindModal(function(){
+    var contado=parseFloat(document.getElementById('corteMonto').value)||0;
+    var dif=contado-esperado;
+    if(state.turnoSales.length){ closeTurno(); } else { state.cajaAbierta=false; }
+    showToast('Corte realizado \u00b7 contado '+money(contado)+' \u00b7 dif '+(dif>=0?'+':'')+money(dif));
+    pedirEfectivoInicial();
+  });
+}
+function pedirEfectivoInicial(){
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Efectivo inicial</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Captura el efectivo con el que inicia la nueva caja.</div>'+
+    '<div class="field"><label>Monto inicial</label><input id="iniMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Omitir</button><button class="btn-confirm" id="mOk">Abrir caja</button></div></div></div>';
+  bindModal(function(){
+    var m=parseFloat(document.getElementById('iniMonto').value)||0;
+    if(m<0){ showToast('Monto inv\u00e1lido'); return; }
+    state.cajaInicial=m; state.cajaAbierta=true; closeModal(); renderCaja(); renderTopbar();
+    showToast('Caja abierta con efectivo inicial '+money(m));
+  });
+}
 function cajaOp(op){
   if(op==='cajon'){ showToast('Abriendo caj&oacute;n...'); return; }
-  if(op==='corte'){ switchView('caja'); showToast('Corte parcial (usa Cerrar turno para el cierre de dia)'); return; }
+  if(op==='corte'){ hacerCorte(); return; }
   var titulo=op==='deposito'?'Depositar a caja':'Retirar de caja';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>'+titulo+'</h2>'+
     '<div class="field"><label>Monto</label><input id="opMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
