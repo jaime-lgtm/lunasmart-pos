@@ -693,6 +693,7 @@ function modsTotal(){
   });
   return base+extra;
 }
+function szLabel(sn){var oz={'El Chico':'12 oz','El Mayor':'20 oz'};return oz[sn]?sn+' '+oz[sn]:sn;}
 function renderMods(){
   var p=_modP; if(!p) return;
   var h='<div class="mods-head"><div class="mh-t">'+esc(p.name)+'</div>'+(p.desc?'<div class="mh-d">'+esc(p.desc)+'</div>':'')+'</div>';
@@ -700,7 +701,7 @@ function renderMods(){
   if(p.sized && p.prices){
     h+='<div class="mgroup"><div class="mg-l">Tama&ntilde;o<span class="req">Requerido</span></div>';
     Object.keys(p.prices).forEach(function(sn){
-      h+='<label class="mopt"><span><input type="radio" name="msize" data-sz="'+esc(sn)+'"'+(_modSize===sn?' checked':'')+'> '+esc(sn)+'</span><span class="op">'+money(p.prices[sn])+'</span></label>';
+      h+='<label class="mopt"><span><input type="radio" name="msize" data-sz="'+esc(sn)+'"'+(_modSize===sn?' checked':'')+'> '+esc(szLabel(sn))+'</span><span class="op">'+money(p.prices[sn])+'</span></label>';
     });
     h+='</div>';
   }
