@@ -289,6 +289,23 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .avail-foot{padding:14px 20px;border-top:1px solid var(--linea);display:flex;justify-content:flex-end;gap:10px;}
 
 .det-cliente{background:var(--beige-claro);border-radius:12px;padding:12px 14px;margin:8px 0}.det-cliente .dc-t{font-size:12px;font-weight:800;color:var(--gris);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}.det-cliente .dc-l{font-size:14px;margin:2px 0}.det-cliente .dc-ref{color:var(--azul);font-style:italic}
+/* ===== Resumen de cierre de turno (pantalla completa) ===== */
+.resumen-overlay{position:fixed;inset:0;background:#faf6ef;z-index:9997;overflow-y:auto;}
+.resumen-wrap{max-width:640px;margin:0 auto;padding:26px 20px 110px;width:100%;}
+.resumen-head{text-align:center;margin-bottom:18px;}
+.resumen-head h2{font-size:19px;color:var(--cafe);}
+.resumen-head .sub{color:var(--gris);font-size:13px;margin-top:2px;}
+.resumen-venta{background:#fff;border:1px solid var(--linea);border-radius:16px;padding:22px;text-align:center;margin-bottom:16px;box-shadow:var(--sombra);}
+.resumen-venta .rv-lbl{font-size:12px;font-weight:700;color:var(--gris);text-transform:uppercase;letter-spacing:.5px;}
+.resumen-venta .rv-total{font-size:34px;font-weight:800;color:var(--terracota);margin-top:4px;}
+.resumen-venta .rv-comp{font-size:14px;margin-top:8px;font-weight:700;}
+.resumen-venta .rv-comp.up{color:var(--verde-ok);}
+.resumen-venta .rv-comp.down{color:var(--rojo);}
+.caja-check{display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:15px;}
+.caja-check.diff{font-weight:800;font-size:16px;border-top:1px solid var(--beige-claro);margin-top:4px;padding-top:12px;}
+.caja-check.diff.ok{color:var(--verde-ok);}
+.caja-check.diff.bad{color:var(--rojo);}
+.resumen-foot{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--linea);padding:14px 20px calc(14px + env(safe-area-inset-bottom));display:flex;gap:12px;max-width:640px;margin:0 auto;}
 #printHost{position:absolute;left:-9999px;top:0}
 @media print{ #printHost{left:0 !important;} .tk{width:280px;margin:0 auto;color:#000;font-family:'Courier New',monospace} .tk-logo{margin-bottom:8px} .tk-biz{text-align:center;font-size:12px;line-height:1.4;margin-bottom:10px} .tk-meta{text-align:center;font-size:11px;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:6px 0;margin-bottom:8px} .tk-cli{font-size:12px;line-height:1.5;margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:8px} .tk-cli .tk-sec{font-weight:800;font-size:11px;margin-bottom:2px} .tk-items{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px} .tk-items td{padding:3px 0;vertical-align:top} .tk-items .tq{width:32px;font-weight:700} .tk-items .tp{text-align:right;white-space:nowrap} .tk-items .tnote{font-size:10px;font-style:italic;color:#333} .tk-tot{display:flex;justify-content:space-between;font-size:12px;padding:2px 0} .tk-grand{font-size:16px;font-weight:800;border-top:1px dashed #000;margin-top:4px;padding-top:6px} .tk-thanks{text-align:center;font-size:12px;margin-top:12px;font-weight:700} }
 </style>
@@ -652,11 +669,34 @@ function pedirDatosDomicilio(){
   var c=state.cliente||{};
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Datos de entrega</h2>'+
     '<div class="sub" style="margin-bottom:12px">Servicio a domicilio</div>'+
-    '<div class="field"><label>Nombre *</label><input id="dNombre" value="'+esc(c.nombre||'')+'" placeholder="Nombre del cliente"></div>'+
     '<div class="field"><label>Tel\u00e9fono *</label><input id="dTel" type="tel" inputmode="tel" value="'+esc(c.telefono||'')+'" placeholder="10 d\u00edgitos"></div>'+
+    '<div class="sub" id="dTelStatus" style="margin:-6px 0 12px;min-height:16px;"></div>'+
+    '<div class="field"><label>Nombre *</label><input id="dNombre" value="'+esc(c.nombre||'')+'" placeholder="Nombre del cliente"></div>'+
     '<div class="field"><label>Direcci\u00f3n</label><input id="dDir" value="'+esc(c.direccion||'')+'" placeholder="Calle, n\u00famero, colonia"></div>'+
     '<div class="field"><label>Referencia</label><input id="dRef" value="'+esc(c.referencia||'')+'" placeholder="Entre calles, color de casa..."></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Continuar</button></div></div></div>';
+  var telInput=document.getElementById('dTel'), telStatus=document.getElementById('dTelStatus');
+  var lookupTimer=null, lastLookedUp='';
+  telInput.addEventListener('input',function(){
+    clearTimeout(lookupTimer);
+    var tel=telInput.value.replace(/\D/g,'');
+    if(tel.length!==10||tel===lastLookedUp){ telStatus.textContent=''; return; }
+    lookupTimer=setTimeout(function(){
+      lastLookedUp=tel; telStatus.textContent='Buscando cliente...';
+      SYNC.buscarClienteDom(tel).then(function(res){
+        if(telInput.value.replace(/\D/g,'')!==tel) return;
+        if(res && res.ok && res.cliente){
+          var cl=res.cliente;
+          if(cl.nombre && !document.getElementById('dNombre').value.trim()) document.getElementById('dNombre').value=cl.nombre;
+          if(cl.direccion && !document.getElementById('dDir').value.trim()) document.getElementById('dDir').value=cl.direccion;
+          if(cl.referencia && !document.getElementById('dRef').value.trim()) document.getElementById('dRef').value=cl.referencia;
+          telStatus.textContent='Cliente encontrado \u2014 revisa y confirma sus datos';
+        } else {
+          telStatus.textContent='Cliente nuevo \u2014 captura sus datos';
+        }
+      }).catch(function(){ telStatus.textContent=''; });
+    },400);
+  });
   bindModal(function(){
     var nombre=document.getElementById('dNombre').value.trim();
     var tel=document.getElementById('dTel').value.trim();
@@ -664,6 +704,7 @@ function pedirDatosDomicilio(){
     if(!tel){ showToast('Captura el tel\u00e9fono del cliente'); return; }
     state.cliente={nombre:nombre,telefono:tel,direccion:document.getElementById('dDir').value.trim(),referencia:document.getElementById('dRef').value.trim()};
     state.tipoOrden='domicilio';
+    SYNC.registrarClienteDom(state.cliente).catch(function(){});
     var prods=CATALOG[state.sucursal]||[];
     state.menu=prods.length?menusOf(prods)[0]:null; state.sub=null; state.search='';
     closeModal(); showAppView('pos'); renderPos();
@@ -1098,6 +1139,11 @@ function renderConfig(){
 /* ============ CAJA / CORTE ============ */
 function totalesPorMetodo(){ var t={efectivo:0,tarjeta:0,transferencia:0,rappi:0}; state.turnoSales.forEach(function(v){ t[v.metodo]=(t[v.metodo]||0)+v.total; }); return t; }
 function productosEstrella(){ var m={}; state.turnoSales.forEach(function(v){ v.items.forEach(function(it){ m[it.name]=(m[it.name]||0)+it.qty; }); }); return Object.keys(m).map(function(k){return {name:k,qty:m[k]};}).sort(function(a,b){return b.qty-a.qty;}).slice(0,8); }
+function productosEstrellaResumen(){ var m={}; state.turnoSales.forEach(function(v){ v.items.forEach(function(it){ if(!m[it.name]) m[it.name]={name:it.name,qty:0,total:0}; m[it.name].qty+=it.qty; m[it.name].total+=it.price*it.qty; }); }); return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return b.qty-a.qty;}).slice(0,5); }
+function fechaCorta(d){ var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; return (d.getDate()<10?'0':'')+d.getDate()+'/'+meses[d.getMonth()]+'/'+d.getFullYear(); }
+function ultimoCierreKey(suc){ return 'lsUltimoCierre_'+suc; }
+function getUltimoCierre(suc){ try{ return JSON.parse(localStorage.getItem(ultimoCierreKey(suc))||'null'); }catch(e){ return null; } }
+function setUltimoCierre(suc,data){ try{ localStorage.setItem(ultimoCierreKey(suc), JSON.stringify(data)); }catch(e){} }
 function renderCaja(){
   var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
   var est=productosEstrella(); var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
@@ -1116,7 +1162,7 @@ function renderCaja(){
     '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>';
   document.querySelectorAll('#cajaContent .caja-op').forEach(function(b){ b.addEventListener('click',function(){ cajaOp(b.dataset.op); }); });
   document.getElementById('btnPrint').addEventListener('click',function(){ window.print(); });
-  document.getElementById('btnCerrarTurno').addEventListener('click',closeTurno);
+  document.getElementById('btnCerrarTurno').addEventListener('click',abrirResumenCierre);
 }
 function hacerCorte(){
   var tm=totalesPorMetodo(); var esperado=state.cajaInicial+tm.efectivo;
@@ -1156,6 +1202,18 @@ var SYNC = {
     if(!token){ return Promise.reject(new Error("SIN_TOKEN")); }
     var body = { token: token, accion: "registrarIngresoCompleto", datos: payload };
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  buscarClienteDom: function(telefono){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token) return Promise.resolve({ok:false,cliente:null});
+    var body = { token: token, accion: "buscarClienteDom", datos: { telefono: telefono } };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  registrarClienteDom: function(cliente){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token) return Promise.resolve({ok:false});
+    var body = { token: token, accion: "registrarClienteDom", datos: cliente };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
   }
 };
 function guardarCortePendiente(payload){
@@ -1183,7 +1241,7 @@ function cajaOp(op){
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Confirmar</button></div></div></div>';
   bindModal(function(){ var m=parseFloat(document.getElementById('opMonto').value)||0; if(m<=0){ showToast('Monto invalido'); return; } if(op==='retiro'){ state.cajaInicial-=m; } else { state.cajaInicial+=m; } closeModal(); renderCaja(); showToast(titulo+': '+money(m)); });
 }
-function closeTurno(){ var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); }); if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
+function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); }); if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
   if(!state.turnoSales.length){ showToast("No hay ventas que cerrar"); return; }
   var t = totalesPorMetodo();
   var total = t.efectivo + t.tarjeta + t.transferencia + t.rappi;
@@ -1201,6 +1259,7 @@ function closeTurno(){ var __pend=(state.pedidos||[]).filter(function(p){ return
   });
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
   var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, observaciones: "POS LunaSmart", detalles: detalles };
+  if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   function _finalizar(msg){ showToast(msg); state.turnoSales = []; state.pedidos = []; state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
   if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local \u2013 falta configurar sincronizaci\u00f3n)"); return; }
   showToast("Enviando corte a Luna Smart...");
@@ -1208,6 +1267,58 @@ function closeTurno(){ var __pend=(state.pedidos||[]).filter(function(p){ return
     if(res && (res.ok || res.status==="ok" || res.id)){ _finalizar("Corte registrado en INGRESOS (" + (res.id||"") + ")"); }
     else { guardarCortePendiente(payload); _finalizar("Corte guardado local: respuesta inesperada del servidor"); }
   }).catch(function(err){ guardarCortePendiente(payload); _finalizar("Sin conexi\u00f3n: corte guardado local para reintentar"); });
+}
+function abrirResumenCierre(){
+  var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
+  if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
+  if(!state.turnoSales.length){ showToast('No hay ventas que cerrar'); return; }
+  var t=totalesPorMetodo();
+  var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
+  var esperado=(state.cajaInicial||0)+t.efectivo;
+  var turnoLabel=(state.turno==='TURNO TARDE')?'Tarde':'Ma\u00f1ana';
+  var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
+  var prev=getUltimoCierre(state.sucursal);
+  var pct=function(v){ return total>0?Math.round(v/total*100):0; };
+  var top5=productosEstrellaResumen();
+  var compHtml='';
+  if(prev && typeof prev.total==='number'){
+    var delta=total-prev.total;
+    compHtml='<div class="rv-comp '+(delta>=0?'up':'down')+'">'+(delta>=0?'+':'-')+money(Math.abs(delta))+' '+(delta>=0?'\u2191':'\u2193')+' vs '+esc(prev.label||'turno anterior')+'</div>';
+  }
+  var host=document.getElementById('resumenHost')||(function(){var d=document.createElement('div'); d.id='resumenHost'; document.body.appendChild(d); return d;})();
+  host.innerHTML='<div class="resumen-overlay"><div class="resumen-wrap">'+
+    '<div class="resumen-head"><h2>Resumen del turno &mdash; '+esc(turnoLabel)+' '+esc(fechaCorta(new Date()))+'</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+'</div>':'')+'</div>'+
+    '<div class="resumen-venta"><div class="rv-lbl">Venta total</div><div class="rv-total">'+money(total)+'</div>'+compHtml+'</div>'+
+    '<div class="card"><h3>M\u00e9todos de pago</h3>'+
+      ['efectivo','tarjeta','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+'</span><b>'+money(t[m])+' &middot; '+pct(t[m])+'%</b></div>'; }).join('')+
+    '</div>'+
+    '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas &middot; '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
+    '</div>'+
+    '<div class="card"><h3>Caja</h3>'+
+      '<div class="field"><label>Efectivo declarado (contado f\u00edsicamente)</label><input id="rDeclarado" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+      '<div class="caja-check"><span>Sistema</span><b>'+money(esperado)+'</b></div>'+
+      '<div class="caja-check diff" id="rDiffRow" style="display:none"></div>'+
+    '</div>'+
+    '</div>'+
+    '<div class="resumen-foot"><button class="btn-cancel" id="rCancel" style="flex:1">Cancelar</button><button class="btn-confirm" id="rConfirm" style="flex:2">Confirmar cierre</button></div>'+
+  '</div>';
+  var diffRow=document.getElementById('rDiffRow');
+  document.getElementById('rDeclarado').addEventListener('input',function(e){
+    var v=parseFloat(e.target.value);
+    if(isNaN(v)){ diffRow.style.display='none'; return; }
+    var dif=v-esperado;
+    diffRow.className='caja-check diff '+(dif===0?'ok':'bad');
+    diffRow.style.display='flex';
+    diffRow.innerHTML='<span>Diferencia</span><b>'+(dif>=0?'+':'')+money(dif)+(dif===0?' \u2713 CUADRA':'')+'</b>';
+  });
+  document.getElementById('rCancel').addEventListener('click',function(){ host.innerHTML=''; });
+  document.getElementById('rConfirm').addEventListener('click',function(){
+    var v=parseFloat(document.getElementById('rDeclarado').value);
+    if(isNaN(v)){ showToast('Captura el efectivo declarado'); return; }
+    setUltimoCierre(state.sucursal, {total:total, label:'turno '+turnoLabel.toLowerCase()+' de hoy', ts:Date.now()});
+    host.innerHTML='';
+    closeTurno(v,esperado);
+  });
 }
 
 /* ============ INIT ============ */
