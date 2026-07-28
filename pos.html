@@ -512,7 +512,7 @@ var MESAS_MOCK = {
 };
 
 /* MOCK: config modulos (estilo Parrot) */
-var CONFIG_ITEMS = [
+var CONFIG_ITEMS = [{t:"Sincronizaci\u00f3n Luna Smart", ic:"\uD83D\uDD04", badge:"Config", badgeClass:""},
   {t:'Mesas',ic:'\uD83E\uDE91'},
   {ic:'&#128421;', t:'Monitores de estacion', badge:'Barra y Cocina', badgeClass:'ok'},
   {ic:'&#127860;', t:'Areas de preparacion', badge:'2 areas', badgeClass:'ok'},
@@ -540,7 +540,7 @@ var state = {
   menu:null, sub:null, search:'',
   cart:[], descuento:{tipo:null,valor:0}, turnoSales:[], pedidos:[], kdsArea:'todas',
   checkoutOpen:false, metodoPago:'efectivo', cashReceived:0,
-  cajaInicial:892, cajaAbierta:true
+  cajaInicial:892, cajaAbierta:true, turno:null
 };
 
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aqui'};
@@ -944,6 +944,35 @@ function getMesas(suc){
   for(var i=1;i<=n;i++){ var m=byN[i]?Object.assign({},byN[i]):{n:i,estado:'libre'}; if(ov[i]){ m.estado=ov[i].estado; if(ov[i].estado==='ocupada'){ m.total=ov[i].total; } else { delete m.total; } } arr.push(m); }
   return arr;
 }
+function configSync(){
+  var urlActual = SYNC.getUrl();
+  var tokActual = SYNC.getToken();
+  var pend = 0;
+  try { pend = JSON.parse(localStorage.getItem("ls_cortes_pendientes")||"[]").length; } catch(e){}
+  var estado = SYNC.configurado() ? "<span style=\"color:#1a7f37;font-weight:700\">Configurado</span>" : "<span style=\"color:#b00;font-weight:700\">Falta el token</span>";
+  var pendTxt = pend>0 ? ("<div class=\"sub\" style=\"margin-top:8px;color:#b00\">Hay " + pend + " corte(s) pendiente(s) de enviar</div>") : "";
+  document.getElementById("modalHost").innerHTML =
+    '<div class="modal-bg" id="mbg"><div class="modal">' +
+    '<h2>Sincronizaci\u00f3n con Luna Smart</h2>' +
+    '<div class="sub" style="margin-bottom:10px">Estado: ' + estado + pendTxt + '</div>' +
+    '<div class="sub" style="margin:10px 0 4px">URL del Web App (Apps Script)</div>' +
+    '<input id="syncUrl" type="text" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--linea)" placeholder="https://script.google.com/macros/s/.../exec" value="' + urlActual.replace(/"/g,"&quot;") + '">' +
+    '<div class="sub" style="margin:14px 0 4px">Token de escritura</div>' +
+    '<input id="syncTok" type="password" autocomplete="off" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--linea)" placeholder="Pega aqu\u00ed el token">' +
+    '<div class="sub" style="margin-top:8px;font-size:12px;opacity:.75">El token se guarda solo en este dispositivo. No se comparte ni queda en el c\u00f3digo.</div>' +
+    '<div class="modal-actions" style="margin-top:18px"><button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mOk">Guardar</button></div>' +
+    '</div></div>';
+  var it = document.getElementById("syncTok"); if(it && tokActual){ it.placeholder = "\u2022\u2022\u2022\u2022\u2022\u2022 (guardado \u2013 escribe para reemplazar)"; }
+  bindModal(function(){
+    var u = document.getElementById("syncUrl").value;
+    var k = document.getElementById("syncTok").value;
+    if(u && u.trim()) SYNC.setUrl(u);
+    if(k && k.trim()) SYNC.setToken(k);
+    closeModal();
+    showToast(SYNC.configurado() ? "Sincronizaci\u00f3n guardada" : "Guardado (falta token)");
+    if(typeof renderConfig==="function") renderConfig();
+  });
+}
 function configMesas(){
   var suc=state.sucursal; var actual=numMesasConfig(suc);
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Configurar mesas</h2>'+
@@ -1053,7 +1082,7 @@ function renderConfig(){
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t==='Mesas'){ configMesas(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 
 /* ============ CAJA / CORTE ============ */
@@ -1097,15 +1126,40 @@ function hacerCorte(){
     pedirEfectivoInicial();
   });
 }
+
+/* ==== SINCRONIZACION CON LUNA SMART (Google Sheets via Apps Script) ==== */
+var SYNC = {
+  URL_KEY: "ls_webapp_url",
+  TOKEN_KEY: "ls_write_token",
+  DEFAULT_URL: "https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec",
+  getUrl: function(){ return localStorage.getItem(this.URL_KEY) || this.DEFAULT_URL; },
+  getToken: function(){ return localStorage.getItem(this.TOKEN_KEY) || ""; },
+  setUrl: function(v){ localStorage.setItem(this.URL_KEY, (v||"").trim()); },
+  setToken: function(v){ localStorage.setItem(this.TOKEN_KEY, (v||"").trim()); },
+  configurado: function(){ return !!this.getToken(); },
+  sucursalSheet: function(sucId){
+    var suc = SUCURSALES.filter(function(s){ return s.id===sucId; })[0];
+    return suc && suc.inventario ? suc.inventario : (suc? String(suc.nombre).toUpperCase() : "");
+  },
+  enviarCorte: function(payload){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token){ return Promise.reject(new Error("SIN_TOKEN")); }
+    var body = { token: token, accion: "registrarIngresoCompleto", datos: payload };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  }
+};
+function guardarCortePendiente(payload){
+  try { var arr = JSON.parse(localStorage.getItem("ls_cortes_pendientes")||"[]"); arr.push({ ts: Date.now(), payload: payload }); localStorage.setItem("ls_cortes_pendientes", JSON.stringify(arr)); } catch(e){}
+}
 function pedirEfectivoInicial(){
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Efectivo inicial</h2>'+
     '<div class="sub" style="margin-bottom:12px">Captura el efectivo con el que inicia la nueva caja.</div>'+
-    '<div class="field"><label>Monto inicial</label><input id="iniMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+    '<div class="field"><label>Monto inicial</label><input id="iniMonto" type="number" inputmode="decimal" placeholder="0.00"><div class="sub" style="margin:14px 0 6px">Turno de esta caja</div><div style="display:flex;gap:10px"><button type="button" id="turMan" class="turno-op" style="flex:1;padding:14px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:700;cursor:pointer">&#127749; Turno Ma&ntilde;ana</button><button type="button" id="turTar" class="turno-op" style="flex:1;padding:14px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:700;cursor:pointer">&#127750; Turno Tarde</button></div></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Omitir</button><button class="btn-confirm" id="mOk">Abrir caja</button></div></div></div>';
-  bindModal(function(){
+  window.__turnoSel=null;var _tm=document.getElementById("turMan"), _tt=document.getElementById("turTar");function _selTur(v){ window.__turnoSel=v; if(_tm){_tm.style.background=(v==="TURNO MA\u00d1ANA")?"var(--terracota)":"#fff"; _tm.style.color=(v==="TURNO MA\u00d1ANA")?"#fff":"inherit";} if(_tt){_tt.style.background=(v==="TURNO TARDE")?"var(--terracota)":"#fff"; _tt.style.color=(v==="TURNO TARDE")?"#fff":"inherit";} }if(_tm) _tm.addEventListener("click",function(){_selTur("TURNO MA\u00d1ANA");});if(_tt) _tt.addEventListener("click",function(){_selTur("TURNO TARDE");});bindModal(function(){
     var m=parseFloat(document.getElementById('iniMonto').value)||0;
     if(m<0){ showToast('Monto inv\u00e1lido'); return; }
-    state.cajaInicial=m; state.cajaAbierta=true; closeModal(); renderCaja(); renderTopbar();
+    if(!window.__turnoSel){ showToast("Selecciona el turno"); return; } state.turno = window.__turnoSel; state.cajaInicial=m; state.cajaAbierta=true; closeModal(); renderCaja(); renderTopbar();
     showToast('Caja abierta con efectivo inicial '+money(m));
   });
 }
@@ -1120,12 +1174,30 @@ function cajaOp(op){
   bindModal(function(){ var m=parseFloat(document.getElementById('opMonto').value)||0; if(m<=0){ showToast('Monto invalido'); return; } if(op==='retiro'){ state.cajaInicial-=m; } else { state.cajaInicial+=m; } closeModal(); renderCaja(); showToast(titulo+': '+money(m)); });
 }
 function closeTurno(){
-  if(!state.turnoSales.length){ showToast('No hay ventas que cerrar'); return; }
-  var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
-  var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
-  API.cerrarTurno({sucursal:suc?suc.nombre:state.sucursal,pago_efectivo:t.efectivo,pago_tarjeta:t.tarjeta,pago_transferencia:t.transferencia,pago_rappi:t.rappi,venta_total:total,num_ventas:state.turnoSales.length}).then(function(){
-    showToast('Turno cerrado -- consolidado en INGRESOS'); state.turnoSales=[]; state.pedidos=[]; renderCaja(); renderTopbar();
+  if(!state.turnoSales.length){ showToast("No hay ventas que cerrar"); return; }
+  var t = totalesPorMetodo();
+  var total = t.efectivo + t.tarjeta + t.transferencia + t.rappi;
+  var sucSheet = SYNC.sucursalSheet(state.sucursal);
+  var turno = state.turno || "TURNO MA\u00d1ANA";
+  var mapDet = {};
+  state.turnoSales.forEach(function(v){
+    (v.items||[]).forEach(function(it){
+      var precio = (typeof it.price==="number") ? it.price : (typeof it.precio==="number" ? it.precio : (it.total&&it.qty? it.total/it.qty : 0));
+      var nombre = it.name || it.nombre || it.articulo || "ARTICULO";
+      var key = nombre + "||" + precio;
+      if(!mapDet[key]) mapDet[key] = { articulo: nombre, cantidad: 0, unitPrice: precio };
+      mapDet[key].cantidad += (it.qty || it.cantidad || 1);
+    });
   });
+  var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
+  var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, observaciones: "POS LunaSmart", detalles: detalles };
+  function _finalizar(msg){ showToast(msg); state.turnoSales = []; state.pedidos = []; state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
+  if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local \u2013 falta configurar sincronizaci\u00f3n)"); return; }
+  showToast("Enviando corte a Luna Smart...");
+  SYNC.enviarCorte(payload).then(function(res){
+    if(res && (res.ok || res.status==="ok" || res.id)){ _finalizar("Corte registrado en INGRESOS (" + (res.id||"") + ")"); }
+    else { guardarCortePendiente(payload); _finalizar("Corte guardado local: respuesta inesperada del servidor"); }
+  }).catch(function(err){ guardarCortePendiente(payload); _finalizar("Sin conexi\u00f3n: corte guardado local para reintentar"); });
 }
 
 /* ============ INIT ============ */
