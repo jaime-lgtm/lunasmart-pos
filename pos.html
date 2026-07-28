@@ -652,7 +652,7 @@ function pedirDatosDomicilio(){
   var c=state.cliente||{};
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Datos de entrega</h2>'+
     '<div class="sub" style="margin-bottom:12px">Servicio a domicilio</div>'+
-    '<div class="field"><label>Tel\u00e9fono *</label><input id="dTel" type="tel" inputmode="tel" value="'+esc(c.telefono||'')+'" placeholder="(878)1404532"></div>'+
+    '<div class="field"><label>Tel\u00e9fono *</label><input id="dTel" type="tel" inputmode="tel" value="'+esc(c.telefono||'')+'" placeholder="10 d\u00edgitos"></div>'+
     '<div class="field"><label>Nombre *</label><input id="dNombre" value="'+esc(c.nombre||'')+'" placeholder="Nombre del cliente"></div>'+
     '<div class="field"><label>Direcci\u00f3n</label><input id="dDir" value="'+esc(c.direccion||'')+'" placeholder="Calle, n\u00famero, colonia"></div>'+
     '<div class="field"><label>Referencia</label><input id="dRef" value="'+esc(c.referencia||'')+'" placeholder="Entre calles, color de casa..."></div>'+
