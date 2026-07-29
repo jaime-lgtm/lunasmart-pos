@@ -676,8 +676,11 @@ function pedirDatosDomicilio(){
     '<div class="field"><label>Referencia</label><input id="dRef" value="'+esc(c.referencia||'')+'" placeholder="Entre calles, color de casa..."></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Continuar</button></div></div></div>';
   var telInput=document.getElementById('dTel'), telStatus=document.getElementById('dTelStatus');
+  function fmtTel(v){ var d=String(v).replace(/\D/g,'').slice(0,10); if(d.length<=3) return d.length? '('+d : ''; return '('+d.slice(0,3)+')'+d.slice(3); }
+  telInput.value=fmtTel(telInput.value);
   var lookupTimer=null, lastLookedUp='';
   telInput.addEventListener('input',function(){
+    telInput.value=fmtTel(telInput.value);
     clearTimeout(lookupTimer);
     var tel=telInput.value.replace(/\D/g,'');
     if(tel.length!==10||tel===lastLookedUp){ telStatus.textContent=''; return; }
@@ -698,11 +701,14 @@ function pedirDatosDomicilio(){
     },400);
   });
   bindModal(function(){
+    var tel=document.getElementById('dTel').value.replace(/\D/g,'');
     var nombre=document.getElementById('dNombre').value.trim();
-    var tel=document.getElementById('dTel').value.trim();
+    if(tel.length!==10){ showToast('Captura los 10 d\u00edgitos del tel\u00e9fono'); return; }
     if(!nombre){ showToast('Captura el nombre del cliente'); return; }
-    if(!tel){ showToast('Captura el tel\u00e9fono del cliente'); return; }
-    state.cliente={nombre:nombre,telefono:tel,direccion:document.getElementById('dDir').value.trim(),referencia:document.getElementById('dRef').value.trim()};
+    var telFmt='('+tel.slice(0,3)+')'+tel.slice(3);
+    var dir=document.getElementById('dDir').value.trim();
+    var ref=document.getElementById('dRef').value.trim();
+    state.cliente={nombre:nombre,telefono:telFmt,direccion:dir,referencia:ref};
     state.tipoOrden='domicilio';
     SYNC.registrarClienteDom(state.cliente).catch(function(){});
     var prods=CATALOG[state.sucursal]||[];
