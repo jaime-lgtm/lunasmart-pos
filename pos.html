@@ -1016,7 +1016,7 @@ function confirmSale(){
   var items=state.cart.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
-  var itemsPedido=state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,area:l.area||'barra'};});
+  var itemsPedido=state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra'};});
   var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
   var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
   var fbRef=fbPedidosRef(state.sucursal).push();
@@ -1151,7 +1151,7 @@ function imprimirTicket(p){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
-  var rows=items.map(function(l){ return '<tr><td class="tq">'+l.qty+'x</td><td class="tn">'+esc(l.name)+(l.note?'<div class="tnote">'+esc(l.note)+'</div>':'')+'</td><td class="tp">'+money(l.price*l.qty)+'</td></tr>'; }).join('');
+  var rows=items.map(function(l){ return '<tr><td class="tq">'+l.qty+'x</td><td class="tn">'+esc(l.name)+(l.mods?'<div class="tnote">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="tnote">'+esc(l.note)+'</div>':'')+'</td><td class="tp">'+money(l.price*l.qty)+'</td></tr>'; }).join('');
   var cli=p.cliente?('<div class="tk-cli"><div class="tk-sec">DATOS DE ENTREGA</div>'+'<div>'+esc(p.cliente.nombre||'')+'</div>'+'<div>Tel: '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div>'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div>Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>'):'';
   var host=document.getElementById('printHost')||(function(){ var d=document.createElement('div'); d.id='printHost'; document.body.appendChild(d); return d; })();
   host.innerHTML='<div id="printArea"><div class="tk">'+
@@ -1173,7 +1173,7 @@ function verPedido(ix){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'? subtotal*(p.descuento.valor/100) : p.descuento.valor; }
-  var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
+  var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
     '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div>'+
     (p.cliente?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b> \u00b7 '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':'')+'<div class="det-list">'+rows+'</div>'+
