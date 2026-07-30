@@ -404,12 +404,58 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <div id="modalHost"></div>
 <div id="modsBackdrop" class="mods-backdrop"><div id="modsBox" class="mods-box"></div></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
 /* ============================================================
    LUNA SMART POS -- Logica (CASCARA, flujo estilo Parrot)
    Datos MOCK. Los === API === son ganchos al Apps Script.
    ============================================================ */
 var CONFIG = { API_URL:'', SHEET_ID:'1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk', IVA_RATE:0.08 };
+
+/* ==== FIREBASE: pedidos en vivo (Monitor de estación en tiempo real) ==== */
+var firebaseConfig = {
+  apiKey: "AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM",
+  authDomain: "luna-smart-pos.firebaseapp.com",
+  databaseURL: "https://luna-smart-pos-default-rtdb.firebaseio.com",
+  projectId: "luna-smart-pos",
+  storageBucket: "luna-smart-pos.firebasestorage.app",
+  messagingSenderId: "29167679041",
+  appId: "1:29167679041:web:0959c2161d86552ded38c0"
+};
+firebase.initializeApp(firebaseConfig);
+var fbDb = firebase.database();
+var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
+var fbPedidosListener = null, fbListenerSuc = null;
+
+function fbPedidosRef(suc){ return fbDb.ref('pedidos/'+suc); }
+
+function fbEscucharPedidos(suc){
+  fbDejarDeEscucharPedidos();
+  fbListenerSuc = suc;
+  fbPedidosListener = function(snap){
+    var val = snap.val() || {};
+    var arr = Object.keys(val).map(function(k){ var p=val[k]; p._fbKey=k; return p; });
+    arr.sort(function(a,b){ return (b._ts||0)-(a._ts||0); });
+    state.pedidos = arr;
+    renderTopbar();
+    if(state.view==='kds') renderKds();
+    if(state.view==='pedidos') renderPedidos();
+  };
+  fbAuthReady.then(function(){ fbPedidosRef(suc).on('value', fbPedidosListener); });
+}
+function fbDejarDeEscucharPedidos(){
+  if(fbPedidosListener && fbListenerSuc){ fbPedidosRef(fbListenerSuc).off('value', fbPedidosListener); }
+  fbPedidosListener = null; fbListenerSuc = null;
+}
+function fbActualizarEstadoPedido(suc, fbKey, campo, valor){
+  var upd={}; upd[campo]=valor;
+  fbPedidosRef(suc).child(fbKey).update(upd).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
+}
+function fbLimpiarPedidos(suc){
+  return fbPedidosRef(suc).remove().catch(function(e){ console.error(e); });
+}
 
 var SUCURSALES = [
   {id:'cafeteria', nombre:'Casa de la Cultura',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:true},
@@ -624,11 +670,12 @@ function doLogin(){
     state.logged=true; state.sucursal=suc; state.role=u.rol; state.user=u.nombre;
     state.view='menu'; state.tipoOrden=null; state.mesa=null; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.turnoSales=[]; state.pin='';
     state.pedidos=[];
+    fbEscucharPedidos(suc);
     showScreen('scApp'); renderTopbar(); goMenu(); if(state.role==='monitor'){ var _k=document.querySelector('[data-view="kds"]'); if(_k) _k.click(); }
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; fbDejarDeEscucharPedidos(); renderPinDisplay(); showScreen('scLogin'); }
 function seedPedidos(){ /* MOCK historial */ return [
   {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:'',area:'barra'},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez',area:'cocina'},{name:'Espresso',qty:1,price:38,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'pendiente'},
   {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45',mesa:3,descuento:{tipo:null,valor:0},items:[{name:'Latte',qty:2,price:58,note:'deslactosado',area:'barra'},{name:'Rebanada de pastel',qty:2,price:75,note:'',area:'cocina'},{name:'Sandwich jamon y queso',qty:1,price:85,note:'',area:'cocina'},{name:'Cold Brew',qty:1,price:59,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'listo'},
@@ -969,11 +1016,13 @@ function confirmSale(){
   var items=state.cart.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
-  var nid='#'+(1044+state.turnoSales.length+1);
   var itemsPedido=state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,area:l.area||'barra'};});
   var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
   var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
-  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:hayBarra?'pendiente':'listo',estadoCocina:hayCocina?'pendiente':'listo'});
+  var fbRef=fbPedidosRef(state.sucursal).push();
+  var nid='#'+fbRef.key.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase();
+  var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:hayBarra?'pendiente':'listo',estadoCocina:hayCocina?'pendiente':'listo',_ts:firebase.database.ServerValue.TIMESTAMP};
+  fbRef.set(pedidoObj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
@@ -1055,10 +1104,9 @@ function renderMesas(){
 }
 function kdsSetArea(a){ state.kdsArea=a; renderKds(); }
 function kdsMarcarListo(ix,area){
-  var p=state.pedidos[ix]; if(!p) return;
-  if(area==='cocina') p.estadoCocina='listo'; else p.estadoBarra='listo';
+  var p=state.pedidos[ix]; if(!p||!p._fbKey) return;
+  fbActualizarEstadoPedido(state.sucursal, p._fbKey, area==='cocina'?'estadoCocina':'estadoBarra', 'listo');
   showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista');
-  renderTopbar(); renderKds();
 }
 function renderKds(){
   var area=state.kdsArea||'todas';
@@ -1269,7 +1317,7 @@ function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(f
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
   var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, observaciones: "POS LunaSmart", detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
-  function _finalizar(msg){ showToast(msg); state.turnoSales = []; state.pedidos = []; state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
+  function _finalizar(msg){ showToast(msg); state.turnoSales = []; fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
   if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local \u2013 falta configurar sincronizaci\u00f3n)"); return; }
   showToast("Enviando corte a Luna Smart...");
   SYNC.enviarCorte(payload).then(function(res){
