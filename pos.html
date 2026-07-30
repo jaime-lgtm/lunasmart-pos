@@ -159,6 +159,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .ped-row .pest{font-size:12px;padding:3px 10px;border-radius:12px;font-weight:700;}
 .pest.pagado{background:#eef6ef;color:var(--verde-ok);}
 .pest.abierto{background:#fdf3e7;color:var(--terracota);}
+.pest.cancelado{background:#fbeeea;color:var(--rojo);}
 /* Config */
 .cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;}
 .cfg-card{background:#fff;border:1px solid var(--linea);border-radius:16px;padding:26px 16px;text-align:center;box-shadow:var(--sombra);transition:.12s;}
@@ -1284,7 +1285,7 @@ function selectMesa(n){
 function renderPedidos(){
   var html='<h2>Historial de pedidos</h2><div class="sub">Toca un pedido para ver el detalle</div><div class="card">';
   if(!state.pedidos.length){ html+='<div class="cart-empty">Sin pedidos</div>'; }
-  else{ html+=state.pedidos.map(function(p,ix){ var mt=p.metodo?(PAGO_LABEL[p.metodo]||p.metodo):'Pendiente de cobro'; return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+'</div><div class="pm">'+esc(mt)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
+  else{ html+=state.pedidos.map(function(p,ix){ var mt=p.metodo?(PAGO_LABEL[p.metodo]||p.metodo):(p.estado==='cancelado'?'Cancelado':'Pendiente de cobro'); return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+'</div><div class="pm">'+esc(mt)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
   html+='</div>';
   document.getElementById('pedidosContent').innerHTML=html;
 }
@@ -1319,7 +1320,7 @@ function verPedido(ix){
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'? subtotal*(p.descuento.valor/100) : p.descuento.valor; }
   var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
-  var metodoTxt = p.metodo ? esc(PAGO_LABEL[p.metodo]||p.metodo) : 'Pendiente de cobro';
+  var metodoTxt = p.metodo ? esc(PAGO_LABEL[p.metodo]||p.metodo) : (p.estado==='cancelado'?'Cancelado':'Pendiente de cobro');
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
     '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+metodoTxt+' &middot; '+esc(p.hora)+'</div>'+
     (p.cliente&&(p.cliente.telefono||p.cliente.direccion)?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b>'+(p.cliente.telefono?' \u00b7 '+esc(p.cliente.telefono):'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
@@ -1327,9 +1328,19 @@ function verPedido(ix){
     (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
     (p.estado==='abierto'?
-      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Cobrar</button></div></div></div>':
+      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-cancel" id="mCancelarPedido" style="color:var(--rojo);">Cancelar pedido</button><button class="btn-confirm" id="mOk">Cobrar</button></div></div></div>':
       '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Reimprimir ticket</button></div></div></div>');
   bindModal(function(){ if(p.estado==='abierto'){ closeModal(); abrirCobroPedido(ix); } else { imprimirTicket(p); } });
+  var __btnCancelar=document.getElementById('mCancelarPedido');
+  if(__btnCancelar){ __btnCancelar.addEventListener('click',function(){ cancelarPedido(ix); }); }
+}
+function cancelarPedido(ix){
+  var p=state.pedidos[ix]; if(!p||!p._fbKey||p.estado!=='abierto') return;
+  if(!confirm('¿Cancelar el pedido '+p.id+'? Esta acción no se puede deshacer.')) return;
+  fbPedidosRef(state.sucursal).child(p._fbKey).update({estado:'cancelado',estadoBarra:'listo',estadoCocina:'listo'}).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
+  if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
+  closeModal();
+  showToast('Pedido '+p.id+' cancelado');
 }
 
 /* ============ CONFIGURACION ============ */
