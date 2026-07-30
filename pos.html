@@ -653,20 +653,25 @@ function showToast(msg){var t=document.getElementById('toast');t.textContent=msg
 /* ---- Alerta sonora (pedido nuevo en Monitor) ---- */
 var _audioCtx=null;
 function unlockAudio(){ try{ if(!_audioCtx){ _audioCtx=new (window.AudioContext||window.webkitAudioContext)(); } if(_audioCtx.state==='suspended'){ _audioCtx.resume(); } }catch(e){} }
-function _beep(freq,delay){
+function _campana(freq,delay,dur,vol){
   setTimeout(function(){
     try{
-      var o=_audioCtx.createOscillator(), g=_audioCtx.createGain();
+      var t0=_audioCtx.currentTime;
+      var o=_audioCtx.createOscillator(), o2=_audioCtx.createOscillator();
+      var g=_audioCtx.createGain(), g2=_audioCtx.createGain();
       o.type='sine'; o.frequency.value=freq;
-      g.gain.setValueAtTime(0.0001,_audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.3,_audioCtx.currentTime+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001,_audioCtx.currentTime+0.35);
+      o2.type='sine'; o2.frequency.value=freq*2; g2.gain.value=0.12;
+      g.gain.setValueAtTime(0.0001,t0);
+      g.gain.exponentialRampToValueAtTime(vol,t0+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+      o2.connect(g2); g2.connect(g);
       o.connect(g); g.connect(_audioCtx.destination);
-      o.start(); o.stop(_audioCtx.currentTime+0.4);
+      o.start(t0); o.stop(t0+dur+0.05);
+      o2.start(t0); o2.stop(t0+dur+0.05);
     }catch(e){}
   },delay);
 }
-function playAlertSound(){ unlockAudio(); if(!_audioCtx) return; _beep(880,0); _beep(1046,220); }
+function playAlertSound(){ unlockAudio(); if(!_audioCtx) return; _campana(659.25,0,0.55,0.28); _campana(523.25,260,0.75,0.28); }
 
 /* ---- Cronometro / semaforo de tiempo de preparacion en el Monitor ---- */
 function _tiempoClase(ms){ var min=ms/60000; if(min<5) return 'tw-verde'; if(min<=10) return 'tw-amarillo'; return 'tw-rojo'; }
@@ -1291,7 +1296,7 @@ function imprimirTicket(p){
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
   var rows=items.map(function(l){ return '<tr><td class="tq">'+l.qty+'x</td><td class="tn">'+esc(l.name)+(l.mods?'<div class="tnote">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="tnote">'+esc(l.note)+'</div>':'')+'</td><td class="tp">'+money(l.price*l.qty)+'</td></tr>'; }).join('');
   var cli='';
-  if(p.cliente&&p.cliente.telefono){ cli='<div class="tk-cli"><div class="tk-sec">DATOS DE ENTREGA</div>'+'<div>'+esc(p.cliente.nombre||'')+'</div>'+'<div>Tel: '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div>'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div>Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>'; }
+  if(p.cliente&&(p.cliente.telefono||p.cliente.direccion)){ cli='<div class="tk-cli"><div class="tk-sec">DATOS DE ENTREGA</div>'+'<div>'+esc(p.cliente.nombre||'')+'</div>'+(p.cliente.telefono?'<div>Tel: '+esc(p.cliente.telefono)+'</div>':'')+(p.cliente.direccion?'<div>'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div>Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>'; }
   else if(p.cliente&&p.cliente.nombre){ cli='<div class="tk-cli"><div class="tk-sec">CLIENTE</div><div>'+esc(p.cliente.nombre)+'</div></div>'; }
   var host=document.getElementById('printHost')||(function(){ var d=document.createElement('div'); d.id='printHost'; document.body.appendChild(d); return d; })();
   host.innerHTML='<div id="printArea"><div class="tk">'+
@@ -1317,7 +1322,7 @@ function verPedido(ix){
   var metodoTxt = p.metodo ? esc(PAGO_LABEL[p.metodo]||p.metodo) : 'Pendiente de cobro';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
     '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+metodoTxt+' &middot; '+esc(p.hora)+'</div>'+
-    (p.cliente&&p.cliente.telefono?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b> \u00b7 '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
+    (p.cliente&&(p.cliente.telefono||p.cliente.direccion)?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b>'+(p.cliente.telefono?' \u00b7 '+esc(p.cliente.telefono):'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
     (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
