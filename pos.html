@@ -1018,13 +1018,24 @@ function renderCheckout(){
   var confDis=(state.metodoPago==='efectivo'&&state.cashReceived<total)?'disabled':'';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cobrar</h2><div class="modal-total">'+money(total)+'</div>'+
     '<div class="pay-grid">'+metodos.map(function(m){return '<button class="pay-btn'+(state.metodoPago===m?" active":"")+'" data-m="'+m+'">'+esc(PAGO_LABEL[m])+'</button>';}).join('')+'</div>'+cashBlock+
-    '<div class="modal-actions"><button class="btn-cancel" id="btnCancelPay">Cancelar</button><button class="btn-confirm" id="btnConfirmPay" '+confDis+'>Confirmar cobro</button></div></div></div>';
+    '<button class="btn-ghost" id="btnGuardarAbierto" style="width:100%;padding:13px;margin-top:2px;border:1px solid var(--linea);border-radius:12px;background:#fff;font-weight:700;color:var(--cafe-medio);">&#128190; Cerrar pedido y cobrar despu&eacute;s</button>'+
+    '<div class="modal-actions" style="margin-top:10px"><button class="btn-cancel" id="btnCancelPay">Cancelar</button><button class="btn-confirm" id="btnConfirmPay" '+confDis+'>Confirmar cobro</button></div></div></div>';
   document.querySelectorAll('.pay-btn').forEach(function(b){ b.addEventListener('click',function(){ setPaymentMethod(b.dataset.m); }); });
   var ci=document.getElementById('cashInput'); if(ci){ ci.addEventListener('input',function(){ setCash(ci.value); }); ci.focus(); }
   document.querySelectorAll('[data-cash]').forEach(function(b){ b.addEventListener('click',function(){ setCash(b.dataset.cash==='exact'?total:b.dataset.cash); }); });
   document.getElementById('btnCancelPay').addEventListener('click',closeCheckout);
   document.getElementById('btnConfirmPay').addEventListener('click',confirmSale);
+  document.getElementById('btnGuardarAbierto').addEventListener('click',guardarPedidoAbierto);
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeCheckout(); });
+}
+function _construirPedidoDesdeCart(estado,metodo){
+  var itemsPedido=state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra'};});
+  var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
+  var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
+  var fbRef=fbPedidosRef(state.sucursal).push();
+  var nid='#'+fbRef.key.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase();
+  var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:metodo,total:cartTotalFinal(),estado:estado,hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:hayBarra?'pendiente':'listo',estadoCocina:hayCocina?'pendiente':'listo',_ts:firebase.database.ServerValue.TIMESTAMP};
+  return {ref:fbRef,obj:pedidoObj};
 }
 function confirmSale(){
   var total=cartTotalFinal();
@@ -1033,17 +1044,60 @@ function confirmSale(){
   var items=state.cart.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
-  var itemsPedido=state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra'};});
-  var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
-  var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
-  var fbRef=fbPedidosRef(state.sucursal).push();
-  var nid='#'+fbRef.key.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase();
-  var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:hayBarra?'pendiente':'listo',estadoCocina:hayCocina?'pendiente':'listo',_ts:firebase.database.ServerValue.TIMESTAMP};
-  fbRef.set(pedidoObj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
+  var built=_construirPedidoDesdeCart('pagado',state.metodoPago);
+  built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
   showToast(change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total)));
+}
+function guardarPedidoAbierto(){
+  if(!state.cart.length){ showToast('La orden esta vacia'); return; }
+  var built=_construirPedidoDesdeCart('abierto',null);
+  built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
+  state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
+  renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
+  showToast('Cuenta guardada '+built.obj.id+' -- pendiente de cobro');
+}
+/* ---- Cobrar una cuenta abierta desde Pedidos ---- */
+var _cobroPedidoIx=null;
+function abrirCobroPedido(ix){
+  var p=state.pedidos[ix]; if(!p||p.estado!=='abierto') return;
+  _cobroPedidoIx=ix; state.metodoPago='efectivo'; state.cashReceived=0;
+  renderCobroPedido();
+}
+function closeCobroPedido(){ _cobroPedidoIx=null; closeModal(); }
+function setCobroMetodo(m){ state.metodoPago=m; renderCobroPedido(); }
+function setCobroCash(v){ state.cashReceived=parseFloat(v)||0; renderCobroPedido(); }
+function renderCobroPedido(){
+  var p=state.pedidos[_cobroPedidoIx]; if(!p){ closeModal(); return; }
+  var total=p.total; var change=state.cashReceived-total;
+  var metodos=['efectivo','tarjeta','transferencia','rappi'];
+  var cashBlock = state.metodoPago==='efectivo' ?
+    '<div class="cash-box"><input id="cashInputCobro" type="number" inputmode="decimal" placeholder="Monto recibido" value="'+(state.cashReceived||'')+'">'+
+    '<div class="quick-cash">'+[100,200,500,1000].map(function(v){return '<button data-cash="'+v+'">$'+v+'</button>';}).join('')+'<button data-cash="exact">Exacto</button></div>'+
+    '<div class="change-row"><span>Cambio</span><span class="change'+(change<0?" neg":"")+'">'+money(change>0?change:0)+'</span></div></div>' : '';
+  var confDis=(state.metodoPago==='efectivo'&&state.cashReceived<total)?'disabled':'';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cobrar '+esc(p.id)+'</h2><div class="modal-total">'+money(total)+'</div>'+
+    '<div class="pay-grid">'+metodos.map(function(m){return '<button class="pay-btn'+(state.metodoPago===m?" active":"")+'" data-m="'+m+'">'+esc(PAGO_LABEL[m])+'</button>';}).join('')+'</div>'+cashBlock+
+    '<div class="modal-actions"><button class="btn-cancel" id="btnCancelPay">Cancelar</button><button class="btn-confirm" id="btnConfirmPay" '+confDis+'>Confirmar cobro</button></div></div></div>';
+  document.querySelectorAll('.pay-btn').forEach(function(b){ b.addEventListener('click',function(){ setCobroMetodo(b.dataset.m); }); });
+  var ci=document.getElementById('cashInputCobro'); if(ci){ ci.addEventListener('input',function(){ setCobroCash(ci.value); }); ci.focus(); }
+  document.querySelectorAll('[data-cash]').forEach(function(b){ b.addEventListener('click',function(){ setCobroCash(b.dataset.cash==='exact'?total:b.dataset.cash); }); });
+  document.getElementById('btnCancelPay').addEventListener('click',closeCobroPedido);
+  document.getElementById('btnConfirmPay').addEventListener('click',confirmCobroPedido);
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeCobroPedido(); });
+}
+function confirmCobroPedido(){
+  var p=state.pedidos[_cobroPedidoIx]; if(!p||!p._fbKey) return;
+  var total=p.total;
+  if(state.metodoPago==='efectivo'&&state.cashReceived<total){ showToast('Monto insuficiente'); return; }
+  fbPedidosRef(state.sucursal).child(p._fbKey).update({estado:'pagado',metodo:state.metodoPago}).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
+  state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
+  if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
+  var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
+  closeCobroPedido();
+  showToast(change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total)));
 }
 function procesarInventario(lines,suc){
   lines.forEach(function(l){ API.getRecetaProducto(l.name).then(function(r){
@@ -1158,7 +1212,7 @@ function selectMesa(n){
 function renderPedidos(){
   var html='<h2>Historial de pedidos</h2><div class="sub">Toca un pedido para ver el detalle</div><div class="card">';
   if(!state.pedidos.length){ html+='<div class="cart-empty">Sin pedidos</div>'; }
-  else{ html+=state.pedidos.map(function(p,ix){ return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+'</div><div class="pm">'+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
+  else{ html+=state.pedidos.map(function(p,ix){ var mt=p.metodo?(PAGO_LABEL[p.metodo]||p.metodo):'Pendiente de cobro'; return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+'</div><div class="pm">'+esc(mt)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
   html+='</div>';
   document.getElementById('pedidosContent').innerHTML=html;
 }
@@ -1193,14 +1247,17 @@ function verPedido(ix){
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'? subtotal*(p.descuento.valor/100) : p.descuento.valor; }
   var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
+  var metodoTxt = p.metodo ? esc(PAGO_LABEL[p.metodo]||p.metodo) : 'Pendiente de cobro';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
-    '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div>'+
+    '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+metodoTxt+' &middot; '+esc(p.hora)+'</div>'+
     (p.cliente&&p.cliente.telefono?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b> \u00b7 '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
     (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
-    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Reimprimir ticket</button></div></div></div>';
-  bindModal(function(){ imprimirTicket(p); });
+    (p.estado==='abierto'?
+      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Cobrar</button></div></div></div>':
+      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Reimprimir ticket</button></div></div></div>');
+  bindModal(function(){ if(p.estado==='abierto'){ closeModal(); abrirCobroPedido(ix); } else { imprimirTicket(p); } });
 }
 
 /* ============ CONFIGURACION ============ */
@@ -1318,6 +1375,7 @@ function cajaOp(op){
   bindModal(function(){ var m=parseFloat(document.getElementById('opMonto').value)||0; if(m<=0){ showToast('Monto invalido'); return; } if(op==='retiro'){ state.cajaInicial-=m; } else { state.cajaInicial+=m; } closeModal(); renderCaja(); showToast(titulo+': '+money(m)); });
 }
 function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); }); if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
+  var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; }); if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar.'); return; }
   if(!state.turnoSales.length){ showToast("No hay ventas que cerrar"); return; }
   var t = totalesPorMetodo();
   var total = t.efectivo + t.tarjeta + t.transferencia + t.rappi;
@@ -1347,6 +1405,8 @@ function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(f
 function abrirResumenCierre(){
   var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
   if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
+  var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; });
+  if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar. Ve a Pedidos y c\u00f3bralas primero.'); return; }
   if(!state.turnoSales.length){ showToast('No hay ventas que cerrar'); return; }
   var t=totalesPorMetodo();
   var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
