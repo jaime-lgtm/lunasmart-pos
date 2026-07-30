@@ -457,6 +457,33 @@ function fbLimpiarPedidos(suc){
   return fbPedidosRef(suc).remove().catch(function(e){ console.error(e); });
 }
 
+/* ==== FIREBASE: mesas en vivo (mismo numero/estado en todos los dispositivos) ==== */
+var fbMesasConfigListener=null, fbMesasEstadoListener=null, fbMesasListenerSuc=null;
+function fbEscucharMesas(suc){
+  fbDejarDeEscucharMesas();
+  fbMesasListenerSuc=suc;
+  fbMesasConfigListener=function(snap){
+    state.mesasConfigVal = snap.val();
+    if(state.view==='mesas') renderMesas();
+  };
+  fbMesasEstadoListener=function(snap){
+    state.mesasEstadoVal = snap.val()||{};
+    if(state.view==='mesas') renderMesas();
+  };
+  fbAuthReady.then(function(){
+    fbDb.ref('mesasConfig/'+suc).on('value', fbMesasConfigListener);
+    fbDb.ref('mesasEstado/'+suc).on('value', fbMesasEstadoListener);
+  });
+}
+function fbDejarDeEscucharMesas(){
+  if(fbMesasListenerSuc){
+    if(fbMesasConfigListener) fbDb.ref('mesasConfig/'+fbMesasListenerSuc).off('value', fbMesasConfigListener);
+    if(fbMesasEstadoListener) fbDb.ref('mesasEstado/'+fbMesasListenerSuc).off('value', fbMesasEstadoListener);
+  }
+  fbMesasConfigListener=null; fbMesasEstadoListener=null; fbMesasListenerSuc=null;
+  state.mesasConfigVal=null; state.mesasEstadoVal={};
+}
+
 var SUCURSALES = [
   {id:'cafeteria', nombre:'Casa de la Cultura',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:true},
   {id:'grano',    nombre:'Venta cafe en grano',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:false},
@@ -604,7 +631,8 @@ var state = {
   menu:null, sub:null, search:'',
   cart:[], descuento:{tipo:null,valor:0}, cargoDomicilio:0, turnoSales:[], pedidos:[], kdsArea:'todas',
   checkoutOpen:false, metodoPago:'efectivo', cashReceived:0,
-  cajaInicial:892, cajaAbierta:true, turno:null
+  cajaInicial:892, cajaAbierta:true, turno:null,
+  mesasConfigVal:null, mesasEstadoVal:{}
 };
 
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aqui'};
@@ -671,11 +699,12 @@ function doLogin(){
     state.view='menu'; state.tipoOrden=null; state.mesa=null; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.turnoSales=[]; state.pin='';
     state.pedidos=[];
     fbEscucharPedidos(suc);
+    fbEscucharMesas(suc);
     showScreen('scApp'); renderTopbar(); goMenu(); if(state.role==='monitor'){ var _k=document.querySelector('[data-view="kds"]'); if(_k) _k.click(); }
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; fbDejarDeEscucharPedidos(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); renderPinDisplay(); showScreen('scLogin'); }
 function seedPedidos(){ /* MOCK historial */ return [
   {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:'',area:'barra'},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez',area:'cocina'},{name:'Espresso',qty:1,price:38,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'pendiente'},
   {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45',mesa:3,descuento:{tipo:null,valor:0},items:[{name:'Latte',qty:2,price:58,note:'deslactosado',area:'barra'},{name:'Rebanada de pastel',qty:2,price:75,note:'',area:'cocina'},{name:'Sandwich jamon y queso',qty:1,price:85,note:'',area:'cocina'},{name:'Cold Brew',qty:1,price:59,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'listo'},
@@ -1108,19 +1137,19 @@ function procesarInventario(lines,suc){
 }
 
 /* ============ MESAS ============ */
-function numMesasConfig(suc){ try{ var v=localStorage.getItem('lsNumMesas_'+suc); if(v!==null) return parseInt(v,10)||0; }catch(e){} var base=MESAS_MOCK[suc]||[]; return base.length; }
-function setNumMesas(suc,n){ try{ localStorage.setItem('lsNumMesas_'+suc, String(Math.max(0,n|0))); }catch(e){} }
-function mesaStateKey(suc){ return 'lsMesaEstado_'+suc; }
-function loadMesaEstados(suc){ try{ return JSON.parse(localStorage.getItem(mesaStateKey(suc))||'{}')||{}; }catch(e){ return {}; } }
-function saveMesaEstados(suc,obj){ try{ localStorage.setItem(mesaStateKey(suc), JSON.stringify(obj)); }catch(e){} }
-function marcarMesaOcupada(suc,n,total){ var e=loadMesaEstados(suc); e[n]={estado:'ocupada',total:total||0}; saveMesaEstados(suc,e); }
-function liberarMesa(suc,n){ var e=loadMesaEstados(suc); e[n]={estado:'libre'}; saveMesaEstados(suc,e); }
+function numMesasConfig(suc){
+  if(suc===state.sucursal && state.mesasConfigVal!=null) return parseInt(state.mesasConfigVal,10)||0;
+  var base=MESAS_MOCK[suc]||[]; return base.length;
+}
+function setNumMesas(suc,n){ fbDb.ref('mesasConfig/'+suc).set(Math.max(0,n|0)).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); }); }
+function marcarMesaOcupada(suc,n,total){ fbDb.ref('mesasEstado/'+suc+'/'+n).set({estado:'ocupada',total:total||0}).catch(function(e){ console.error(e); }); }
+function liberarMesa(suc,n){ fbDb.ref('mesasEstado/'+suc+'/'+n).remove().catch(function(e){ console.error(e); }); }
 function getMesas(suc){
   var n=numMesasConfig(suc);
   var base=MESAS_MOCK[suc]||[];
   var byN={}; base.forEach(function(m){ byN[m.n]=m; });
   var arr=[];
-  var ov=loadMesaEstados(suc);
+  var ov=(suc===state.sucursal)?(state.mesasEstadoVal||{}):{};
   for(var i=1;i<=n;i++){ var m=byN[i]?Object.assign({},byN[i]):{n:i,estado:'libre'}; if(ov[i]){ m.estado=ov[i].estado; if(ov[i].estado==='ocupada'){ m.total=ov[i].total; } else { delete m.total; } } arr.push(m); }
   return arr;
 }
