@@ -970,7 +970,10 @@ function confirmSale(){
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
   var nid='#'+(1044+state.turnoSales.length+1);
-  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,area:l.area||'barra'};}),cliente:state.cliente||null,estadoBarra:'pendiente',estadoCocina:'pendiente'});
+  var itemsPedido=state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,area:l.area||'barra'};});
+  var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
+  var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
+  state.pedidos.unshift({id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:state.metodoPago,total:total,estado:'pagado',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:hayBarra?'pendiente':'listo',estadoCocina:hayCocina?'pendiente':'listo'});
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
