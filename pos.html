@@ -464,6 +464,36 @@ function fbLimpiarPedidos(suc){
   return fbPedidosRef(suc).remove().catch(function(e){ console.error(e); });
 }
 
+/* ==== FIREBASE: ventas del turno en vivo (sobreviven refresh/logout hasta el corte) ==== */
+var fbTurnoSalesListener=null, fbTurnoSalesListenerSuc=null;
+function fbTurnoSalesRef(suc){ return fbDb.ref('turnoSales/'+suc); }
+function fbEscucharTurnoSales(suc){
+  fbDejarDeEscucharTurnoSales();
+  fbTurnoSalesListenerSuc=suc;
+  fbTurnoSalesListener=function(snap){
+    var val=snap.val()||{};
+    var arr=Object.keys(val).map(function(k){ var v=val[k]; v._fbKey=k; return v; });
+    arr.sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+    state.turnoSales = arr;
+    if(state.view==='caja') renderCaja();
+  };
+  fbAuthReady.then(function(){ fbTurnoSalesRef(suc).on('value', fbTurnoSalesListener); });
+}
+function fbDejarDeEscucharTurnoSales(){
+  if(fbTurnoSalesListener && fbTurnoSalesListenerSuc){ fbTurnoSalesRef(fbTurnoSalesListenerSuc).off('value', fbTurnoSalesListener); }
+  fbTurnoSalesListener=null; fbTurnoSalesListenerSuc=null;
+}
+function fbAgregarVenta(suc,venta){
+  return fbTurnoSalesRef(suc).push().set(venta).catch(function(e){ showToast('Sin conexión -- la venta no se sincronizó'); console.error(e); });
+}
+function fbQuitarVenta(suc,fbKey){
+  if(!fbKey) return Promise.resolve();
+  return fbTurnoSalesRef(suc).child(fbKey).remove().catch(function(e){ console.error(e); });
+}
+function fbLimpiarTurnoSales(suc){
+  return fbTurnoSalesRef(suc).remove().catch(function(e){ console.error(e); });
+}
+
 /* ==== FIREBASE: mesas en vivo (mismo numero/estado en todos los dispositivos) ==== */
 var fbMesasConfigListener=null, fbMesasEstadoListener=null, fbMesasListenerSuc=null;
 function fbEscucharMesas(suc){
@@ -744,11 +774,12 @@ function doLogin(){
     state.pedidos=[];
     fbEscucharPedidos(suc);
     fbEscucharMesas(suc);
+    fbEscucharTurnoSales(suc);
     showScreen('scApp'); renderTopbar(); goMenu(); if(state.role==='monitor'){ var _k=document.querySelector('[data-view="kds"]'); if(_k) _k.click(); }
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharTurnoSales(); renderPinDisplay(); showScreen('scLogin'); }
 function seedPedidos(){ /* MOCK historial */ return [
   {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:'',area:'barra'},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez',area:'cocina'},{name:'Espresso',qty:1,price:38,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'pendiente'},
   {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45',mesa:3,descuento:{tipo:null,valor:0},items:[{name:'Latte',qty:2,price:58,note:'deslactosado',area:'barra'},{name:'Rebanada de pastel',qty:2,price:75,note:'',area:'cocina'},{name:'Sandwich jamon y queso',qty:1,price:85,note:'',area:'cocina'},{name:'Cold Brew',qty:1,price:59,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'listo'},
@@ -1116,9 +1147,9 @@ function confirmSale(){
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var items=state.cart.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
-  state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:state.cart.slice()});
   var built=_construirPedidoDesdeCart('pagado',state.metodoPago);
   built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
+  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,pedidoId:built.ref.key,items:state.cart.slice()});
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
@@ -1166,7 +1197,7 @@ function confirmCobroPedido(){
   var total=p.total;
   if(state.metodoPago==='efectivo'&&state.cashReceived<total){ showToast('Monto insuficiente'); return; }
   fbPedidosRef(state.sucursal).child(p._fbKey).update({estado:'pagado',metodo:state.metodoPago}).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
-  state.turnoSales.push({ts:Date.now(),metodo:state.metodoPago,total:total,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
+  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
   if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   closeCobroPedido();
@@ -1327,20 +1358,26 @@ function verPedido(ix){
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
     (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
-    (p.estado==='abierto'?
-      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-cancel" id="mCancelarPedido" style="color:var(--rojo);">Cancelar pedido</button><button class="btn-confirm" id="mOk">Cobrar</button></div></div></div>':
-      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Reimprimir ticket</button></div></div></div>');
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button>'+
+    ((p.estado==='abierto'||p.estado==='pagado')?'<button class="btn-cancel" id="mCancelarPedido" style="color:var(--rojo);">Cancelar pedido</button>':'')+
+    '<button class="btn-confirm" id="mOk">'+(p.estado==='abierto'?'Cobrar':'Reimprimir ticket')+'</button></div></div></div>';
   bindModal(function(){ if(p.estado==='abierto'){ closeModal(); abrirCobroPedido(ix); } else { imprimirTicket(p); } });
   var __btnCancelar=document.getElementById('mCancelarPedido');
   if(__btnCancelar){ __btnCancelar.addEventListener('click',function(){ cancelarPedido(ix); }); }
 }
 function cancelarPedido(ix){
-  var p=state.pedidos[ix]; if(!p||!p._fbKey||p.estado!=='abierto') return;
-  if(!confirm('¿Cancelar el pedido '+p.id+'? Esta acción no se puede deshacer.')) return;
+  var p=state.pedidos[ix]; if(!p||!p._fbKey||(p.estado!=='abierto'&&p.estado!=='pagado')) return;
+  var esPagado=p.estado==='pagado';
+  var msg=esPagado?('¿Cancelar el pedido '+p.id+'? Ya estaba pagado -- se descontará del corte de caja. Esta acción no se puede deshacer.'):('¿Cancelar el pedido '+p.id+'? Esta acción no se puede deshacer.');
+  if(!confirm(msg)) return;
   fbPedidosRef(state.sucursal).child(p._fbKey).update({estado:'cancelado',estadoBarra:'listo',estadoCocina:'listo'}).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
+  if(esPagado){
+    var venta=(state.turnoSales||[]).filter(function(v){ return v.pedidoId===p._fbKey; })[0];
+    if(venta&&venta._fbKey){ fbQuitarVenta(state.sucursal,venta._fbKey); }
+  }
   if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
   closeModal();
-  showToast('Pedido '+p.id+' cancelado');
+  showToast('Pedido '+p.id+' cancelado'+(esPagado?' -- se descontó del corte':''));
 }
 
 /* ============ CONFIGURACION ============ */
@@ -1477,7 +1514,7 @@ function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(f
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
   var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, observaciones: "POS LunaSmart", detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
-  function _finalizar(msg){ showToast(msg); state.turnoSales = []; fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
+  function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
   if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local \u2013 falta configurar sincronizaci\u00f3n)"); return; }
   showToast("Enviando corte a Luna Smart...");
   SYNC.enviarCorte(payload).then(function(res){
