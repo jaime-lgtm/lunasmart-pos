@@ -374,7 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
         <div class="cart-head"><div><div class="t">Orden</div><div class="st" id="cartTipo">Para llevar</div></div><button class="clear" id="btnClearCart">Vaciar</button></div>
         <div class="cart-lines" id="cartLines"></div>
         <div class="cart-actions">
-          <button class="cart-act" id="btnNota">&#9998; Nota</button>
+          <button class="cart-act" id="btnNota">&#128100; Cliente</button>
           <button class="cart-act" id="btnDescuento">&#37; Descuento</button>
           <button class="cart-act" id="btnSeparador">&#8942; Separador</button><button class="cart-act" id="btnCargoDom" style="display:none">&#128666; Cargo domicilio</button>
         </div>
@@ -766,6 +766,14 @@ function pedirDatosDomicilio(){
 function selectTipoOrden(tipo){
   if(tipo==='domicilio'){ pedirDatosDomicilio(); return; }
   state.cliente=null;
+  if(tipo==='aqui'){
+    var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
+    if(suc && suc.mesas){
+      state.tipoOrden='aqui'; state.mesa=null;
+      showAppView('mesas'); renderMesas();
+      return;
+    }
+  }
   state.tipoOrden=tipo;
   var prods=CATALOG[state.sucursal]||[];
   state.menu = prods.length? menusOf(prods)[0] : null; state.sub=null; state.search='';
@@ -793,9 +801,9 @@ function addToCart(p){
   renderTopbar(); renderCart();
 }
 
-var _modP=null, _modSize=null, _modSel={};
+var _modP=null, _modSize=null, _modSel={}, _modNote='';
 function openMods(p){
-  _modP=p; _modSel={}; _modSize=null;
+  _modP=p; _modSel={}; _modSize=null; _modNote='';
   if(p.sized && p.prices){ _modSize=Object.keys(p.prices)[0]; }
   (p.mods||[]).forEach(function(g,gi){
     if(g.req && g.opts && g.opts.length){ _modSel[gi]= (g.type==='multi')? [0] : 0; }
@@ -840,9 +848,12 @@ function renderMods(){
     });
     h+='</div>';
   });
+  h+='<div class="mgroup"><div class="mg-l">Notas<span class="opc">Opcional</span></div>'+
+    '<textarea id="modNoteTxt" placeholder="Ej. sin az&uacute;car, extra caliente..." style="width:100%;padding:12px;border:1px solid var(--linea);border-radius:12px;background:var(--beige-claro);min-height:70px;resize:vertical;font-family:inherit;font-size:15px;">'+esc(_modNote)+'</textarea></div>';
   h+='</div>';
   h+='<div class="mods-foot"><button class="btn-ghost" id="modsCancel">Cancelar</button><button class="btn-primary" id="modsAdd">Agregar &middot; <span id="modsTot">'+money(modsTotal())+'</span></button></div>';
   var box=document.getElementById('modsBox'); box.innerHTML=h;
+  var __noteEl=document.getElementById('modNoteTxt'); if(__noteEl) __noteEl.addEventListener('input',function(){ _modNote=__noteEl.value; });
   box.querySelectorAll('input[name="msize"]').forEach(function(r){ r.addEventListener('change',function(){ _modSize=r.dataset.sz; document.getElementById('modsTot').textContent=money(modsTotal()); }); });
   (p.mods||[]).forEach(function(g,gi){
     box.querySelectorAll('input[name="mg'+gi+'"]').forEach(function(inp){
@@ -869,7 +880,7 @@ function confirmMods(){
   if(missing){ alert('Selecciona las opciones requeridas'); return; }
   var price=modsTotal();
   var label=parts.join(' \u00b7 ');
-  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:1,note:'',mods:label,area:areaDe(p)});
+  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:1,note:_modNote.trim(),mods:label,area:areaDe(p)});
   renderTopbar(); renderCart(); closeMods();
 }
 function changeQty(uid,d){
@@ -923,6 +934,7 @@ function renderCart(){
     }).join('');
     host.querySelectorAll('.qty button').forEach(function(b){ b.addEventListener('click',function(){ changeQty(b.dataset.uid, parseInt(b.dataset.d,10)); }); });
   }
+  var __bn=document.getElementById('btnNota'); if(__bn){ var __cn=(state.cliente&&state.cliente.nombre)||''; __bn.innerHTML=__cn?('&#128100; '+esc(__cn)):'&#128100; Cliente'; }
   var sub=cartSubtotal(); var desc=cartDescuentoMonto(); var base=sub-desc; var iva=base*CONFIG.IVA_RATE/(1+CONFIG.IVA_RATE);
   document.getElementById('cartSubtotal').textContent=money(sub);
   var dr=document.getElementById('cartDescRow');
@@ -937,12 +949,17 @@ function cartTotalFinal(){ var __cargo=(state.tipoOrden==='domicilio')?(state.ca
 /* ---- Nota ---- */
 function openNota(){
   if(!state.cart.length){ showToast('Agrega art&iacute;culos primero'); return; }
-  var opts=state.cart.map(function(l,i){return '<option value="'+i+'">'+esc(l.name)+(l.note?' ('+esc(l.note)+')':'')+'</option>';}).join('');
-  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Nota del art&iacute;culo</h2>'+
-    '<div class="field"><label>Art&iacute;culo</label><select id="notaSel">'+opts+'</select></div>'+
-    '<div class="field"><label>Indicaci&oacute;n</label><textarea id="notaTxt" placeholder="Ej. sin az&uacute;car, extra caliente..."></textarea></div>'+
-    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar nota</button></div></div></div>';
-  bindModal(function(){ var i=parseInt(document.getElementById('notaSel').value,10); state.cart[i].note=document.getElementById('notaTxt').value; closeModal(); renderCart(); showToast('Nota agregada'); });
+  var nombreActual=(state.cliente&&state.cliente.nombre)||'';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Nombre del cliente</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Para llamarlo cuando su pedido est&eacute; listo</div>'+
+    '<div class="field"><label>Nombre</label><input id="clienteNombreTxt" value="'+esc(nombreActual)+'" placeholder="Ej. Ana"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  bindModal(function(){
+    var nombre=document.getElementById('clienteNombreTxt').value.trim();
+    state.cliente=state.cliente||{};
+    state.cliente.nombre=nombre;
+    closeModal(); renderCart(); showToast(nombre?('Cliente: '+nombre):'Nombre borrado');
+  });
 }
 /* ---- Descuento ---- */
 function openDescuento(){
@@ -1123,7 +1140,7 @@ function renderKds(){
       var its=(p.items||[]).filter(function(l){return (l.area||'barra')===ar;});
       if(!its.length) return;
       var rows=its.map(function(l){ return '<div class="kdc-item"><span class="kdc-q">'+l.qty+'x</span><span class="kdc-n">'+esc(l.name)+(l.mods?'<div class="kdc-mods">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="kdc-note">'+esc(l.note)+'</div>':'')+'</span></div>'; }).join('');
-      cards+='<div class="kds-card '+ar+'"><div class="kdc-top"><span class="kdc-folio">'+esc(p.id)+'</span><span class="kdc-area">'+AREA_LABEL[ar]+'</span></div><div class="kdc-meta">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(p.hora)+'</div>'+rows+'<button class="kdc-btn" onclick="kdsMarcarListo('+ix+',\''+ar+'\')">Marcar listo</button></div>';
+      cards+='<div class="kds-card '+ar+'"><div class="kdc-top"><span class="kdc-folio">'+esc(p.id)+'</span><span class="kdc-area">'+AREA_LABEL[ar]+'</span></div><div class="kdc-meta">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(p.hora)+(p.cliente&&p.cliente.nombre?' &middot; <b>'+esc(p.cliente.nombre)+'</b>':'')+'</div>'+rows+'<button class="kdc-btn" onclick="kdsMarcarListo('+ix+',\''+ar+'\')">Marcar listo</button></div>';
     });
   });
   if(!cards) cards='<div class="cart-empty">Sin comandas pendientes</div>';
@@ -1152,7 +1169,9 @@ function imprimirTicket(p){
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
   var rows=items.map(function(l){ return '<tr><td class="tq">'+l.qty+'x</td><td class="tn">'+esc(l.name)+(l.mods?'<div class="tnote">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="tnote">'+esc(l.note)+'</div>':'')+'</td><td class="tp">'+money(l.price*l.qty)+'</td></tr>'; }).join('');
-  var cli=p.cliente?('<div class="tk-cli"><div class="tk-sec">DATOS DE ENTREGA</div>'+'<div>'+esc(p.cliente.nombre||'')+'</div>'+'<div>Tel: '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div>'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div>Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>'):'';
+  var cli='';
+  if(p.cliente&&p.cliente.telefono){ cli='<div class="tk-cli"><div class="tk-sec">DATOS DE ENTREGA</div>'+'<div>'+esc(p.cliente.nombre||'')+'</div>'+'<div>Tel: '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div>'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div>Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>'; }
+  else if(p.cliente&&p.cliente.nombre){ cli='<div class="tk-cli"><div class="tk-sec">CLIENTE</div><div>'+esc(p.cliente.nombre)+'</div></div>'; }
   var host=document.getElementById('printHost')||(function(){ var d=document.createElement('div'); d.id='printHost'; document.body.appendChild(d); return d; })();
   host.innerHTML='<div id="printArea"><div class="tk">'+
     '<div class="tk-logo">'+logoSVG()+'</div>'+
@@ -1176,7 +1195,7 @@ function verPedido(ix){
   var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
     '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(PAGO_LABEL[p.metodo]||p.metodo)+' &middot; '+esc(p.hora)+'</div>'+
-    (p.cliente?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b> \u00b7 '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':'')+'<div class="det-list">'+rows+'</div>'+
+    (p.cliente&&p.cliente.telefono?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b> \u00b7 '+esc(p.cliente.telefono||'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
     (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
