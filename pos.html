@@ -1311,6 +1311,7 @@ function confirmSale(){
   var msg=change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total));
   if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
   showToast(msg);
+  ofrecerWhatsAppTicket(built.obj);
 }
 function guardarPedidoAbierto(){
   if(!state.cart.length){ showToast('La orden esta vacia'); return; }
@@ -1365,6 +1366,7 @@ function confirmCobroPedido(){
   var msg=change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total));
   if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
   showToast(msg);
+  ofrecerWhatsAppTicket(p);
 }
 function procesarInventario(lines,suc){
   lines.forEach(function(l){ API.getRecetaProducto(l.name).then(function(r){
@@ -1508,6 +1510,45 @@ function imprimirTicket(p){
   window.print();
   showToast('Ticket '+p.id+' enviado a impresi\u00f3n');
 }
+function ticketTextoWhatsApp(p){
+  var items=(p.items||[]);
+  var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
+  var lineas=[];
+  lineas.push('*'+NEGOCIO.nombre+'* \u2014 '+NEGOCIO.sucursal);
+  lineas.push(NEGOCIO.dir1+', '+NEGOCIO.dir2);
+  lineas.push('');
+  lineas.push('Ticket '+p.id+' \u00b7 '+(p.hora||''));
+  lineas.push((TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' \u00b7 Mesa '+p.mesa:'')+' \u00b7 '+(PAGO_LABEL[p.metodo]||p.metodo||''));
+  lineas.push('');
+  items.forEach(function(l){
+    lineas.push(l.qty+'x '+l.name+' \u2014 '+money(l.price*l.qty));
+    if(l.mods) lineas.push('   '+l.mods);
+    if(l.note) lineas.push('   '+l.note);
+  });
+  lineas.push('');
+  lineas.push('Subtotal: '+money(subtotal));
+  if(desc>0) lineas.push('Descuento: -'+money(desc));
+  lineas.push('*TOTAL: '+money(p.total)+'*');
+  lineas.push('');
+  lineas.push('\u00a1Gracias por tu compra! \ud83c\udf19');
+  return lineas.join('\n');
+}
+function enviarTicketWhatsApp(p){
+  var tel=_normTelLealtad(p.cliente&&p.cliente.telefono);
+  if(tel.length!==10){ showToast('Este pedido no tiene tel\u00e9fono capturado'); return; }
+  var texto=encodeURIComponent(ticketTextoWhatsApp(p));
+  window.open('https://wa.me/52'+tel+'?text='+texto,'_blank');
+}
+function ofrecerWhatsAppTicket(p){
+  var tel=_normTelLealtad(p.cliente&&p.cliente.telefono);
+  if(tel.length!==10) return;
+  var nombre=(p.cliente&&p.cliente.nombre)||'el cliente';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>\u00bfEnviar ticket por WhatsApp?</h2>'+
+    '<div class="sub" style="margin-bottom:12px">A '+esc(nombre)+' \u00b7 '+esc(p.cliente.telefono)+'</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Ahora no</button><button class="btn-confirm" id="mOk">\ud83d\udcf2 Enviar</button></div></div></div>';
+  bindModal(function(){ closeModal(); enviarTicketWhatsApp(p); });
+}
 function verPedido(ix){
   var p=state.pedidos[ix]; if(!p) return;
   var items=(p.items||[]);
@@ -1523,10 +1564,13 @@ function verPedido(ix){
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button>'+
     ((p.estado==='abierto'||p.estado==='pagado')?'<button class="btn-cancel" id="mCancelarPedido" style="color:var(--rojo);">Cancelar pedido</button>':'')+
+    (p.estado!=='abierto'&&_normTelLealtad(p.cliente&&p.cliente.telefono).length===10?'<button class="btn-ghost" id="mWhatsapp" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:#1a7f37;">📲 WhatsApp</button>':'')+
     '<button class="btn-confirm" id="mOk">'+(p.estado==='abierto'?'Cobrar':'Reimprimir ticket')+'</button></div></div></div>';
   bindModal(function(){ if(p.estado==='abierto'){ closeModal(); abrirCobroPedido(ix); } else { imprimirTicket(p); } });
   var __btnCancelar=document.getElementById('mCancelarPedido');
   if(__btnCancelar){ __btnCancelar.addEventListener('click',function(){ cancelarPedido(ix); }); }
+  var __btnWa=document.getElementById('mWhatsapp');
+  if(__btnWa){ __btnWa.addEventListener('click',function(){ enviarTicketWhatsApp(p); }); }
 }
 function cancelarPedido(ix){
   var p=state.pedidos[ix]; if(!p||!p._fbKey||(p.estado!=='abierto'&&p.estado!=='pagado')) return;
