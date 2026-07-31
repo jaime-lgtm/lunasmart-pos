@@ -497,7 +497,7 @@ function fbLimpiarTurnoSales(suc){
 }
 
 /* ==== FIREBASE: Puntos de Lealtad (global, no por sucursal) ==== */
-var PUNTOS_TASA=0.03; // 3% del total pagado se acumula como puntos (1 punto = $1)
+var PUNTOS_TASA=0.02; // 2% del total pagado se acumula como puntos (1 punto = $1)
 function _normTelLealtad(tel){ return String(tel||'').replace(/\D/g,''); }
 function fbLealtadRef(tel){ return fbDb.ref('clientesLealtad/'+_normTelLealtad(tel)); }
 function fbBuscarLealtad(tel){
