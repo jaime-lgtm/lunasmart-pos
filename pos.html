@@ -496,7 +496,10 @@ function fbLimpiarTurnoSales(suc){
   return fbTurnoSalesRef(suc).remove().catch(function(e){ console.error(e); });
 }
 
-/* ==== FIREBASE: Puntos de Lealtad (global, no por sucursal) ==== */
+/* ==== FIREBASE: Cliente unico (Puntos de Lealtad + domicilio), global por telefono ====
+   clientesLealtad/$telefono es el UNICO registro de cliente -- lo usan tanto el
+   flujo de "Cliente" (puntos) como el de "Datos de entrega" (domicilio), para que
+   un mismo telefono jale siempre el mismo cliente sin importar por donde se capture. */
 var PUNTOS_TASA=0.02; // 2% del total pagado se acumula como puntos (1 punto = $1)
 function _normTelLealtad(tel){ return String(tel||'').replace(/\D/g,''); }
 function fbLealtadRef(tel){ return fbDb.ref('clientesLealtad/'+_normTelLealtad(tel)); }
@@ -504,44 +507,66 @@ function fbBuscarLealtad(tel){
   var t=_normTelLealtad(tel); if(t.length!==10) return Promise.resolve(null);
   return fbAuthReady.then(function(){ return fbLealtadRef(t).once('value'); }).then(function(snap){ return snap.val(); });
 }
-function fbRegistrarLealtad(tel,datos){
+function etiquetaCliente(visitas){
+  visitas=visitas||0;
+  if(visitas>=5) return 'CLIENTE FRECUENTE';
+  if(visitas>=2) return 'CLIENTE REGULAR';
+  return 'CLIENTE NUEVO';
+}
+// Guarda/actualiza un cliente sin pisar puntos/visitas si ya existia (upsert).
+// Tambien espeja el registro a la hoja CLIENTES_DOMICILIO en Sheets (si hay sync configurada).
+function fbGuardarCliente(tel,datos){
   var t=_normTelLealtad(tel); if(t.length!==10) return Promise.resolve(null);
   return fbAuthReady.then(function(){
-    return fbLealtadRef(t).set({nombre:datos.nombre||'',telefono:t,cumpleanos:datos.cumpleanos||'',puntos:0,creado:firebase.database.ServerValue.TIMESTAMP});
+    var ref=fbLealtadRef(t);
+    return ref.once('value').then(function(snap){
+      var existe=snap.val();
+      var payload={telefono:t};
+      if(datos.nombre!==undefined) payload.nombre=datos.nombre||(existe&&existe.nombre)||'';
+      if(datos.direccion!==undefined) payload.direccion=datos.direccion;
+      if(datos.referencia!==undefined) payload.referencia=datos.referencia;
+      if(datos.cumpleanos!==undefined) payload.cumpleanos=datos.cumpleanos;
+      if(!existe){ payload.puntos=0; payload.visitas=0; payload.creado=firebase.database.ServerValue.TIMESTAMP; }
+      return ref.update(payload).then(function(){ return {existe:!!existe, cliente:Object.assign({},existe,payload)}; });
+    });
+  }).then(function(r){
+    if(SYNC.configurado()){
+      SYNC.registrarClienteDom({telefono:t,nombre:r.cliente.nombre||'',direccion:r.cliente.direccion||'',referencia:r.cliente.referencia||'',cumpleanos:r.cliente.cumpleanos||'',puntos:r.cliente.puntos||0,etiqueta:etiquetaCliente(r.cliente.visitas),sucursal:state.sucursal}).catch(function(){});
+    }
+    return r.cliente;
+  }).catch(function(e){ console.error('guardar cliente',e); return null; });
+}
+// Busca primero en Firebase (fuente en vivo); si no existe ahi, revisa la hoja
+// CLIENTES_DOMICILIO por si ya es cliente de domicilio pero aun no de Puntos de Lealtad.
+function fbBuscarClienteUnificado(tel){
+  return fbBuscarLealtad(tel).then(function(cli){
+    if(cli) return {origen:'lealtad', cliente:cli};
+    if(!SYNC.configurado()) return null;
+    return SYNC.buscarClienteDom(tel).then(function(res){
+      if(res && res.ok && res.cliente) return {origen:'domicilio', cliente:res.cliente};
+      return null;
+    }).catch(function(){ return null; });
   });
 }
-function fbAcumularPuntos(tel,monto){
-  var t=_normTelLealtad(tel); if(t.length!==10||!(monto>0)) return Promise.resolve();
-  var puntos=Math.round(monto*PUNTOS_TASA);
-  if(puntos<=0) return Promise.resolve();
-  return fbAuthReady.then(function(){
-    return fbLealtadRef(t).child('puntos').transaction(function(actual){ return (actual||0)+puntos; });
-  }).catch(function(e){ console.error('acumular puntos',e); });
-}
-function fbUsarPuntos(tel,puntos){
-  var t=_normTelLealtad(tel); if(t.length!==10||!(puntos>0)) return Promise.resolve(false);
-  return fbAuthReady.then(function(){
-    var ref=fbLealtadRef(t).child('puntos');
-    return ref.once('value').then(function(snap){
-      if((snap.val()||0)<puntos) return {committed:false};
-      // Sin ruta con listener activo, transaction() puede recibir null en su primera
-      // pasada; nunca abortar aqui (undefined cancela para siempre) -- ya validamos arriba.
-      return ref.transaction(function(actual){ return Math.max(0,(actual||0)-puntos); });
-    });
-  }).then(function(res){ return !!res.committed; }).catch(function(e){ console.error('usar puntos',e); return false; });
-}
-// Gastar y ganar en UNA sola transaccion -- fbUsarPuntos + fbAcumularPuntos por separado
-// en la misma venta compiten por el mismo path y una puede sobrescribir a la otra.
-function fbAjustarPuntos(tel,gastar,ganar){
+// Registra la venta (canje + acumulacion) y suma una visita, todo en una sola
+// transaccion sobre el nodo completo del cliente para evitar que dos escrituras
+// concurrentes del mismo telefono se pisen entre si.
+function fbRegistrarVentaLealtad(tel,gastar,ganar){
   var t=_normTelLealtad(tel); gastar=Math.max(0,Math.round(gastar||0)); ganar=Math.max(0,Math.round(ganar||0));
   if(t.length!==10||(!gastar&&!ganar)) return Promise.resolve(true);
   return fbAuthReady.then(function(){
-    var ref=fbLealtadRef(t).child('puntos');
+    var ref=fbLealtadRef(t);
     return ref.once('value').then(function(snap){
-      if((snap.val()||0)<gastar) return {committed:false};
-      return ref.transaction(function(actual){ return Math.max(0,(actual||0)-gastar+ganar); });
+      if(((snap.val()||{}).puntos||0)<gastar) return {committed:false};
+      return ref.transaction(function(actual){
+        actual=actual||{telefono:t};
+        actual.puntos=Math.max(0,(actual.puntos||0)-gastar+ganar);
+        actual.visitas=(actual.visitas||0)+1;
+        actual.ultimaVisita=Date.now();
+        return actual;
+      });
     });
-  }).then(function(res){ return !!res.committed; }).catch(function(e){ console.error('ajustar puntos',e); return false; });
+  }).then(function(res){ return !!res.committed; }).catch(function(e){ console.error('registrar venta lealtad',e); return false; });
 }
 
 /* ==== FIREBASE: mesas en vivo (mismo numero/estado en todos los dispositivos) ==== */
@@ -880,7 +905,7 @@ function pedirDatosDomicilio(){
   var telInput=document.getElementById('dTel'), telStatus=document.getElementById('dTelStatus');
   function fmtTel(v){ var d=String(v).replace(/\D/g,'').slice(0,10); if(d.length<=3) return d.length? '('+d : ''; return '('+d.slice(0,3)+')'+d.slice(3); }
   telInput.value=fmtTel(telInput.value);
-  var lookupTimer=null, lastLookedUp='';
+  var lookupTimer=null, lastLookedUp=''; state._clienteEncontrado=null;
   telInput.addEventListener('input',function(){
     telInput.value=fmtTel(telInput.value);
     clearTimeout(lookupTimer);
@@ -888,15 +913,20 @@ function pedirDatosDomicilio(){
     if(tel.length!==10||tel===lastLookedUp){ telStatus.textContent=''; return; }
     lookupTimer=setTimeout(function(){
       lastLookedUp=tel; telStatus.textContent='Buscando cliente...';
-      SYNC.buscarClienteDom(tel).then(function(res){
+      fbBuscarClienteUnificado(tel).then(function(res){
         if(telInput.value.replace(/\D/g,'')!==tel) return;
-        if(res && res.ok && res.cliente){
-          var cl=res.cliente;
+        if(res && res.cliente){
+          var cl=res.cliente; state._clienteEncontrado=cl;
           if(cl.nombre && !document.getElementById('dNombre').value.trim()) document.getElementById('dNombre').value=cl.nombre;
           if(cl.direccion && !document.getElementById('dDir').value.trim()) document.getElementById('dDir').value=cl.direccion;
           if(cl.referencia && !document.getElementById('dRef').value.trim()) document.getElementById('dRef').value=cl.referencia;
-          telStatus.textContent='Cliente encontrado \u2014 revisa y confirma sus datos';
+          if(res.origen==='lealtad'){
+            telStatus.innerHTML='<b style="color:var(--verde-ok);">\u2713 '+etiquetaCliente(cl.visitas)+'</b> &middot; '+(cl.puntos||0)+' puntos disponibles';
+          } else {
+            telStatus.textContent='Cliente conocido (a\u00fan no inscrito a Puntos de Lealtad) \u2014 revisa sus datos';
+          }
         } else {
+          state._clienteEncontrado=null;
           telStatus.textContent='Cliente nuevo \u2014 captura sus datos';
         }
       }).catch(function(){ telStatus.textContent=''; });
@@ -907,12 +937,13 @@ function pedirDatosDomicilio(){
     var nombre=document.getElementById('dNombre').value.trim();
     if(tel.length!==10){ showToast('Captura los 10 d\u00edgitos del tel\u00e9fono'); return; }
     if(!nombre){ showToast('Captura el nombre del cliente'); return; }
-    var telFmt='('+tel.slice(0,3)+')'+tel.slice(3);
     var dir=document.getElementById('dDir').value.trim();
     var ref=document.getElementById('dRef').value.trim();
-    state.cliente={nombre:nombre,telefono:telFmt,direccion:dir,referencia:ref};
+    state.cliente={nombre:nombre,telefono:tel,direccion:dir,referencia:ref};
     state.tipoOrden='domicilio';
-    SYNC.registrarClienteDom(state.cliente).catch(function(){});
+    var cl=state._clienteEncontrado;
+    state.puntosDisponibles=cl?(cl.puntos||0):0; state.usarPuntos=false; state.puntosUsados=0;
+    fbGuardarCliente(tel,{nombre:nombre,direccion:dir,referencia:ref}).catch(function(){});
     var prods=CATALOG[state.sucursal]||[];
     state.menu=prods.length?menusOf(prods)[0]:null; state.sub=null; state.search='';
     closeModal(); showAppView('pos'); renderPos();
@@ -1124,29 +1155,37 @@ function openNota(){
   if(!state.cart.length){ showToast('Agrega art&iacute;culos primero'); return; }
   var nombreActual=(state.cliente&&state.cliente.nombre)||'';
   var telActual=(state.cliente&&state.cliente.telefono)||'';
+  var cumpleActual=(state.cliente&&state.cliente.cumpleanos)||'';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cliente</h2>'+
     '<div class="sub" style="margin-bottom:12px">Nombre para llamarlo, y tel&eacute;fono para Puntos de Lealtad</div>'+
     '<div class="field"><label>Tel&eacute;fono (opcional)</label><input id="clienteTelTxt" type="tel" inputmode="tel" value="'+esc(telActual)+'" placeholder="10 d&iacute;gitos"></div>'+
     '<div class="sub" id="clienteLealtadStatus" style="margin:-6px 0 12px;min-height:16px;"></div>'+
     '<div class="field"><label>Nombre</label><input id="clienteNombreTxt" value="'+esc(nombreActual)+'" placeholder="Ej. Ana"></div>'+
+    '<div class="field"><label>Cumplea&ntilde;os (opcional)</label><input id="clienteCumpleTxt" type="date" value="'+esc(cumpleActual)+'"></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
   var telInput=document.getElementById('clienteTelTxt'), estadoEl=document.getElementById('clienteLealtadStatus');
-  state._lealtadEncontrado=null; state._lealtadEsNuevo=false;
+  state._lealtadEncontrado=null; state._debeInscribir=false;
   var buscarTimer=null, ultimaBusqueda='';
   function actualizarEstado(tel){
-    if(tel.length!==10){ estadoEl.innerHTML=''; state._lealtadEncontrado=null; state._lealtadEsNuevo=false; return; }
+    if(tel.length!==10){ estadoEl.innerHTML=''; state._lealtadEncontrado=null; state._debeInscribir=false; return; }
     estadoEl.textContent='Buscando en Puntos de Lealtad...';
-    fbBuscarLealtad(tel).then(function(cli){
+    fbBuscarClienteUnificado(tel).then(function(res){
       if(telInput.value.replace(/\D/g,'')!==tel) return;
-      if(cli){
-        state._lealtadEncontrado=cli; state._lealtadEsNuevo=false;
+      var cli=res&&res.cliente;
+      if(cli && res.origen==='lealtad'){
+        state._lealtadEncontrado=cli; state._debeInscribir=true;
         if(!document.getElementById('clienteNombreTxt').value.trim() && cli.nombre) document.getElementById('clienteNombreTxt').value=cli.nombre;
-        estadoEl.innerHTML='<b style="color:var(--verde-ok);">✓ Miembro Puntos de Lealtad</b> &middot; '+(cli.puntos||0)+' puntos disponibles';
+        if(!document.getElementById('clienteCumpleTxt').value && cli.cumpleanos) document.getElementById('clienteCumpleTxt').value=cli.cumpleanos;
+        estadoEl.innerHTML='<b style="color:var(--verde-ok);">✓ '+etiquetaCliente(cli.visitas)+'</b> &middot; '+(cli.puntos||0)+' puntos disponibles';
+      } else if(cli && res.origen==='domicilio'){
+        state._lealtadEncontrado=null; state._debeInscribir=true;
+        if(!document.getElementById('clienteNombreTxt').value.trim() && cli.nombre) document.getElementById('clienteNombreTxt').value=cli.nombre;
+        estadoEl.textContent='Cliente conocido (servicio a domicilio) — se inscribirá a Puntos de Lealtad al guardar';
       } else {
         state._lealtadEncontrado=null;
         estadoEl.innerHTML='Cliente nuevo &middot; <label style="cursor:pointer;"><input type="checkbox" id="chkInscribir" checked style="margin-right:4px;">Inscribir a Puntos de Lealtad</label>';
-        var chk=document.getElementById('chkInscribir'); if(chk) chk.addEventListener('change',function(){ state._lealtadEsNuevo=chk.checked; });
-        state._lealtadEsNuevo=true;
+        var chk=document.getElementById('chkInscribir'); if(chk) chk.addEventListener('change',function(){ state._debeInscribir=chk.checked; });
+        state._debeInscribir=true;
       }
     }).catch(function(){ estadoEl.textContent=''; });
   }
@@ -1160,13 +1199,15 @@ function openNota(){
   bindModal(function(){
     var nombre=document.getElementById('clienteNombreTxt').value.trim();
     var tel=document.getElementById('clienteTelTxt').value.replace(/\D/g,'');
+    var cumple=document.getElementById('clienteCumpleTxt').value||'';
     state.cliente=state.cliente||{};
     state.cliente.nombre=nombre;
     state.cliente.telefono=tel||state.cliente.telefono||'';
+    state.cliente.cumpleanos=cumple;
     state.puntosDisponibles=state._lealtadEncontrado?(state._lealtadEncontrado.puntos||0):0;
     state.puntosUsados=0;
-    if(tel.length===10 && !state._lealtadEncontrado && state._lealtadEsNuevo){
-      fbRegistrarLealtad(tel,{nombre:nombre}).catch(function(){});
+    if(tel.length===10 && state._debeInscribir){
+      fbGuardarCliente(tel,{nombre:nombre,cumpleanos:cumple}).catch(function(){});
     }
     closeModal(); renderCart(); showToast(nombre?('Cliente: '+nombre):'Cliente actualizado');
   });
@@ -1255,14 +1296,14 @@ function confirmSale(){
   API.registrarVenta({items:items,metodoPago:state.metodoPago,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   var built=_construirPedidoDesdeCart('pagado',state.metodoPago);
   built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
-  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,pedidoId:built.ref.key,items:state.cart.slice()});
   var telCliente=(state.cliente&&state.cliente.telefono)||'';
   var puntosUsadosMonto=puntosMontoUsado();
   var puntosGanados=0;
   if(telCliente){
     puntosGanados=Math.round(total*PUNTOS_TASA);
-    fbAjustarPuntos(telCliente,puntosUsadosMonto,puntosGanados);
+    fbRegistrarVentaLealtad(telCliente,puntosUsadosMonto,puntosGanados);
   }
+  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,puntosUsados:puntosUsadosMonto,pedidoId:built.ref.key,items:state.cart.slice()});
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
@@ -1314,10 +1355,10 @@ function confirmCobroPedido(){
   var total=p.total;
   if(state.metodoPago==='efectivo'&&state.cashReceived<total){ showToast('Monto insuficiente'); return; }
   fbPedidosRef(state.sucursal).child(p._fbKey).update({estado:'pagado',metodo:state.metodoPago}).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
-  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
+  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,puntosUsados:0,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
   var puntosGanados=0;
-  if(telCliente){ puntosGanados=Math.round(total*PUNTOS_TASA); if(puntosGanados>0) fbAcumularPuntos(telCliente,total); }
+  if(telCliente){ puntosGanados=Math.round(total*PUNTOS_TASA); fbRegistrarVentaLealtad(telCliente,0,puntosGanados); }
   if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   closeCobroPedido();
@@ -1634,7 +1675,8 @@ function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(f
     });
   });
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
-  var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, observaciones: "POS LunaSmart", detalles: detalles };
+  var puntosCanjeados = state.turnoSales.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
+  var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart", detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
   if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local \u2013 falta configurar sincronizaci\u00f3n)"); return; }
@@ -1658,6 +1700,7 @@ function abrirResumenCierre(){
   var prev=getUltimoCierre(state.sucursal);
   var pct=function(v){ return total>0?Math.round(v/total*100):0; };
   var top5=productosEstrellaResumen();
+  var puntosCanjeados=state.turnoSales.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
   var compHtml='';
   if(prev && typeof prev.total==='number'){
     var delta=total-prev.total;
@@ -1670,6 +1713,7 @@ function abrirResumenCierre(){
     '<div class="card"><h3>M\u00e9todos de pago</h3>'+
       ['efectivo','tarjeta','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+'</span><b>'+money(t[m])+' &middot; '+pct(t[m])+'%</b></div>'; }).join('')+
     '</div>'+
+    (puntosCanjeados>0?'<div class="card"><h3>🌙 Puntos de Lealtad</h3><div class="star-row"><span>Canjeados este turno</span><b>-'+money(puntosCanjeados)+'</b></div></div>':'')+
     '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas &middot; '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
     '</div>'+
     '<div class="card"><h3>Caja</h3>'+
