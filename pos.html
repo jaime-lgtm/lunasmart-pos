@@ -383,7 +383,9 @@ input,select,textarea{font-family:inherit;font-size:16px;}
           <div class="row-line"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div>
           <div class="row-line desc hidden" id="cartDescRow"><span id="cartDescLbl">Descuento</span><span id="cartDescVal">-$0.00</span></div>
           <div class="row-line"><span>IVA incl. (8%)</span><span id="cartIva">$0.00</span></div>
-          <div class="row-line cargo hidden" id="cartCargoRow"><span>Cargo domicilio</span><span id="cartCargoVal">$0.00</span></div><div class="cart-total"><span>Total</span><span class="amt" id="cartTotal">$0.00</span></div>
+          <div class="row-line cargo hidden" id="cartCargoRow"><span>Cargo domicilio</span><span id="cartCargoVal">$0.00</span></div>
+          <div class="row-line hidden" id="cartPuntosRow" style="cursor:pointer;color:var(--terracota);font-weight:700;"><span id="cartPuntosLbl">🌙 0 puntos disponibles</span><span id="cartPuntosVal"></span></div>
+          <div class="cart-total"><span>Total</span><span class="amt" id="cartTotal">$0.00</span></div>
           <button class="btn-cobrar" id="btnCobrar" disabled>COBRAR</button>
         </div>
       </div>
@@ -492,6 +494,54 @@ function fbQuitarVenta(suc,fbKey){
 }
 function fbLimpiarTurnoSales(suc){
   return fbTurnoSalesRef(suc).remove().catch(function(e){ console.error(e); });
+}
+
+/* ==== FIREBASE: Puntos de Lealtad (global, no por sucursal) ==== */
+var PUNTOS_TASA=0.03; // 3% del total pagado se acumula como puntos (1 punto = $1)
+function _normTelLealtad(tel){ return String(tel||'').replace(/\D/g,''); }
+function fbLealtadRef(tel){ return fbDb.ref('clientesLealtad/'+_normTelLealtad(tel)); }
+function fbBuscarLealtad(tel){
+  var t=_normTelLealtad(tel); if(t.length!==10) return Promise.resolve(null);
+  return fbAuthReady.then(function(){ return fbLealtadRef(t).once('value'); }).then(function(snap){ return snap.val(); });
+}
+function fbRegistrarLealtad(tel,datos){
+  var t=_normTelLealtad(tel); if(t.length!==10) return Promise.resolve(null);
+  return fbAuthReady.then(function(){
+    return fbLealtadRef(t).set({nombre:datos.nombre||'',telefono:t,cumpleanos:datos.cumpleanos||'',puntos:0,creado:firebase.database.ServerValue.TIMESTAMP});
+  });
+}
+function fbAcumularPuntos(tel,monto){
+  var t=_normTelLealtad(tel); if(t.length!==10||!(monto>0)) return Promise.resolve();
+  var puntos=Math.round(monto*PUNTOS_TASA);
+  if(puntos<=0) return Promise.resolve();
+  return fbAuthReady.then(function(){
+    return fbLealtadRef(t).child('puntos').transaction(function(actual){ return (actual||0)+puntos; });
+  }).catch(function(e){ console.error('acumular puntos',e); });
+}
+function fbUsarPuntos(tel,puntos){
+  var t=_normTelLealtad(tel); if(t.length!==10||!(puntos>0)) return Promise.resolve(false);
+  return fbAuthReady.then(function(){
+    var ref=fbLealtadRef(t).child('puntos');
+    return ref.once('value').then(function(snap){
+      if((snap.val()||0)<puntos) return {committed:false};
+      // Sin ruta con listener activo, transaction() puede recibir null en su primera
+      // pasada; nunca abortar aqui (undefined cancela para siempre) -- ya validamos arriba.
+      return ref.transaction(function(actual){ return Math.max(0,(actual||0)-puntos); });
+    });
+  }).then(function(res){ return !!res.committed; }).catch(function(e){ console.error('usar puntos',e); return false; });
+}
+// Gastar y ganar en UNA sola transaccion -- fbUsarPuntos + fbAcumularPuntos por separado
+// en la misma venta compiten por el mismo path y una puede sobrescribir a la otra.
+function fbAjustarPuntos(tel,gastar,ganar){
+  var t=_normTelLealtad(tel); gastar=Math.max(0,Math.round(gastar||0)); ganar=Math.max(0,Math.round(ganar||0));
+  if(t.length!==10||(!gastar&&!ganar)) return Promise.resolve(true);
+  return fbAuthReady.then(function(){
+    var ref=fbLealtadRef(t).child('puntos');
+    return ref.once('value').then(function(snap){
+      if((snap.val()||0)<gastar) return {committed:false};
+      return ref.transaction(function(actual){ return Math.max(0,(actual||0)-gastar+ganar); });
+    });
+  }).then(function(res){ return !!res.committed; }).catch(function(e){ console.error('ajustar puntos',e); return false; });
 }
 
 /* ==== FIREBASE: mesas en vivo (mismo numero/estado en todos los dispositivos) ==== */
@@ -669,7 +719,8 @@ var state = {
   cart:[], descuento:{tipo:null,valor:0}, cargoDomicilio:0, turnoSales:[], pedidos:[], kdsArea:'todas',
   checkoutOpen:false, metodoPago:'efectivo', cashReceived:0,
   cajaInicial:892, cajaAbierta:true, turno:null,
-  mesasConfigVal:null, mesasEstadoVal:{}
+  mesasConfigVal:null, mesasEstadoVal:{},
+  puntosDisponibles:0, puntosUsados:0, usarPuntos:false
 };
 
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aqui'};
@@ -869,7 +920,7 @@ function pedirDatosDomicilio(){
 }
 function selectTipoOrden(tipo){
   if(tipo==='domicilio'){ pedirDatosDomicilio(); return; }
-  state.cliente=null;
+  state.cliente=null; state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   if(tipo==='aqui'){
     var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
     if(suc && suc.mesas){
@@ -994,6 +1045,16 @@ function changeQty(uid,d){
 }
 function clearCart(){ state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; renderTopbar(); renderCart(); }
 function cartSubtotal(){ return state.cart.reduce(function(s,l){return s+l.price*l.qty;},0); }
+function puntosMontoUsado(){
+  if(!state.usarPuntos || !(state.puntosDisponibles>0)) return 0;
+  var baseSinPuntos=cartSubtotal()-cartDescuentoMonto();
+  return Math.min(state.puntosDisponibles, Math.max(0,baseSinPuntos));
+}
+function toggleUsarPuntos(){
+  if(!(state.puntosDisponibles>0)){ showToast('El cliente no tiene puntos disponibles'); return; }
+  state.usarPuntos=!state.usarPuntos;
+  renderCart();
+}
 function cartDescuentoMonto(){
   var sub=cartSubtotal();
   if(state.descuento.tipo==='porcentaje'){ return sub*(state.descuento.valor/100); }
@@ -1039,30 +1100,75 @@ function renderCart(){
     host.querySelectorAll('.qty button').forEach(function(b){ b.addEventListener('click',function(){ changeQty(b.dataset.uid, parseInt(b.dataset.d,10)); }); });
   }
   var __bn=document.getElementById('btnNota'); if(__bn){ var __cn=(state.cliente&&state.cliente.nombre)||''; __bn.innerHTML=__cn?('&#128100; '+esc(__cn)):'&#128100; Cliente'; }
-  var sub=cartSubtotal(); var desc=cartDescuentoMonto(); var base=sub-desc; var iva=base*CONFIG.IVA_RATE/(1+CONFIG.IVA_RATE);
+  var sub=cartSubtotal(); var desc=cartDescuentoMonto(); var puntosMonto=puntosMontoUsado(); var base=sub-desc-puntosMonto; var iva=base*CONFIG.IVA_RATE/(1+CONFIG.IVA_RATE);
   document.getElementById('cartSubtotal').textContent=money(sub);
   var dr=document.getElementById('cartDescRow');
   if(desc>0){ dr.classList.remove('hidden'); document.getElementById('cartDescLbl').textContent='Descuento'+(state.descuento.tipo==='porcentaje'?' ('+state.descuento.valor+'%)':''); document.getElementById('cartDescVal').textContent='-'+money(desc); }
   else{ dr.classList.add('hidden'); }
   document.getElementById('cartIva').textContent=money(iva);
+  var pr=document.getElementById('cartPuntosRow');
+  if(pr){
+    if(state.puntosDisponibles>0){
+      pr.classList.remove('hidden');
+      document.getElementById('cartPuntosLbl').textContent='🌙 '+state.puntosDisponibles+' puntos disponibles'+(state.usarPuntos?' (usando)':' -- toca para usar');
+      document.getElementById('cartPuntosVal').textContent=puntosMonto>0?('-'+money(puntosMonto)):'';
+    } else { pr.classList.add('hidden'); }
+  }
   var cargo=(state.tipoOrden==='domicilio')?(state.cargoDomicilio||0):0; var __cr=document.getElementById('cartCargoRow'); if(__cr){ if(cargo>0){__cr.classList.remove('hidden'); document.getElementById('cartCargoVal').textContent=money(cargo);} else {__cr.classList.add('hidden');} } var __bcd=document.getElementById('btnCargoDom'); if(__bcd){ __bcd.style.display=(state.tipoOrden==='domicilio')?'':'none'; } document.getElementById('cartTotal').textContent=money(base+cargo);
   document.getElementById('btnCobrar').disabled=!state.cart.length;
 }
-function cartTotalFinal(){ var __cargo=(state.tipoOrden==='domicilio')?(state.cargoDomicilio||0):0; var base=cartSubtotal()-cartDescuentoMonto(); return base+__cargo; }
+function cartTotalFinal(){ var __cargo=(state.tipoOrden==='domicilio')?(state.cargoDomicilio||0):0; var base=cartSubtotal()-cartDescuentoMonto()-puntosMontoUsado(); return base+__cargo; }
 
 /* ---- Nota ---- */
 function openNota(){
   if(!state.cart.length){ showToast('Agrega art&iacute;culos primero'); return; }
   var nombreActual=(state.cliente&&state.cliente.nombre)||'';
-  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Nombre del cliente</h2>'+
-    '<div class="sub" style="margin-bottom:12px">Para llamarlo cuando su pedido est&eacute; listo</div>'+
+  var telActual=(state.cliente&&state.cliente.telefono)||'';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cliente</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Nombre para llamarlo, y tel&eacute;fono para Puntos de Lealtad</div>'+
+    '<div class="field"><label>Tel&eacute;fono (opcional)</label><input id="clienteTelTxt" type="tel" inputmode="tel" value="'+esc(telActual)+'" placeholder="10 d&iacute;gitos"></div>'+
+    '<div class="sub" id="clienteLealtadStatus" style="margin:-6px 0 12px;min-height:16px;"></div>'+
     '<div class="field"><label>Nombre</label><input id="clienteNombreTxt" value="'+esc(nombreActual)+'" placeholder="Ej. Ana"></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  var telInput=document.getElementById('clienteTelTxt'), estadoEl=document.getElementById('clienteLealtadStatus');
+  state._lealtadEncontrado=null; state._lealtadEsNuevo=false;
+  var buscarTimer=null, ultimaBusqueda='';
+  function actualizarEstado(tel){
+    if(tel.length!==10){ estadoEl.innerHTML=''; state._lealtadEncontrado=null; state._lealtadEsNuevo=false; return; }
+    estadoEl.textContent='Buscando en Puntos de Lealtad...';
+    fbBuscarLealtad(tel).then(function(cli){
+      if(telInput.value.replace(/\D/g,'')!==tel) return;
+      if(cli){
+        state._lealtadEncontrado=cli; state._lealtadEsNuevo=false;
+        if(!document.getElementById('clienteNombreTxt').value.trim() && cli.nombre) document.getElementById('clienteNombreTxt').value=cli.nombre;
+        estadoEl.innerHTML='<b style="color:var(--verde-ok);">✓ Miembro Puntos de Lealtad</b> &middot; '+(cli.puntos||0)+' puntos disponibles';
+      } else {
+        state._lealtadEncontrado=null;
+        estadoEl.innerHTML='Cliente nuevo &middot; <label style="cursor:pointer;"><input type="checkbox" id="chkInscribir" checked style="margin-right:4px;">Inscribir a Puntos de Lealtad</label>';
+        var chk=document.getElementById('chkInscribir'); if(chk) chk.addEventListener('change',function(){ state._lealtadEsNuevo=chk.checked; });
+        state._lealtadEsNuevo=true;
+      }
+    }).catch(function(){ estadoEl.textContent=''; });
+  }
+  telInput.addEventListener('input',function(){
+    clearTimeout(buscarTimer);
+    var tel=telInput.value.replace(/\D/g,'');
+    if(tel===ultimaBusqueda) return;
+    buscarTimer=setTimeout(function(){ ultimaBusqueda=tel; actualizarEstado(tel); },400);
+  });
+  if(telActual.replace(/\D/g,'').length===10){ ultimaBusqueda=telActual.replace(/\D/g,''); actualizarEstado(ultimaBusqueda); }
   bindModal(function(){
     var nombre=document.getElementById('clienteNombreTxt').value.trim();
+    var tel=document.getElementById('clienteTelTxt').value.replace(/\D/g,'');
     state.cliente=state.cliente||{};
     state.cliente.nombre=nombre;
-    closeModal(); renderCart(); showToast(nombre?('Cliente: '+nombre):'Nombre borrado');
+    state.cliente.telefono=tel||state.cliente.telefono||'';
+    state.puntosDisponibles=state._lealtadEncontrado?(state._lealtadEncontrado.puntos||0):0;
+    state.puntosUsados=0;
+    if(tel.length===10 && !state._lealtadEncontrado && state._lealtadEsNuevo){
+      fbRegistrarLealtad(tel,{nombre:nombre}).catch(function(){});
+    }
+    closeModal(); renderCart(); showToast(nombre?('Cliente: '+nombre):'Cliente actualizado');
   });
 }
 /* ---- Descuento ---- */
@@ -1150,16 +1256,27 @@ function confirmSale(){
   var built=_construirPedidoDesdeCart('pagado',state.metodoPago);
   built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
   fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,pedidoId:built.ref.key,items:state.cart.slice()});
+  var telCliente=(state.cliente&&state.cliente.telefono)||'';
+  var puntosUsadosMonto=puntosMontoUsado();
+  var puntosGanados=0;
+  if(telCliente){
+    puntosGanados=Math.round(total*PUNTOS_TASA);
+    fbAjustarPuntos(telCliente,puntosUsadosMonto,puntosGanados);
+  }
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
+  state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
-  showToast(change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total)));
+  var msg=change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total));
+  if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
+  showToast(msg);
 }
 function guardarPedidoAbierto(){
   if(!state.cart.length){ showToast('La orden esta vacia'); return; }
   var built=_construirPedidoDesdeCart('abierto',null);
   built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
   state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
+  state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
   showToast('Cuenta guardada '+built.obj.id+' -- pendiente de cobro');
 }
@@ -1198,10 +1315,15 @@ function confirmCobroPedido(){
   if(state.metodoPago==='efectivo'&&state.cashReceived<total){ showToast('Monto insuficiente'); return; }
   fbPedidosRef(state.sucursal).child(p._fbKey).update({estado:'pagado',metodo:state.metodoPago}).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
   fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
+  var telCliente=(p.cliente&&p.cliente.telefono)||'';
+  var puntosGanados=0;
+  if(telCliente){ puntosGanados=Math.round(total*PUNTOS_TASA); if(puntosGanados>0) fbAcumularPuntos(telCliente,total); }
   if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   closeCobroPedido();
-  showToast(change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total)));
+  var msg=change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total));
+  if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
+  showToast(msg);
 }
 function procesarInventario(lines,suc){
   lines.forEach(function(l){ API.getRecetaProducto(l.name).then(function(r){
@@ -1586,6 +1708,7 @@ function initApp(){
   document.getElementById('btnNota').addEventListener('click',openNota);
   document.getElementById('btnDescuento').addEventListener('click',openDescuento);
   document.getElementById('btnSeparador').addEventListener('click',openSeparador); var __bcd=document.getElementById('btnCargoDom'); if(__bcd) __bcd.addEventListener('click',openCargoDom);
+  var __bpr=document.getElementById('cartPuntosRow'); if(__bpr) __bpr.addEventListener('click',toggleUsarPuntos);
   document.getElementById('searchInput').addEventListener('input',function(e){ state.search=e.target.value; renderProducts(); });
   document.querySelectorAll('#scApp .nav-tab').forEach(function(t){ t.addEventListener('click',function(){ switchView(t.dataset.view); }); });
   document.querySelectorAll('#scTipoOrden .to-card').forEach(function(c){ c.addEventListener('click',function(){ selectTipoOrden(c.dataset.tipo); }); });
