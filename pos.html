@@ -538,14 +538,20 @@ function fbGuardarCliente(tel,datos){
 }
 // Busca primero en Firebase (fuente en vivo); si no existe ahi, revisa la hoja
 // CLIENTES_DOMICILIO por si ya es cliente de domicilio pero aun no de Puntos de Lealtad.
+// Combina Firebase (fuente en vivo de puntos) con la hoja CLIENTES_DOMICILIO:
+// un registro de lealtad puede no tener direccion (se creo desde "Cliente",
+// que no la pide), asi que si falta se completa con lo que haya en la hoja.
 function fbBuscarClienteUnificado(tel){
   return fbBuscarLealtad(tel).then(function(cli){
-    if(cli) return {origen:'lealtad', cliente:cli};
-    if(!SYNC.configurado()) return null;
+    if(cli && cli.direccion) return {origen:'lealtad', cliente:cli};
+    if(!SYNC.configurado()) return cli ? {origen:'lealtad', cliente:cli} : null;
     return SYNC.buscarClienteDom(tel).then(function(res){
-      if(res && res.ok && res.cliente) return {origen:'domicilio', cliente:res.cliente};
+      var dom=(res && res.ok && res.cliente) ? res.cliente : null;
+      if(cli && dom) return {origen:'lealtad', cliente:Object.assign({},dom,cli,{direccion:cli.direccion||dom.direccion,referencia:cli.referencia||dom.referencia})};
+      if(cli) return {origen:'lealtad', cliente:cli};
+      if(dom) return {origen:'domicilio', cliente:dom};
       return null;
-    }).catch(function(){ return null; });
+    }).catch(function(){ return cli ? {origen:'lealtad', cliente:cli} : null; });
   });
 }
 // Registra la venta (canje + acumulacion) y suma una visita, todo en una sola
