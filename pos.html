@@ -522,10 +522,14 @@ function fbGuardarCliente(tel,datos){
     return ref.once('value').then(function(snap){
       var existe=snap.val();
       var payload={telefono:t};
-      if(datos.nombre!==undefined) payload.nombre=datos.nombre||(existe&&existe.nombre)||'';
-      if(datos.direccion!==undefined) payload.direccion=datos.direccion;
-      if(datos.referencia!==undefined) payload.referencia=datos.referencia;
-      if(datos.cumpleanos!==undefined) payload.cumpleanos=datos.cumpleanos;
+      // nombre/direccion/referencia/cumpleanos quedan "fijos" una vez guardados --
+      // no se sobrescriben con lo que alguien mas escriba despues con el mismo
+      // telefono (p.ej. un pedido a nombre de otra persona en la familia no debe
+      // borrar los datos correctos ya guardados de ese numero).
+      if(datos.nombre && !(existe&&existe.nombre)) payload.nombre=datos.nombre;
+      if(datos.direccion && !(existe&&existe.direccion)) payload.direccion=datos.direccion;
+      if(datos.referencia && !(existe&&existe.referencia)) payload.referencia=datos.referencia;
+      if(datos.cumpleanos && !(existe&&existe.cumpleanos)) payload.cumpleanos=datos.cumpleanos;
       if(!existe){ payload.puntos=0; payload.visitas=0; payload.creado=firebase.database.ServerValue.TIMESTAMP; }
       return ref.update(payload).then(function(){ return {existe:!!existe, cliente:Object.assign({},existe,payload)}; });
     });
