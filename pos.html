@@ -1359,6 +1359,7 @@ function renderCobroPedido(){
     '<div class="change-row"><span>Cambio</span><span class="change'+(change<0?" neg":"")+'">'+money(change>0?change:0)+'</span></div></div>' : '';
   var confDis=(state.metodoPago==='efectivo'&&state.cashReceived<total)?'disabled':'';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cobrar '+esc(p.id)+'</h2><div class="modal-total">'+money(total)+'</div>'+
+    (p.puntosUsados>0?'<div class="sub" style="margin:-8px 0 10px;color:#1a7f37;font-weight:700;">🌙 Ya incluye -'+money(p.puntosUsados)+' de puntos aplicados desde el sitio web</div>':'')+
     '<div class="pay-grid">'+metodos.map(function(m){return '<button class="pay-btn'+(state.metodoPago===m?" active":"")+'" data-m="'+m+'">'+esc(PAGO_LABEL[m])+'</button>';}).join('')+'</div>'+cashBlock+
     '<div class="modal-actions"><button class="btn-cancel" id="btnCancelPay">Cancelar</button><button class="btn-confirm" id="btnConfirmPay" '+confDis+'>Confirmar cobro</button></div></div></div>';
   document.querySelectorAll('.pay-btn').forEach(function(b){ b.addEventListener('click',function(){ setCobroMetodo(b.dataset.m); }); });
@@ -1373,10 +1374,11 @@ function confirmCobroPedido(){
   var total=p.total;
   if(state.metodoPago==='efectivo'&&state.cashReceived<total){ showToast('Monto insuficiente'); return; }
   fbPedidosRef(state.sucursal).child(p._fbKey).update({estado:'pagado',metodo:state.metodoPago}).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
-  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,puntosUsados:0,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
+  var puntosUsadosPedido=p.puntosUsados||0;
+  fbAgregarVenta(state.sucursal,{ts:Date.now(),metodo:state.metodoPago,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})});
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
   var puntosGanados=0;
-  if(telCliente){ puntosGanados=Math.round(total*PUNTOS_TASA); fbRegistrarVentaLealtad(telCliente,0,puntosGanados); }
+  if(telCliente){ puntosGanados=Math.round(total*PUNTOS_TASA); fbRegistrarVentaLealtad(telCliente,puntosUsadosPedido,puntosGanados); }
   if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
   var change=state.metodoPago==='efectivo'?(state.cashReceived-total):0;
   closeCobroPedido();
