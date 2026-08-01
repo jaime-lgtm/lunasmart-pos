@@ -762,7 +762,7 @@ var state = {
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aqui'};
 var AREA_LABEL={barra:'Barra', cocina:'Cocina'};
 function areaDe(p){ if(p && p.area) return p.area; if(p && p.menu==='Alimentos') return 'cocina'; return 'barra'; }
-var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta', transferencia:'Transferencia', rappi:'Rappi/Uber'};
+var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta (terminal)', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi/Uber'};
 
 function money(n){ return '$'+Number(n||0).toFixed(2); }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -1639,7 +1639,7 @@ function renderConfig(){
 }
 
 /* ============ CAJA / CORTE ============ */
-function totalesPorMetodo(){ var t={efectivo:0,tarjeta:0,transferencia:0,rappi:0}; state.turnoSales.forEach(function(v){ t[v.metodo]=(t[v.metodo]||0)+v.total; }); return t; }
+function totalesPorMetodo(){ var t={efectivo:0,tarjeta:0,mercadopago:0,transferencia:0,rappi:0}; state.turnoSales.forEach(function(v){ t[v.metodo]=(t[v.metodo]||0)+v.total; }); return t; }
 function productosEstrella(){ var m={}; state.turnoSales.forEach(function(v){ v.items.forEach(function(it){ m[it.name]=(m[it.name]||0)+it.qty; }); }); return Object.keys(m).map(function(k){return {name:k,qty:m[k]};}).sort(function(a,b){return b.qty-a.qty;}).slice(0,8); }
 function productosEstrellaResumen(){ var m={}; state.turnoSales.forEach(function(v){ v.items.forEach(function(it){ if(!m[it.name]) m[it.name]={name:it.name,qty:0,total:0}; m[it.name].qty+=it.qty; m[it.name].total+=it.price*it.qty; }); }); return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return b.qty-a.qty;}).slice(0,5); }
 function fechaCorta(d){ var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; return (d.getDate()<10?'0':'')+d.getDate()+'/'+meses[d.getMonth()]+'/'+d.getFullYear(); }
@@ -1743,11 +1743,11 @@ function cajaOp(op){
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Confirmar</button></div></div></div>';
   bindModal(function(){ var m=parseFloat(document.getElementById('opMonto').value)||0; if(m<=0){ showToast('Monto invalido'); return; } if(op==='retiro'){ state.cajaInicial-=m; } else { state.cajaInicial+=m; } closeModal(); renderCaja(); showToast(titulo+': '+money(m)); });
 }
-function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); }); if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
+function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal){ var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); }); if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
   var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; }); if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar.'); return; }
   if(!state.turnoSales.length){ showToast("No hay ventas que cerrar"); return; }
   var t = totalesPorMetodo();
-  var total = t.efectivo + t.tarjeta + t.transferencia + t.rappi;
+  var total = t.efectivo + t.tarjeta + t.mercadopago + t.transferencia + t.rappi;
   var sucSheet = SYNC.sucursalSheet(state.sucursal);
   var turno = state.turno || "TURNO MA\u00d1ANA";
   var mapDet = {};
@@ -1762,8 +1762,9 @@ function closeTurno(declarado,esperado){ var __pend=(state.pedidos||[]).filter(f
   });
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
   var puntosCanjeados = state.turnoSales.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
-  var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart", detalles: detalles };
+  var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart", detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
+  if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
   if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local \u2013 falta configurar sincronizaci\u00f3n)"); return; }
   showToast("Enviando corte a Luna Smart...");
@@ -1779,8 +1780,9 @@ function abrirResumenCierre(){
   if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar. Ve a Pedidos y c\u00f3bralas primero.'); return; }
   if(!state.turnoSales.length){ showToast('No hay ventas que cerrar'); return; }
   var t=totalesPorMetodo();
-  var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
+  var total=t.efectivo+t.tarjeta+t.mercadopago+t.transferencia+t.rappi;
   var esperado=(state.cajaInicial||0)+t.efectivo;
+  var esperadoTerminal=t.tarjeta;
   var turnoLabel=(state.turno==='TURNO TARDE')?'Tarde':'Ma\u00f1ana';
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var prev=getUltimoCierre(state.sucursal);
@@ -1797,15 +1799,19 @@ function abrirResumenCierre(){
     '<div class="resumen-head"><h2>Resumen del turno &mdash; '+esc(turnoLabel)+' '+esc(fechaCorta(new Date()))+'</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+'</div>':'')+'</div>'+
     '<div class="resumen-venta"><div class="rv-lbl">Venta total</div><div class="rv-total">'+money(total)+'</div>'+compHtml+'</div>'+
     '<div class="card"><h3>M\u00e9todos de pago</h3>'+
-      ['efectivo','tarjeta','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+'</span><b>'+money(t[m])+' &middot; '+pct(t[m])+'%</b></div>'; }).join('')+
+      ['efectivo','tarjeta','mercadopago','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+(m==='mercadopago'&&t[m]>0?' (auto)':'')+'</span><b>'+money(t[m])+' &middot; '+pct(t[m])+'%</b></div>'; }).join('')+
     '</div>'+
     (puntosCanjeados>0?'<div class="card"><h3>🌙 Puntos de Lealtad</h3><div class="star-row"><span>Canjeados este turno</span><b>-'+money(puntosCanjeados)+'</b></div></div>':'')+
     '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas &middot; '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
     '</div>'+
-    '<div class="card"><h3>Caja</h3>'+
+    '<div class="card"><h3>Declaraci\u00f3n del cajero</h3>'+
+      '<div class="sub" style="margin-bottom:10px">Mercado Pago no se declara -- ya qued\u00f3 confirmado solo. Solo cuenta el efectivo y lee el reporte de la terminal.</div>'+
       '<div class="field"><label>Efectivo declarado (contado f\u00edsicamente)</label><input id="rDeclarado" type="number" inputmode="decimal" placeholder="0.00"></div>'+
-      '<div class="caja-check"><span>Sistema</span><b>'+money(esperado)+'</b></div>'+
+      '<div class="caja-check"><span>Sistema (efectivo)</span><b>'+money(esperado)+'</b></div>'+
       '<div class="caja-check diff" id="rDiffRow" style="display:none"></div>'+
+      '<div class="field" style="margin-top:16px"><label>Reporte de terminal (tarjeta f\u00edsica)</label><input id="rDeclaradoTerminal" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+      '<div class="caja-check"><span>Sistema (tarjeta)</span><b>'+money(esperadoTerminal)+'</b></div>'+
+      '<div class="caja-check diff" id="rDiffRowTerminal" style="display:none"></div>'+
     '</div>'+
     '</div>'+
     '<div class="resumen-foot"><button class="btn-cancel" id="rCancel" style="flex:1">Cancelar</button><button class="btn-confirm" id="rConfirm" style="flex:2">Confirmar cierre</button></div>'+
@@ -1819,13 +1825,24 @@ function abrirResumenCierre(){
     diffRow.style.display='flex';
     diffRow.innerHTML='<span>Diferencia</span><b>'+(dif>=0?'+':'')+money(dif)+(dif===0?' \u2713 CUADRA':'')+'</b>';
   });
+  var diffRowTerminal=document.getElementById('rDiffRowTerminal');
+  document.getElementById('rDeclaradoTerminal').addEventListener('input',function(e){
+    var v=parseFloat(e.target.value);
+    if(isNaN(v)){ diffRowTerminal.style.display='none'; return; }
+    var dif=v-esperadoTerminal;
+    diffRowTerminal.className='caja-check diff '+(dif===0?'ok':'bad');
+    diffRowTerminal.style.display='flex';
+    diffRowTerminal.innerHTML='<span>Diferencia</span><b>'+(dif>=0?'+':'')+money(dif)+(dif===0?' ✓ CUADRA':'')+'</b>';
+  });
   document.getElementById('rCancel').addEventListener('click',function(){ host.innerHTML=''; });
   document.getElementById('rConfirm').addEventListener('click',function(){
     var v=parseFloat(document.getElementById('rDeclarado').value);
+    var vt=parseFloat(document.getElementById('rDeclaradoTerminal').value);
     if(isNaN(v)){ showToast('Captura el efectivo declarado'); return; }
+    if(isNaN(vt)){ showToast('Captura el reporte de la terminal'); return; }
     setUltimoCierre(state.sucursal, {total:total, label:'turno '+turnoLabel.toLowerCase()+' de hoy', ts:Date.now()});
     host.innerHTML='';
-    closeTurno(v,esperado);
+    closeTurno(v,esperado,vt,esperadoTerminal);
   });
 }
 
