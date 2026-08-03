@@ -1585,10 +1585,9 @@ function setUltimoCierre(suc,data){ try{ localStorage.setItem(ultimoCierreKey(su
 function renderCaja(){
   var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
   var est=productosEstrella(); var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
-  var efectivoEnCaja=state.cajaInicial+t.efectivo;
   document.getElementById('cajaContent').innerHTML=
     '<div id="printArea"><h2>Caja &mdash; '+esc(suc?suc.nombre:'')+'</h2><div class="sub">'+(state.cajaAbierta?'Caja abierta':'Caja cerrada')+' &middot; '+state.turnoSales.length+' ventas en el turno</div>'+
-    '<div class="card"><h3>Estado de caja</h3><div class="caja-info"><div><div class="l">Efectivo inicial</div><div class="v">'+money(state.cajaInicial)+'</div></div><div><div class="l">Efectivo esperado</div><div class="v">'+money(efectivoEnCaja)+'</div></div></div>'+
+    '<div class="card"><h3>Estado de caja</h3><div class="caja-info"><div><div class="l">Efectivo inicial</div><div class="v">'+money(state.cajaInicial)+'</div></div></div>'+
       '<div class="caja-ops"><button class="caja-op" data-op="corte"><span class="ci">&#128203;</span>Corte de caja</button><button class="caja-op" data-op="deposito"><span class="ci">&#11015;</span>Depositar</button><button class="caja-op" data-op="retiro"><span class="ci">&#11014;</span>Retirar</button><button class="caja-op" data-op="cajon"><span class="ci">&#128230;</span>Abrir caj&oacute;n</button></div></div>'+
     '<div class="card"><h3>Desglose por metodo de pago</h3><div class="pay-summary">'+
       '<div class="pill"><div class="l">Efectivo</div><div class="v">'+money(t.efectivo)+'</div></div>'+
@@ -1600,31 +1599,8 @@ function renderCaja(){
     '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>';
   document.querySelectorAll('#cajaContent .caja-op').forEach(function(b){ b.addEventListener('click',function(){ cajaOp(b.dataset.op); }); });
   document.getElementById('btnPrint').addEventListener('click',function(){ window.print(); });
-  document.getElementById('btnCerrarTurno').addEventListener('click',abrirResumenCierre);
+  document.getElementById('btnCerrarTurno').addEventListener('click',function(){ abrirResumenCierre(true); });
 }
-function hacerCorte(){
-  var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
-  if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. Márcalas como listas.'); return; }
-  var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; });
-  if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar. Ve a Pedidos y cóbralas primero.'); return; }
-  var tm=totalesPorMetodo(); var esperado=state.cajaInicial+tm.efectivo;
-  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Realizar corte de caja</h2>'+
-    '<div class="sub" style="margin-bottom:12px">Registra y verifica el efectivo actual al cambiar de turno.</div>'+
-    '<div class="caja-info"><div><div class="l">Efectivo esperado</div><div class="v">'+money(esperado)+'</div></div><div><div class="l">Ventas del turno</div><div class="v">'+state.turnoSales.length+'</div></div></div>'+
-    '<div class="field"><label>Efectivo contado</label><input id="corteMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
-    '<div class="field" id="corteDifWrap" style="display:none"><label>Diferencia</label><div id="corteDif" class="v"></div></div>'+
-    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Confirmar corte</button></div></div></div>';
-  var inp=document.getElementById('corteMonto');
-  inp.addEventListener('input',function(){ var c=parseFloat(inp.value)||0; var d=c-esperado; document.getElementById('corteDifWrap').style.display='block'; document.getElementById('corteDif').textContent=(d>=0?'+':'')+money(d)+(d===0?' (cuadra)':(d>0?' (sobra)':' (falta)')); });
-  bindModal(function(){
-    var contado=parseFloat(document.getElementById('corteMonto').value)||0;
-    var dif=contado-esperado;
-    if(state.turnoSales.length){ closeTurno(); } else { state.cajaAbierta=false; }
-    showToast('Corte realizado \u00b7 contado '+money(contado)+' \u00b7 dif '+(dif>=0?'+':'')+money(dif));
-    pedirEfectivoInicial();
-  });
-}
-
 /* ==== SINCRONIZACION CON LUNA SMART (Google Sheets via Apps Script) ==== */
 var SYNC = {
   URL_KEY: "ls_webapp_url",
@@ -1656,6 +1632,12 @@ var SYNC = {
     if(!token) return Promise.resolve({ok:false});
     var body = { token: token, accion: "registrarClienteDom", datos: cliente };
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  obtenerCorteDia: function(sucursal, turno, fecha){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token) return Promise.resolve({ok:false, encontrado:false});
+    var body = { token: token, accion: "obtenerCorteDia", datos: { sucursal: sucursal, turno: turno, fecha: fecha } };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); }).catch(function(){ return {ok:false, encontrado:false}; });
   }
 };
 function guardarCortePendiente(payload){
@@ -1675,7 +1657,7 @@ function pedirEfectivoInicial(){
 }
 function cajaOp(op){
   if(op==='cajon'){ showToast('Abriendo caj&oacute;n...'); return; }
-  if(op==='corte'){ hacerCorte(); return; }
+  if(op==='corte'){ abrirResumenCierre(false); return; }
   var titulo=op==='deposito'?'Depositar a caja':'Retirar de caja';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>'+titulo+'</h2>'+
     '<div class="field"><label>Monto</label><input id="opMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
@@ -1683,13 +1665,16 @@ function cajaOp(op){
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Confirmar</button></div></div></div>';
   bindModal(function(){ var m=parseFloat(document.getElementById('opMonto').value)||0; if(m<=0){ showToast('Monto invalido'); return; } if(op==='retiro'){ state.cajaInicial-=m; } else { state.cajaInicial+=m; } closeModal(); renderCaja(); showToast(titulo+': '+money(m)); });
 }
-function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal){ var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); }); if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
-  var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; }); if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar.'); return; }
+function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declaradoTransferencia,esperadoTransferencia,onDone){
+  var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
+  if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. Márcalas como listas.'); return; }
+  var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; });
+  if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar.'); return; }
   if(!state.turnoSales.length){ showToast("No hay ventas que cerrar"); return; }
   var t = totalesPorMetodo();
   var total = t.efectivo + t.tarjeta + t.mercadopago + t.transferencia + t.rappi;
   var sucSheet = SYNC.sucursalSheet(state.sucursal);
-  var turno = state.turno || "TURNO MA\u00d1ANA";
+  var turno = state.turno || "TURNO MAÑANA";
   var mapDet = {};
   state.turnoSales.forEach(function(v){
     (v.items||[]).forEach(function(it){
@@ -1705,25 +1690,29 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal){ var 
   var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart", detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
-  function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); }
-  if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local \u2013 falta configurar sincronizaci\u00f3n)"); return; }
+  if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
+  function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); if(typeof onDone==='function') onDone(payload); }
+  if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local – falta configurar sincronización)"); return; }
   showToast("Enviando corte a Luna Smart...");
   SYNC.enviarCorte(payload).then(function(res){
     if(res && (res.ok || res.status==="ok" || res.id)){ _finalizar("Corte registrado en INGRESOS (" + (res.id||"") + ")"); }
     else { guardarCortePendiente(payload); _finalizar("Corte guardado local: respuesta inesperada del servidor"); }
-  }).catch(function(err){ guardarCortePendiente(payload); _finalizar("Sin conexi\u00f3n: corte guardado local para reintentar"); });
+  }).catch(function(err){ guardarCortePendiente(payload); _finalizar("Sin conexión: corte guardado local para reintentar"); });
 }
-function abrirResumenCierre(){
+function fechaHoyDDMMYYYY(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear(); }
+function abrirResumenCierre(finalDelDia){
   var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
-  if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. M\u00e1rcalas como listas.'); return; }
+  if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. Márcalas como listas.'); return; }
   var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; });
-  if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar. Ve a Pedidos y c\u00f3bralas primero.'); return; }
+  if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar. Ve a Pedidos y cóbralas primero.'); return; }
   if(!state.turnoSales.length){ showToast('No hay ventas que cerrar'); return; }
   var t=totalesPorMetodo();
   var total=t.efectivo+t.tarjeta+t.mercadopago+t.transferencia+t.rappi;
   var esperado=(state.cajaInicial||0)+t.efectivo;
   var esperadoTerminal=t.tarjeta;
-  var turnoLabel=(state.turno==='TURNO TARDE')?'Tarde':'Ma\u00f1ana';
+  var esperadoTransferencia=t.transferencia;
+  var turno=state.turno||'TURNO MAÑANA';
+  var turnoLabel=(turno==='TURNO TARDE')?'Tarde':'Mañana';
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var prev=getUltimoCierre(state.sucursal);
   var pct=function(v){ return total>0?Math.round(v/total*100):0; };
@@ -1732,58 +1721,126 @@ function abrirResumenCierre(){
   var compHtml='';
   if(prev && typeof prev.total==='number'){
     var delta=total-prev.total;
-    compHtml='<div class="rv-comp '+(delta>=0?'up':'down')+'">'+(delta>=0?'+':'-')+money(Math.abs(delta))+' '+(delta>=0?'\u2191':'\u2193')+' vs '+esc(prev.label||'turno anterior')+'</div>';
+    compHtml='<div class="rv-comp '+(delta>=0?'up':'down')+'">'+(delta>=0?'+':'-')+money(Math.abs(delta))+' '+(delta>=0?'↑':'↓')+' vs '+esc(prev.label||'turno anterior')+'</div>';
   }
+  var titulo=finalDelDia?'Cierre del día':'Corte de caja';
   var host=document.getElementById('resumenHost')||(function(){var d=document.createElement('div'); d.id='resumenHost'; document.body.appendChild(d); return d;})();
   host.innerHTML='<div class="resumen-overlay"><div class="resumen-wrap">'+
-    '<div class="resumen-head"><h2>Resumen del turno &mdash; '+esc(turnoLabel)+' '+esc(fechaCorta(new Date()))+'</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+'</div>':'')+'</div>'+
+    '<div class="resumen-head"><h2>'+esc(titulo)+' — '+esc(turnoLabel)+' '+esc(fechaCorta(new Date()))+'</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+'</div>':'')+'</div>'+
     '<div class="resumen-venta"><div class="rv-lbl">Venta total</div><div class="rv-total">'+money(total)+'</div>'+compHtml+'</div>'+
-    '<div class="card"><h3>M\u00e9todos de pago</h3>'+
-      ['efectivo','tarjeta','mercadopago','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+(m==='mercadopago'&&t[m]>0?' (auto)':'')+'</span><b>'+money(t[m])+' &middot; '+pct(t[m])+'%</b></div>'; }).join('')+
+    '<div class="card"><h3>Métodos de pago</h3>'+
+      ['efectivo','tarjeta','mercadopago','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+((m==='mercadopago')&&t[m]>0?' (auto)':'')+'</span><b>'+money(t[m])+' · '+pct(t[m])+'%</b></div>'; }).join('')+
     '</div>'+
     (puntosCanjeados>0?'<div class="card"><h3>🌙 Puntos de Lealtad</h3><div class="star-row"><span>Canjeados este turno</span><b>-'+money(puntosCanjeados)+'</b></div></div>':'')+
-    '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas &middot; '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
+    '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas · '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
     '</div>'+
-    '<div class="card"><h3>Declaraci\u00f3n del cajero</h3>'+
-      '<div class="sub" style="margin-bottom:10px">Mercado Pago no se declara -- ya qued\u00f3 confirmado solo. Solo cuenta el efectivo y lee el reporte de la terminal.</div>'+
-      '<div class="field"><label>Efectivo declarado (contado f\u00edsicamente)</label><input id="rDeclarado" type="number" inputmode="decimal" placeholder="0.00"></div>'+
-      '<div class="caja-check"><span>Sistema (efectivo)</span><b>'+money(esperado)+'</b></div>'+
-      '<div class="caja-check diff" id="rDiffRow" style="display:none"></div>'+
-      '<div class="field" style="margin-top:16px"><label>Reporte de terminal (tarjeta f\u00edsica)</label><input id="rDeclaradoTerminal" type="number" inputmode="decimal" placeholder="0.00"></div>'+
-      '<div class="caja-check"><span>Sistema (tarjeta)</span><b>'+money(esperadoTerminal)+'</b></div>'+
-      '<div class="caja-check diff" id="rDiffRowTerminal" style="display:none"></div>'+
+    '<div class="card"><h3>Declaración del cajero (corte ciego)</h3>'+
+      '<div class="sub" style="margin-bottom:10px">Cuenta el efectivo, lee el reporte de la terminal y confirma la transferencia recibida. No necesitas saber cuánto "debería" haber -- solo reporta lo real, el sistema calcula la diferencia despues.</div>'+
+      '<div class="field"><label>Efectivo declarado (contado físicamente)</label><input id="rDeclarado" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+      '<div class="field" style="margin-top:14px"><label>Reporte de terminal (tarjeta física)</label><input id="rDeclaradoTerminal" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+      '<div class="field" style="margin-top:14px"><label>Transferencia recibida</label><input id="rDeclaradoTransferencia" type="number" inputmode="decimal" placeholder="0.00"></div>'+
+      (t.mercadopago>0?'<div class="caja-check" style="margin-top:14px"><span>Mercado Pago (auto, no se declara)</span><b>'+money(t.mercadopago)+'</b></div>':'')+
+      (t.rappi>0?'<div class="caja-check"><span>Rappi/Uber (no se declara)</span><b>'+money(t.rappi)+'</b></div>':'')+
     '</div>'+
-    '</div>'+
-    '<div class="resumen-foot"><button class="btn-cancel" id="rCancel" style="flex:1">Cancelar</button><button class="btn-confirm" id="rConfirm" style="flex:2">Confirmar cierre</button></div>'+
+    '<div class="resumen-foot"><button class="btn-cancel" id="rCancel" style="flex:1">Cancelar</button><button class="btn-confirm" id="rConfirm" style="flex:2">Confirmar '+(finalDelDia?'cierre':'corte')+'</button></div>'+
   '</div>';
-  var diffRow=document.getElementById('rDiffRow');
-  document.getElementById('rDeclarado').addEventListener('input',function(e){
-    var v=parseFloat(e.target.value);
-    if(isNaN(v)){ diffRow.style.display='none'; return; }
-    var dif=v-esperado;
-    diffRow.className='caja-check diff '+(dif===0?'ok':'bad');
-    diffRow.style.display='flex';
-    diffRow.innerHTML='<span>Diferencia</span><b>'+(dif>=0?'+':'')+money(dif)+(dif===0?' \u2713 CUADRA':'')+'</b>';
-  });
-  var diffRowTerminal=document.getElementById('rDiffRowTerminal');
-  document.getElementById('rDeclaradoTerminal').addEventListener('input',function(e){
-    var v=parseFloat(e.target.value);
-    if(isNaN(v)){ diffRowTerminal.style.display='none'; return; }
-    var dif=v-esperadoTerminal;
-    diffRowTerminal.className='caja-check diff '+(dif===0?'ok':'bad');
-    diffRowTerminal.style.display='flex';
-    diffRowTerminal.innerHTML='<span>Diferencia</span><b>'+(dif>=0?'+':'')+money(dif)+(dif===0?' ✓ CUADRA':'')+'</b>';
-  });
   document.getElementById('rCancel').addEventListener('click',function(){ host.innerHTML=''; });
   document.getElementById('rConfirm').addEventListener('click',function(){
     var v=parseFloat(document.getElementById('rDeclarado').value);
     var vt=parseFloat(document.getElementById('rDeclaradoTerminal').value);
+    var vtr=parseFloat(document.getElementById('rDeclaradoTransferencia').value);
     if(isNaN(v)){ showToast('Captura el efectivo declarado'); return; }
     if(isNaN(vt)){ showToast('Captura el reporte de la terminal'); return; }
+    if(isNaN(vtr)){ showToast('Captura la transferencia recibida (0 si no hubo)'); return; }
     setUltimoCierre(state.sucursal, {total:total, label:'turno '+turnoLabel.toLowerCase()+' de hoy', ts:Date.now()});
     host.innerHTML='';
-    closeTurno(v,esperado,vt,esperadoTerminal);
+    closeTurno(v,esperado,vt,esperadoTerminal,vtr,esperadoTransferencia,function(payloadFinal){
+      mostrarReporteFinal(payloadFinal, finalDelDia, turno, turnoLabel, suc);
+    });
   });
+}
+function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
+  var host=document.getElementById('resumenHost')||(function(){var d=document.createElement('div'); d.id='resumenHost'; document.body.appendChild(d); return d;})();
+  function filaMetodo(declarado, esperado, diferencia){
+    var okClass = Math.abs(diferencia)<0.01 ? 'ok':'bad';
+    return '<div class="caja-check"><span>Declarado</span><b>'+money(declarado)+'</b></div>'+
+      '<div class="caja-check"><span>Sistema (esperado)</span><b>'+money(esperado)+'</b></div>'+
+      '<div class="caja-check diff '+okClass+'"><span>Diferencia</span><b>'+(diferencia>=0?'+':'')+money(diferencia)+(Math.abs(diferencia)<0.01?' ✓ CUADRA':'')+'</b></div>';
+  }
+  var top5=(payload.detalles||[]).slice().sort(function(a,b){return b.cantidad-a.cantidad;}).slice(0,5);
+  function _pintarReporte(acumulado){
+    var accHtml='';
+    if(acumulado){
+      accHtml='<div class="card"><h3>📅 Acumulado del día (mañana + tarde)</h3>'+
+        '<div class="star-row"><span>Venta total del día</span><b>'+money(acumulado.ventaTotal)+'</b></div>'+
+        '<div class="star-row"><span>Efectivo</span><b>'+money(acumulado.efectivo)+'</b></div>'+
+        '<div class="star-row"><span>Terminal</span><b>'+money(acumulado.tarjeta)+'</b></div>'+
+        '<div class="star-row"><span>Transferencia</span><b>'+money(acumulado.transferencia)+'</b></div>'+
+        '<div class="star-row"><span>Mercado Pago</span><b>'+money(acumulado.mercadopago)+'</b></div>'+
+        '<div class="star-row"><span>Rappi/Uber</span><b>'+money(acumulado.rappi)+'</b></div>'+
+      '</div>';
+    }
+    var textoWA=_construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulado);
+    host.innerHTML='<div class="resumen-overlay"><div class="resumen-wrap">'+
+      '<div class="resumen-head"><h2>'+(finalDelDia?'Cierre del día completado':'Corte completado')+'</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+' · '+esc(turnoLabel)+'</div>':'')+'</div>'+
+      '<div class="resumen-venta"><div class="rv-lbl">Venta total del turno</div><div class="rv-total">'+money(payload.ventaTotal)+'</div></div>'+
+      '<div class="card"><h3>Efectivo</h3>'+filaMetodo(payload.cajaDeclarada, payload.cajaEsperada, payload.cajaDiferencia)+'</div>'+
+      '<div class="card"><h3>Terminal (tarjeta física)</h3>'+filaMetodo(payload.terminalDeclarada, payload.terminalEsperada, payload.terminalDiferencia)+'</div>'+
+      '<div class="card"><h3>Transferencia</h3>'+filaMetodo(payload.transferenciaDeclarada, payload.transferenciaEsperada, payload.transferenciaDiferencia)+'</div>'+
+      (payload.mercadopago>0||payload.rappi>0?'<div class="card"><h3>Automático</h3>'+(payload.mercadopago>0?'<div class="star-row"><span>Mercado Pago</span><b>'+money(payload.mercadopago)+'</b></div>':'')+(payload.rappi>0?'<div class="star-row"><span>Rappi/Uber</span><b>'+money(payload.rappi)+'</b></div>':'')+'</div>':'')+
+      (top5.length?'<div class="card"><h3>Top 5 productos</h3>'+top5.map(function(p,i){return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.articulo)+'</span><b>'+p.cantidad+' pzas</b></div>';}).join('')+'</div>':'')+
+      accHtml+
+      '<div class="resumen-foot" style="flex-direction:column;gap:10px">'+
+        '<button class="btn-confirm" id="rWhatsapp" style="width:100%;background:#1a7f37">📲 Enviar reporte por WhatsApp</button>'+
+        '<button class="btn-cancel" id="rContinuar" style="width:100%">'+(finalDelDia?'Cerrar':'Continuar (abrir siguiente turno)')+'</button>'+
+      '</div>'+
+    '</div></div>';
+    document.getElementById('rWhatsapp').addEventListener('click',function(){
+      window.open('https://wa.me/528781404532?text='+encodeURIComponent(textoWA),'_blank');
+    });
+    document.getElementById('rContinuar').addEventListener('click',function(){
+      host.innerHTML='';
+      if(!finalDelDia){ pedirEfectivoInicial(); }
+    });
+  }
+  if(finalDelDia && turno==='TURNO TARDE'){
+    SYNC.obtenerCorteDia(payload.sucursal, 'TURNO MAÑANA', fechaHoyDDMMYYYY()).then(function(res){
+      if(res && res.ok && res.encontrado){
+        var acumulado={
+          ventaTotal:(parseFloat(res.ventaTotal)||0)+payload.ventaTotal,
+          efectivo:(parseFloat(res.efectivo)||0)+payload.efectivo,
+          tarjeta:(parseFloat(res.tarjeta)||0)+payload.tarjeta,
+          transferencia:(parseFloat(res.transferencia)||0)+payload.transferencia,
+          mercadopago:(parseFloat(res.mercadopago)||0)+payload.mercadopago,
+          rappi:(parseFloat(res.rappi)||0)+payload.rappi
+        };
+        _pintarReporte(acumulado);
+      } else { _pintarReporte(null); }
+    }).catch(function(){ _pintarReporte(null); });
+  } else {
+    _pintarReporte(null);
+  }
+}
+function _construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulado){
+  var lineas=[];
+  lineas.push('*Sueño de Luna* — '+(suc?suc.nombre:''));
+  lineas.push('*'+(finalDelDia?'Cierre del día':'Corte de caja')+' — Turno '+turnoLabel+'*');
+  lineas.push(fechaCorta(new Date()));
+  lineas.push('');
+  lineas.push('Venta total: '+money(payload.ventaTotal));
+  lineas.push('');
+  lineas.push('Efectivo: declarado '+money(payload.cajaDeclarada)+' / sistema '+money(payload.cajaEsperada)+' / dif '+(payload.cajaDiferencia>=0?'+':'')+money(payload.cajaDiferencia));
+  lineas.push('Terminal: declarado '+money(payload.terminalDeclarada)+' / sistema '+money(payload.terminalEsperada)+' / dif '+(payload.terminalDiferencia>=0?'+':'')+money(payload.terminalDiferencia));
+  lineas.push('Transferencia: declarado '+money(payload.transferenciaDeclarada)+' / sistema '+money(payload.transferenciaEsperada)+' / dif '+(payload.transferenciaDiferencia>=0?'+':'')+money(payload.transferenciaDiferencia));
+  if(payload.mercadopago>0) lineas.push('Mercado Pago (auto): '+money(payload.mercadopago));
+  if(payload.rappi>0) lineas.push('Rappi/Uber: '+money(payload.rappi));
+  if(acumulado){
+    lineas.push('');
+    lineas.push('*Acumulado del día (mañana + tarde)*');
+    lineas.push('Venta total: '+money(acumulado.ventaTotal));
+    lineas.push('Efectivo: '+money(acumulado.efectivo)+' · Terminal: '+money(acumulado.tarjeta)+' · Transferencia: '+money(acumulado.transferencia)+' · Mercado Pago: '+money(acumulado.mercadopago)+' · Rappi/Uber: '+money(acumulado.rappi));
+  }
+  return lineas.join('\n');
 }
 
 /* ============ INIT ============ */
