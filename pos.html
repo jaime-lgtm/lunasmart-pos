@@ -1766,18 +1766,6 @@ function abrirResumenCierre(finalDelDia){
 }
 function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
   var host=document.getElementById('resumenHost')||(function(){var d=document.createElement('div'); d.id='resumenHost'; document.body.appendChild(d); return d;})();
-  if(!esRolSupervisorAdmin()){
-    host.innerHTML='<div class="resumen-overlay"><div class="resumen-wrap">'+
-      '<div class="resumen-head"><h2>✅ Corte registrado</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+' · '+esc(turnoLabel)+'</div>':'')+'</div>'+
-      '<div class="card"><div class="sub">Gracias, tu declaración quedó guardada. El resumen y la comparación contra el sistema los revisa administración.</div></div>'+
-      '<div class="resumen-foot"><button class="btn-confirm" id="rContinuar" style="width:100%">'+(finalDelDia?'Cerrar':'Continuar (abrir siguiente turno)')+'</button></div>'+
-    '</div></div>';
-    document.getElementById('rContinuar').addEventListener('click',function(){
-      host.innerHTML='';
-      if(!finalDelDia){ pedirEfectivoInicial(); }
-    });
-    return;
-  }
   function filaMetodo(declarado, esperado, diferencia){
     var okClass = Math.abs(diferencia)<0.01 ? 'ok':'bad';
     return '<div class="caja-check"><span>Declarado</span><b>'+money(declarado)+'</b></div>'+
