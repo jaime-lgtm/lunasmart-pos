@@ -1603,6 +1603,10 @@ function renderCaja(){
   document.getElementById('btnCerrarTurno').addEventListener('click',abrirResumenCierre);
 }
 function hacerCorte(){
+  var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
+  if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. Márcalas como listas.'); return; }
+  var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; });
+  if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar. Ve a Pedidos y cóbralas primero.'); return; }
   var tm=totalesPorMetodo(); var esperado=state.cajaInicial+tm.efectivo;
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Realizar corte de caja</h2>'+
     '<div class="sub" style="margin-bottom:12px">Registra y verifica el efectivo actual al cambiar de turno.</div>'+
