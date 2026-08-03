@@ -1582,19 +1582,21 @@ function fechaCorta(d){ var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ag
 function ultimoCierreKey(suc){ return 'lsUltimoCierre_'+suc; }
 function getUltimoCierre(suc){ try{ return JSON.parse(localStorage.getItem(ultimoCierreKey(suc))||'null'); }catch(e){ return null; } }
 function setUltimoCierre(suc,data){ try{ localStorage.setItem(ultimoCierreKey(suc), JSON.stringify(data)); }catch(e){} }
+function esRolSupervisorAdmin(){ return state.role==='admin'||state.role==='supervisor'; }
 function renderCaja(){
   var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
   var est=productosEstrella(); var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
+  var verDesglose=esRolSupervisorAdmin();
   document.getElementById('cajaContent').innerHTML=
     '<div id="printArea"><h2>Caja &mdash; '+esc(suc?suc.nombre:'')+'</h2><div class="sub">'+(state.cajaAbierta?'Caja abierta':'Caja cerrada')+' &middot; '+state.turnoSales.length+' ventas en el turno</div>'+
     '<div class="card"><h3>Estado de caja</h3><div class="caja-info"><div><div class="l">Efectivo inicial</div><div class="v">'+money(state.cajaInicial)+'</div></div></div>'+
       '<div class="caja-ops"><button class="caja-op" data-op="corte"><span class="ci">&#128203;</span>Corte de caja</button><button class="caja-op" data-op="deposito"><span class="ci">&#11015;</span>Depositar</button><button class="caja-op" data-op="retiro"><span class="ci">&#11014;</span>Retirar</button><button class="caja-op" data-op="cajon"><span class="ci">&#128230;</span>Abrir caj&oacute;n</button></div></div>'+
-    '<div class="card"><h3>Desglose por metodo de pago</h3><div class="pay-summary">'+
+    (verDesglose?('<div class="card"><h3>Desglose por metodo de pago</h3><div class="pay-summary">'+
       '<div class="pill"><div class="l">Efectivo</div><div class="v">'+money(t.efectivo)+'</div></div>'+
       '<div class="pill"><div class="l">Tarjeta</div><div class="v">'+money(t.tarjeta)+'</div></div>'+
       '<div class="pill"><div class="l">Transferencia</div><div class="v">'+money(t.transferencia)+'</div></div>'+
       '<div class="pill"><div class="l">Rappi/Uber</div><div class="v">'+money(t.rappi)+'</div></div>'+
-    '</div><div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'+
+    '</div><div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'):'')+
     '<div class="card"><h3>Art&iacute;culos estrella del turno</h3>'+(est.length?est.map(function(e){return '<div class="star-row"><span>'+esc(e.name)+'</span><b>'+e.qty+'</b></div>';}).join(''):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div></div>'+
     '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>';
   document.querySelectorAll('#cajaContent .caja-op').forEach(function(b){ b.addEventListener('click',function(){ cajaOp(b.dataset.op); }); });
@@ -1724,16 +1726,19 @@ function abrirResumenCierre(finalDelDia){
     compHtml='<div class="rv-comp '+(delta>=0?'up':'down')+'">'+(delta>=0?'+':'-')+money(Math.abs(delta))+' '+(delta>=0?'↑':'↓')+' vs '+esc(prev.label||'turno anterior')+'</div>';
   }
   var titulo=finalDelDia?'Cierre del día':'Corte de caja';
+  var verInfo=esRolSupervisorAdmin();
   var host=document.getElementById('resumenHost')||(function(){var d=document.createElement('div'); d.id='resumenHost'; document.body.appendChild(d); return d;})();
   host.innerHTML='<div class="resumen-overlay"><div class="resumen-wrap">'+
     '<div class="resumen-head"><h2>'+esc(titulo)+' — '+esc(turnoLabel)+' '+esc(fechaCorta(new Date()))+'</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+'</div>':'')+'</div>'+
+    (verInfo?(
     '<div class="resumen-venta"><div class="rv-lbl">Venta total</div><div class="rv-total">'+money(total)+'</div>'+compHtml+'</div>'+
     '<div class="card"><h3>Métodos de pago</h3>'+
       ['efectivo','tarjeta','mercadopago','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+((m==='mercadopago')&&t[m]>0?' (auto)':'')+'</span><b>'+money(t[m])+' · '+pct(t[m])+'%</b></div>'; }).join('')+
     '</div>'+
     (puntosCanjeados>0?'<div class="card"><h3>🌙 Puntos de Lealtad</h3><div class="star-row"><span>Canjeados este turno</span><b>-'+money(puntosCanjeados)+'</b></div></div>':'')+
     '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas · '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
-    '</div>'+
+    '</div>'
+    ):'')+
     '<div class="card"><h3>Declaración del cajero (corte ciego)</h3>'+
       '<div class="sub" style="margin-bottom:10px">Cuenta el efectivo, lee el reporte de la terminal y confirma la transferencia recibida. No necesitas saber cuánto "debería" haber -- solo reporta lo real, el sistema calcula la diferencia despues.</div>'+
       '<div class="field"><label>Efectivo declarado (contado físicamente)</label><input id="rDeclarado" type="number" inputmode="decimal" placeholder="0.00"></div>'+
@@ -1761,6 +1766,18 @@ function abrirResumenCierre(finalDelDia){
 }
 function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
   var host=document.getElementById('resumenHost')||(function(){var d=document.createElement('div'); d.id='resumenHost'; document.body.appendChild(d); return d;})();
+  if(!esRolSupervisorAdmin()){
+    host.innerHTML='<div class="resumen-overlay"><div class="resumen-wrap">'+
+      '<div class="resumen-head"><h2>✅ Corte registrado</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+' · '+esc(turnoLabel)+'</div>':'')+'</div>'+
+      '<div class="card"><div class="sub">Gracias, tu declaración quedó guardada. El resumen y la comparación contra el sistema los revisa administración.</div></div>'+
+      '<div class="resumen-foot"><button class="btn-confirm" id="rContinuar" style="width:100%">'+(finalDelDia?'Cerrar':'Continuar (abrir siguiente turno)')+'</button></div>'+
+    '</div></div>';
+    document.getElementById('rContinuar').addEventListener('click',function(){
+      host.innerHTML='';
+      if(!finalDelDia){ pedirEfectivoInicial(); }
+    });
+    return;
+  }
   function filaMetodo(declarado, esperado, diferencia){
     var okClass = Math.abs(diferencia)<0.01 ? 'ok':'bad';
     return '<div class="caja-check"><span>Declarado</span><b>'+money(declarado)+'</b></div>'+
