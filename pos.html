@@ -1014,7 +1014,7 @@ function confirmMods(){
   if(missing){ alert('Selecciona las opciones requeridas'); return; }
   var price=modsTotal();
   var label=parts.join(' \u00b7 ');
-  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:1,note:_modNote.trim(),mods:label,area:areaDe(p)});
+  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:1,note:_modNote.trim(),mods:label,area:areaDe(p),size:(p.sized?_modSize:null)});
   renderTopbar(); renderCart(); closeMods();
 }
 function changeQty(uid,d){
