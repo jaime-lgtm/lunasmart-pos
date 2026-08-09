@@ -935,12 +935,13 @@ function addToCart(p){
   renderTopbar(); renderCart();
 }
 
-var _modP=null, _modSize=null, _modSel={}, _modNote='', _modCustomMonto=0;
+var _modP=null, _modSize=null, _modSel={}, _modNote='', _modCustomMonto=0, _modQty=1;
 function openMods(p){
-  _modP=p; _modSel={}; _modSize=null; _modNote=''; _modCustomMonto=0;
+  _modP=p; _modSel={}; _modSize=null; _modNote=''; _modCustomMonto=0; _modQty=1;
   if(p.sized && p.prices){ _modSize=Object.keys(p.prices)[0]; }
   (p.mods||[]).forEach(function(g,gi){
-    if(g.req && g.opts && g.opts.length){ _modSel[gi]= (g.type==='multi')? [0] : 0; }
+    if(g.type==='distribuir'){ _modSel[gi]=(g.opts||[]).map(function(){return 0;}); }
+    else if(g.req && g.opts && g.opts.length){ _modSel[gi]= (g.type==='multi')? [0] : 0; }
     else { _modSel[gi]= (g.type==='multi')? [] : -1; }
   });
   renderMods();
@@ -953,16 +954,23 @@ function modsTotal(){
   var extra=0;
   (p.mods||[]).forEach(function(g,gi){
     var sel=_modSel[gi];
-    if(g.type==='multi'){ (sel||[]).forEach(function(oi){ extra+= (g.opts[oi]&&g.opts[oi].p)||0; }); }
+    if(g.type==='distribuir'){ (sel||[]).forEach(function(cant,oi){ extra+= cant*((g.opts[oi]&&g.opts[oi].p)||0); }); }
+    else if(g.type==='multi'){ (sel||[]).forEach(function(oi){ extra+= (g.opts[oi]&&g.opts[oi].p)||0; }); }
     else if(sel>-1 && g.opts[sel]){ extra+= g.opts[sel].p||0; }
   });
   return base+extra;
 }
+function distribuirSuma(sel){ return (sel||[]).reduce(function(a,b){return a+(b||0);},0); }
 function szLabel(sn){var oz={'El Chico':'12 oz','El Mayor':'20 oz'};return oz[sn]?sn+' '+oz[sn]:sn;}
 function renderMods(){
   var p=_modP; if(!p) return;
   var h='<div class="mods-head"><div class="mh-t">'+esc(p.name)+'</div>'+(p.desc?'<div class="mh-d">'+esc(p.desc)+'</div>':'')+'</div>';
   h+='<div class="mods-body">';
+  h+='<div class="mgroup"><div class="mg-l">Cantidad</div><div style="display:flex;align-items:center;justify-content:center;gap:18px;padding:6px 0">'+
+    '<button type="button" id="modQtyMinus" style="width:44px;height:44px;border-radius:12px;border:1px solid var(--linea);background:var(--beige-claro);font-size:22px;font-weight:800;color:var(--cafe-medio)">&minus;</button>'+
+    '<span id="modQtyVal" style="font-size:22px;font-weight:800;min-width:30px;text-align:center">'+_modQty+'</span>'+
+    '<button type="button" id="modQtyPlus" style="width:44px;height:44px;border-radius:12px;border:1px solid var(--linea);background:var(--beige-claro);font-size:22px;font-weight:800;color:var(--cafe-medio)">&plus;</button>'+
+    '</div></div>';
   if(p.sized && p.prices){
     h+='<div class="mgroup"><div class="mg-l">Tama&ntilde;o<span class="req">Requerido</span></div>';
     Object.keys(p.prices).forEach(function(sn){
@@ -975,6 +983,24 @@ function renderMods(){
     h+='</div>';
   }
   (p.mods||[]).forEach(function(g,gi){
+    if(g.type==='distribuir'){
+      var suma=distribuirSuma(_modSel[gi]);
+      var ok=(suma===g.total);
+      h+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
+      h+='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:'+(ok?'#2e7d32':'var(--terracota)')+'">Llevas '+suma+' de '+g.total+(ok?' ✓':'')+'</div>';
+      (g.opts||[]).forEach(function(o,oi){
+        var cant=(_modSel[gi]||[])[oi]||0;
+        h+='<div class="mopt" style="display:flex;align-items:center;justify-content:space-between;gap:10px">'+
+          '<span>'+esc(o.l)+(o.p?' <span class="op">+'+money(o.p)+' c/u</span>':'')+'</span>'+
+          '<span style="display:flex;align-items:center;gap:10px">'+
+            '<button type="button" class="mdist-btn" data-gi="'+gi+'" data-oi="'+oi+'" data-d="-1" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--linea);background:var(--beige-claro);font-size:17px;font-weight:800">&minus;</button>'+
+            '<span style="min-width:20px;text-align:center;font-weight:800">'+cant+'</span>'+
+            '<button type="button" class="mdist-btn" data-gi="'+gi+'" data-oi="'+oi+'" data-d="1" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--linea);background:var(--beige-claro);font-size:17px;font-weight:800">&plus;</button>'+
+          '</span></div>';
+      });
+      h+='</div>';
+      return;
+    }
     h+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
     (g.opts||[]).forEach(function(o,oi){
       var checked;
@@ -989,18 +1015,30 @@ function renderMods(){
   h+='<div class="mgroup"><div class="mg-l">Notas<span class="opc">Opcional</span></div>'+
     '<textarea id="modNoteTxt" placeholder="Ej. sin az&uacute;car, extra caliente..." style="width:100%;padding:12px;border:1px solid var(--linea);border-radius:12px;background:var(--beige-claro);min-height:70px;resize:vertical;font-family:inherit;font-size:15px;">'+esc(_modNote)+'</textarea></div>';
   h+='</div>';
-  h+='<div class="mods-foot"><button class="btn-ghost" id="modsCancel">Cancelar</button><button class="btn-primary" id="modsAdd">Agregar &middot; <span id="modsTot">'+money(modsTotal())+'</span></button></div>';
+  h+='<div class="mods-foot"><button class="btn-ghost" id="modsCancel">Cancelar</button><button class="btn-primary" id="modsAdd">Agregar &middot; <span id="modsTot">'+money(modsTotal()*_modQty)+'</span></button></div>';
   var box=document.getElementById('modsBox'); box.innerHTML=h;
   var __noteEl=document.getElementById('modNoteTxt'); if(__noteEl) __noteEl.addEventListener('input',function(){ _modNote=__noteEl.value; });
-  var __custInp=document.getElementById('modCustomMontoInp'); if(__custInp) __custInp.addEventListener('input',function(){ _modCustomMonto=parseFloat(__custInp.value)||0; document.getElementById('modsTot').textContent=money(modsTotal()); });
+  var __custInp=document.getElementById('modCustomMontoInp'); if(__custInp) __custInp.addEventListener('input',function(){ _modCustomMonto=parseFloat(__custInp.value)||0; document.getElementById('modsTot').textContent=money(modsTotal()*_modQty); });
+  document.getElementById('modQtyMinus').addEventListener('click',function(){ if(_modQty>1){ _modQty--; document.getElementById('modQtyVal').textContent=_modQty; document.getElementById('modsTot').textContent=money(modsTotal()*_modQty); } });
+  document.getElementById('modQtyPlus').addEventListener('click',function(){ _modQty++; document.getElementById('modQtyVal').textContent=_modQty; document.getElementById('modsTot').textContent=money(modsTotal()*_modQty); });
   box.querySelectorAll('input[name="msize"]').forEach(function(r){ r.addEventListener('change',function(){ _modSize=r.dataset.sz; renderMods(); }); });
+  box.querySelectorAll('.mdist-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var gi=parseInt(b.dataset.gi,10), oi=parseInt(b.dataset.oi,10), d=parseInt(b.dataset.d,10);
+      var arr=_modSel[gi]||[]; var nuevo=(arr[oi]||0)+d;
+      if(nuevo<0) nuevo=0;
+      arr[oi]=nuevo; _modSel[gi]=arr;
+      renderMods();
+    });
+  });
   (p.mods||[]).forEach(function(g,gi){
+    if(g.type==='distribuir') return;
     box.querySelectorAll('input[name="mg'+gi+'"]').forEach(function(inp){
       inp.addEventListener('change',function(){
         var oi=parseInt(inp.dataset.oi,10);
         if(g.type==='multi'){ var a=_modSel[gi]||[]; var k=a.indexOf(oi); if(inp.checked){ if(k<0)a.push(oi);} else { if(k>-1)a.splice(k,1);} _modSel[gi]=a; }
         else { _modSel[gi]=oi; }
-        document.getElementById('modsTot').textContent=money(modsTotal());
+        document.getElementById('modsTot').textContent=money(modsTotal()*_modQty);
       });
     });
   });
@@ -1014,13 +1052,18 @@ function confirmMods(){
   var missing=false;
   (p.mods||[]).forEach(function(g,gi){
     var sel=_modSel[gi];
-    if(g.type==='multi'){ (sel||[]).forEach(function(oi){ if(g.opts[oi]) parts.push(g.opts[oi].l); }); if(g.req && (!sel||!sel.length)) missing=true; }
+    if(g.type==='distribuir'){
+      var suma=distribuirSuma(sel);
+      if(g.req && suma!==g.total){ missing=true; return; }
+      (g.opts||[]).forEach(function(o,oi){ if(sel[oi]>0) parts.push(sel[oi]+' '+o.l); });
+    }
+    else if(g.type==='multi'){ (sel||[]).forEach(function(oi){ if(g.opts[oi]) parts.push(g.opts[oi].l); }); if(g.req && (!sel||!sel.length)) missing=true; }
     else { if(sel>-1 && g.opts[sel]) parts.push(g.opts[sel].l); else if(g.req) missing=true; }
   });
-  if(missing){ alert('Selecciona las opciones requeridas'); return; }
+  if(missing){ showToast('Completa las opciones requeridas'); return; }
   var price=modsTotal();
-  var label=parts.join(' \u00b7 ');
-  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:1,note:_modNote.trim(),mods:label,area:areaDe(p),size:(p.sized?_modSize:null)});
+  var label=parts.join(' · ');
+  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:_modQty,note:_modNote.trim(),mods:label,area:areaDe(p),size:(p.sized?_modSize:null)});
   renderTopbar(); renderCart(); closeMods();
 }
 function changeQty(uid,d){
