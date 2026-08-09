@@ -1294,7 +1294,7 @@ function _htmlPagoDividido(total){
     h+='<div class="pay-grid">'+metodos.map(function(m){return '<button class="pay-btn dividir-metodo'+(state.dividirMetodoSel===m?' active':'')+'" data-dm="'+m+'">'+esc(PAGO_LABEL[m])+'</button>';}).join('')+'</div>';
     h+='<div class="cash-box"><input id="dividirMontoInp" type="number" inputmode="decimal" placeholder="Monto" value="'+(restante>0?restante.toFixed(2):'')+'">'+
       (state.dividirMetodoSel==='efectivo'?('<div class="quick-cash">'+[100,200,500,1000].map(function(v){return '<button data-cashdiv="'+v+'">$'+v+'</button>';}).join('')+'<button data-cashdiv="exact">Exacto</button></div>'):'')+
-      '<button class="btn-primary" id="btnAgregarPagoDividido" style="width:100%;margin-top:8px">+ Agregar '+esc(PAGO_LABEL[state.dividirMetodoSel])+'</button></div>';
+      '<button class="btn-confirm" id="btnAgregarPagoDividido" style="width:100%;margin-top:8px">+ Agregar '+esc(PAGO_LABEL[state.dividirMetodoSel])+'</button></div>';
   }
   return h;
 }
