@@ -935,9 +935,9 @@ function addToCart(p){
   renderTopbar(); renderCart();
 }
 
-var _modP=null, _modSize=null, _modSel={}, _modNote='';
+var _modP=null, _modSize=null, _modSel={}, _modNote='', _modCustomMonto=0;
 function openMods(p){
-  _modP=p; _modSel={}; _modSize=null; _modNote='';
+  _modP=p; _modSel={}; _modSize=null; _modNote=''; _modCustomMonto=0;
   if(p.sized && p.prices){ _modSize=Object.keys(p.prices)[0]; }
   (p.mods||[]).forEach(function(g,gi){
     if(g.req && g.opts && g.opts.length){ _modSel[gi]= (g.type==='multi')? [0] : 0; }
@@ -949,7 +949,7 @@ function openMods(p){
 function closeMods(){ document.getElementById('modsBackdrop').classList.remove('show'); _modP=null; }
 function modsTotal(){
   var p=_modP; if(!p) return 0;
-  var base = (p.sized && p.prices && _modSize!=null)? p.prices[_modSize] : p.price;
+  var base = (p.sized && p.prices && _modSize!=null)? (_modSize==='Personalizado'?(_modCustomMonto||0):p.prices[_modSize]) : p.price;
   var extra=0;
   (p.mods||[]).forEach(function(g,gi){
     var sel=_modSel[gi];
@@ -966,8 +966,12 @@ function renderMods(){
   if(p.sized && p.prices){
     h+='<div class="mgroup"><div class="mg-l">Tama&ntilde;o<span class="req">Requerido</span></div>';
     Object.keys(p.prices).forEach(function(sn){
-      h+='<label class="mopt"><span><input type="radio" name="msize" data-sz="'+esc(sn)+'"'+(_modSize===sn?' checked':'')+'> '+esc(szLabel(sn))+'</span><span class="op">'+money(p.prices[sn])+'</span></label>';
+      var esLibre=(sn==='Personalizado');
+      h+='<label class="mopt"><span><input type="radio" name="msize" data-sz="'+esc(sn)+'"'+(_modSize===sn?' checked':'')+'> '+esc(szLabel(sn))+'</span><span class="op">'+(esLibre?'monto libre':money(p.prices[sn]))+'</span></label>';
     });
+    if(_modSize==='Personalizado'){
+      h+='<div class="field" style="margin-top:8px"><label>&iquest;Cu&aacute;nto va a pagar?</label><input type="number" id="modCustomMontoInp" inputmode="decimal" placeholder="0.00" value="'+(_modCustomMonto||'')+'" style="font-size:18px;font-weight:700;text-align:right"></div>';
+    }
     h+='</div>';
   }
   (p.mods||[]).forEach(function(g,gi){
@@ -988,7 +992,8 @@ function renderMods(){
   h+='<div class="mods-foot"><button class="btn-ghost" id="modsCancel">Cancelar</button><button class="btn-primary" id="modsAdd">Agregar &middot; <span id="modsTot">'+money(modsTotal())+'</span></button></div>';
   var box=document.getElementById('modsBox'); box.innerHTML=h;
   var __noteEl=document.getElementById('modNoteTxt'); if(__noteEl) __noteEl.addEventListener('input',function(){ _modNote=__noteEl.value; });
-  box.querySelectorAll('input[name="msize"]').forEach(function(r){ r.addEventListener('change',function(){ _modSize=r.dataset.sz; document.getElementById('modsTot').textContent=money(modsTotal()); }); });
+  var __custInp=document.getElementById('modCustomMontoInp'); if(__custInp) __custInp.addEventListener('input',function(){ _modCustomMonto=parseFloat(__custInp.value)||0; document.getElementById('modsTot').textContent=money(modsTotal()); });
+  box.querySelectorAll('input[name="msize"]').forEach(function(r){ r.addEventListener('change',function(){ _modSize=r.dataset.sz; renderMods(); }); });
   (p.mods||[]).forEach(function(g,gi){
     box.querySelectorAll('input[name="mg'+gi+'"]').forEach(function(inp){
       inp.addEventListener('change',function(){
@@ -1004,7 +1009,8 @@ function renderMods(){
 }
 function confirmMods(){
   var p=_modP; if(!p) return;
-  var parts=[]; if(_modSize) parts.push(_modSize);
+  if(p.sized && _modSize==='Personalizado' && !(_modCustomMonto>0)){ showToast('Escribe el monto a cobrar'); return; }
+  var parts=[]; if(_modSize) parts.push(_modSize==='Personalizado'?'Monto libre':_modSize);
   var missing=false;
   (p.mods||[]).forEach(function(g,gi){
     var sel=_modSel[gi];
