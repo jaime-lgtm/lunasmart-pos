@@ -794,12 +794,29 @@ function doLogin(){
     var s=SUCURSALES.filter(function(x){return x.id===suc;})[0];
     state.logged=true; state.sucursal=suc; state.role=u.rol; state.user=u.nombre;
     state.view='menu'; state.tipoOrden=null; state.mesa=null; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.turnoSales=[]; state.pin='';
-    state.pedidos=[];
+    state.pedidos=[]; state.cajaAbierta=false;
     fbEscucharPedidos(suc);
     fbEscucharMesas(suc);
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
-    showScreen('scApp'); renderTopbar(); goMenu(); if(state.role==='monitor'){ var _k=document.querySelector('[data-view="kds"]'); if(_k) _k.click(); }
+    showScreen('scApp'); renderTopbar();
+    fbAuthReady.then(function(){
+      return Promise.all([
+        fbDb.ref('cajaEstado/'+suc).once('value'),
+        fbDb.ref('turnoSales/'+suc).once('value')
+      ]);
+    }).then(function(res){
+      var ce=res[0].val();
+      var hayVentasEnCurso = res[1].val() && Object.keys(res[1].val()).length>0;
+      if((ce && ce.abierta===true) || hayVentasEnCurso){
+        state.cajaAbierta=true;
+        if(ce){ state.cajaInicial=(typeof ce.cajaInicial==='number')?ce.cajaInicial:state.cajaInicial; state.turno=ce.turno||state.turno; }
+        goMenu();
+      } else {
+        pedirEfectivoInicial(true);
+      }
+    }).catch(function(){ pedirEfectivoInicial(true); });
+    if(state.role==='monitor'){ var _k=document.querySelector('[data-view="kds"]'); if(_k) _k.click(); }
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
@@ -1449,7 +1466,7 @@ function configSync(){
   var pend = 0;
   try { pend = JSON.parse(localStorage.getItem("ls_cortes_pendientes")||"[]").length; } catch(e){}
   var estado = SYNC.configurado() ? "<span style=\"color:#1a7f37;font-weight:700\">Configurado</span>" : "<span style=\"color:#b00;font-weight:700\">Falta el token</span>";
-  var pendTxt = pend>0 ? ("<div class=\"sub\" style=\"margin-top:8px;color:#b00\">Hay " + pend + " corte(s) pendiente(s) de enviar</div>") : "";
+  var pendTxt = pend>0 ? ("<div class=\"sub\" style=\"margin-top:8px;color:#b00\">Hay " + pend + " corte(s) pendiente(s) de enviar</div><button type=\"button\" id=\"btnReenviarPend\" class=\"btn-confirm\" style=\"width:100%;margin-top:8px\">Reenviar " + pend + " corte(s) pendiente(s)</button>") : "";
   document.getElementById("modalHost").innerHTML =
     '<div class="modal-bg" id="mbg"><div class="modal">' +
     '<h2>Sincronizaci\u00f3n con Luna Smart</h2>' +
@@ -1462,6 +1479,7 @@ function configSync(){
     '<div class="modal-actions" style="margin-top:18px"><button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mOk">Guardar</button></div>' +
     '</div></div>';
   var it = document.getElementById("syncTok"); if(it && tokActual){ it.placeholder = "\u2022\u2022\u2022\u2022\u2022\u2022 (guardado \u2013 escribe para reemplazar)"; }
+  var btnRe=document.getElementById("btnReenviarPend"); if(btnRe) btnRe.addEventListener("click",reenviarCortesPendientes);
   bindModal(function(){
     var u = document.getElementById("syncUrl").value;
     var k = document.getElementById("syncTok").value;
@@ -1746,20 +1764,50 @@ var SYNC = {
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); }).catch(function(){ return {ok:false, encontrado:false}; });
   }
 };
+function reenviarCortesPendientes(){
+  var arr=[]; try{ arr=JSON.parse(localStorage.getItem("ls_cortes_pendientes")||"[]"); }catch(e){}
+  if(!arr.length){ showToast("No hay cortes pendientes"); return; }
+  if(!SYNC.configurado()){ showToast("Configura primero la URL y el token"); return; }
+  showToast("Enviando "+arr.length+" corte(s) pendiente(s)...");
+  var quedan=[]; var ok=0;
+  var siguiente=function(i){
+    if(i>=arr.length){
+      localStorage.setItem("ls_cortes_pendientes", JSON.stringify(quedan));
+      showToast(ok+" corte(s) enviado(s)"+(quedan.length?(", "+quedan.length+" siguen pendientes"):""));
+      if(typeof configSync==="function") configSync();
+      return;
+    }
+    SYNC.enviarCorte(arr[i].payload).then(function(res){
+      if(res && (res.ok||res.status==="ok"||res.id)){ ok++; } else { quedan.push(arr[i]); }
+      siguiente(i+1);
+    }).catch(function(){ quedan.push(arr[i]); siguiente(i+1); });
+  };
+  siguiente(0);
+}
 function guardarCortePendiente(payload){
   try { var arr = JSON.parse(localStorage.getItem("ls_cortes_pendientes")||"[]"); arr.push({ ts: Date.now(), payload: payload }); localStorage.setItem("ls_cortes_pendientes", JSON.stringify(arr)); } catch(e){}
 }
-function pedirEfectivoInicial(){
+function pedirEfectivoInicial(obligatorio){
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Efectivo inicial</h2>'+
-    '<div class="sub" style="margin-bottom:12px">Captura el efectivo con el que inicia la nueva caja.</div>'+
+    '<div class="sub" style="margin-bottom:12px">'+(obligatorio?'Antes de operar, captura el efectivo con el que abres la caja.':'Captura el efectivo con el que inicia la nueva caja.')+'</div>'+
     '<div class="field"><label>Monto inicial</label><input id="iniMonto" type="number" inputmode="decimal" placeholder="0.00"><div class="sub" style="margin:14px 0 6px">Turno de esta caja</div><div style="display:flex;gap:10px"><button type="button" id="turMan" class="turno-op" style="flex:1;padding:14px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:700;cursor:pointer">&#127749; Turno Ma&ntilde;ana</button><button type="button" id="turTar" class="turno-op" style="flex:1;padding:14px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:700;cursor:pointer">&#127750; Turno Tarde</button></div></div>'+
-    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Omitir</button><button class="btn-confirm" id="mOk">Abrir caja</button></div></div></div>';
-  window.__turnoSel=null;var _tm=document.getElementById("turMan"), _tt=document.getElementById("turTar");function _selTur(v){ window.__turnoSel=v; if(_tm){_tm.style.background=(v==="TURNO MA\u00d1ANA")?"var(--terracota)":"#fff"; _tm.style.color=(v==="TURNO MA\u00d1ANA")?"#fff":"inherit";} if(_tt){_tt.style.background=(v==="TURNO TARDE")?"var(--terracota)":"#fff"; _tt.style.color=(v==="TURNO TARDE")?"#fff":"inherit";} }if(_tm) _tm.addEventListener("click",function(){_selTur("TURNO MA\u00d1ANA");});if(_tt) _tt.addEventListener("click",function(){_selTur("TURNO TARDE");});bindModal(function(){
+    '<div class="modal-actions">'+(obligatorio?'':'<button class="btn-cancel" id="mCancel">Omitir</button>')+'<button class="btn-confirm" id="mOk" style="flex:1">Abrir caja</button></div></div></div>';
+  window.__turnoSel=null;var _tm=document.getElementById("turMan"), _tt=document.getElementById("turTar");function _selTur(v){ window.__turnoSel=v; if(_tm){_tm.style.background=(v==="TURNO MA\u00d1ANA")?"var(--terracota)":"#fff"; _tm.style.color=(v==="TURNO MA\u00d1ANA")?"#fff":"inherit";} if(_tt){_tt.style.background=(v==="TURNO TARDE")?"var(--terracota)":"#fff"; _tt.style.color=(v==="TURNO TARDE")?"#fff":"inherit";} }if(_tm) _tm.addEventListener("click",function(){_selTur("TURNO MA\u00d1ANA");});if(_tt) _tt.addEventListener("click",function(){_selTur("TURNO TARDE");});
+  var confirmar=function(){
     var m=parseFloat(document.getElementById('iniMonto').value)||0;
     if(m<0){ showToast('Monto inv\u00e1lido'); return; }
-    if(!window.__turnoSel){ showToast("Selecciona el turno"); return; } state.turno = window.__turnoSel; state.cajaInicial=m; state.cajaAbierta=true; closeModal(); renderCaja(); renderTopbar();
+    if(!window.__turnoSel){ showToast("Selecciona el turno"); return; }
+    state.turno = window.__turnoSel; state.cajaInicial=m; state.cajaAbierta=true;
+    fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:true, cajaInicial:m, turno:window.__turnoSel}).catch(function(){}); });
+    closeModal(); renderCaja(); renderTopbar();
     showToast('Caja abierta con efectivo inicial '+money(m));
-  });
+    if(obligatorio) goMenu();
+  };
+  document.getElementById('mOk').addEventListener('click',confirmar);
+  if(!obligatorio){
+    document.getElementById('mCancel').addEventListener('click',closeModal);
+    document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  }
 }
 function cajaOp(op){
   if(op==='cajon'){ showToast('Abriendo caj&oacute;n...'); return; }
@@ -1797,7 +1845,7 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
-  function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; renderCaja(); renderTopbar(); if(typeof onDone==='function') onDone(payload); }
+  function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:false}).catch(function(){}); }); renderCaja(); renderTopbar(); if(typeof onDone==='function') onDone(payload); }
   if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local – falta configurar sincronización)"); return; }
   showToast("Enviando corte a Luna Smart...");
   SYNC.enviarCorte(payload).then(function(res){
