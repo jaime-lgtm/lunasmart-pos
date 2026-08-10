@@ -1130,7 +1130,7 @@ function renderProducts(){
     var badge = (p.mods&&p.mods.length)||p.sized ? '<span class="pmods">+ opciones</span>' : '';
     return '<button class="prod-btn" data-id="'+p.id+'"><span class="pn">'+esc(p.name)+'</span>'+d+'<span class="pp">'+pr+'</span>'+badge+'</button>';
   }).join('');
-  grid.querySelectorAll('.prod-btn').forEach(function(b){ b.addEventListener('click',function(){ var p=(CATALOG[state.sucursal]||[]).filter(function(x){return x.id===b.dataset.id;})[0]; if(!p) return; if((p.mods&&p.mods.length)||p.sized){ openMods(p); } else { addToCart(p); } }); });
+  grid.querySelectorAll('.prod-btn').forEach(function(b){ b.addEventListener('click',function(){ if(!_requiereCajaAbierta()) return; var p=(CATALOG[state.sucursal]||[]).filter(function(x){return x.id===b.dataset.id;})[0]; if(!p) return; if((p.mods&&p.mods.length)||p.sized){ openMods(p); } else { addToCart(p); } }); });
 }
 function renderCart(){
   var host=document.getElementById('cartLines');
@@ -1789,9 +1789,9 @@ function guardarCortePendiente(payload){
 }
 function pedirEfectivoInicial(obligatorio){
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Efectivo inicial</h2>'+
-    '<div class="sub" style="margin-bottom:12px">'+(obligatorio?'Antes de operar, captura el efectivo con el que abres la caja.':'Captura el efectivo con el que inicia la nueva caja.')+'</div>'+
+    '<div class="sub" style="margin-bottom:12px">'+(obligatorio?'Antes de registrar ventas necesitas abrir caja. Puedes cerrar esta ventana para solo ver/configurar sin abrirla todav\u00eda.':'Captura el efectivo con el que inicia la nueva caja.')+'</div>'+
     '<div class="field"><label>Monto inicial</label><input id="iniMonto" type="number" inputmode="decimal" placeholder="0.00"><div class="sub" style="margin:14px 0 6px">Turno de esta caja</div><div style="display:flex;gap:10px"><button type="button" id="turMan" class="turno-op" style="flex:1;padding:14px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:700;cursor:pointer">&#127749; Turno Ma&ntilde;ana</button><button type="button" id="turTar" class="turno-op" style="flex:1;padding:14px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:700;cursor:pointer">&#127750; Turno Tarde</button></div></div>'+
-    '<div class="modal-actions">'+(obligatorio?'':'<button class="btn-cancel" id="mCancel">Omitir</button>')+'<button class="btn-confirm" id="mOk" style="flex:1">Abrir caja</button></div></div></div>';
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">'+(obligatorio?'Cerrar (ver sin abrir)':'Omitir')+'</button><button class="btn-confirm" id="mOk" style="flex:1">Abrir caja</button></div></div></div>';
   window.__turnoSel=null;var _tm=document.getElementById("turMan"), _tt=document.getElementById("turTar");function _selTur(v){ window.__turnoSel=v; if(_tm){_tm.style.background=(v==="TURNO MA\u00d1ANA")?"var(--terracota)":"#fff"; _tm.style.color=(v==="TURNO MA\u00d1ANA")?"#fff":"inherit";} if(_tt){_tt.style.background=(v==="TURNO TARDE")?"var(--terracota)":"#fff"; _tt.style.color=(v==="TURNO TARDE")?"#fff":"inherit";} }if(_tm) _tm.addEventListener("click",function(){_selTur("TURNO MA\u00d1ANA");});if(_tt) _tt.addEventListener("click",function(){_selTur("TURNO TARDE");});
   var confirmar=function(){
     var m=parseFloat(document.getElementById('iniMonto').value)||0;
@@ -1803,11 +1803,21 @@ function pedirEfectivoInicial(obligatorio){
     showToast('Caja abierta con efectivo inicial '+money(m));
     if(obligatorio) goMenu();
   };
+  var cerrarSinAbrir=function(){ closeModal(); if(obligatorio) goMenu(); };
   document.getElementById('mOk').addEventListener('click',confirmar);
-  if(!obligatorio){
-    document.getElementById('mCancel').addEventListener('click',closeModal);
-    document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
-  }
+  document.getElementById('mCancel').addEventListener('click',cerrarSinAbrir);
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') cerrarSinAbrir(); });
+}
+/** Bloquea el registro de ventas si la caja no esta abierta; regresa true si se puede continuar. */
+function _requiereCajaAbierta(){
+  if(state.cajaAbierta) return true;
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Turno no iniciado</h2>'+
+    '<div class="sub" style="margin-bottom:16px">Debes abrir la caja (efectivo inicial + turno) antes de registrar ventas.</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Abrir caja ahora</button></div></div></div>';
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('mOk').addEventListener('click',function(){ closeModal(); pedirEfectivoInicial(false); });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  return false;
 }
 function cajaOp(op){
   if(op==='cajon'){ showToast('Abriendo caj&oacute;n...'); return; }
