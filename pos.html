@@ -1764,16 +1764,21 @@ var SYNC = {
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); }).catch(function(){ return {ok:false, encontrado:false}; });
   }
 };
+var _reenviarEnCurso=false;
 function reenviarCortesPendientes(){
+  if(_reenviarEnCurso) return;
   var arr=[]; try{ arr=JSON.parse(localStorage.getItem("ls_cortes_pendientes")||"[]"); }catch(e){}
   if(!arr.length){ showToast("No hay cortes pendientes"); return; }
   if(!SYNC.configurado()){ showToast("Configura primero la URL y el token"); return; }
+  _reenviarEnCurso=true;
+  var btnRe=document.getElementById("btnReenviarPend"); if(btnRe){ btnRe.disabled=true; btnRe.textContent="Enviando..."; }
   showToast("Enviando "+arr.length+" corte(s) pendiente(s)...");
   var quedan=[]; var ok=0;
   var siguiente=function(i){
     if(i>=arr.length){
       localStorage.setItem("ls_cortes_pendientes", JSON.stringify(quedan));
       showToast(ok+" corte(s) enviado(s)"+(quedan.length?(", "+quedan.length+" siguen pendientes"):""));
+      _reenviarEnCurso=false;
       if(typeof configSync==="function") configSync();
       return;
     }
@@ -1851,7 +1856,7 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   });
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
   var puntosCanjeados = state.turnoSales.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
-  var payload = { sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart", detalles: detalles };
+  var payload = { corteId: (sucSheet||state.sucursal||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart", detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
