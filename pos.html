@@ -1850,7 +1850,7 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
       var precio = (typeof it.price==="number") ? it.price : (typeof it.precio==="number" ? it.precio : (it.total&&it.qty? it.total/it.qty : 0));
       var nombre = it.name || it.nombre || it.articulo || "ARTICULO";
       var key = nombre + "||" + precio;
-      if(!mapDet[key]) mapDet[key] = { articulo: nombre, cantidad: 0, unitPrice: precio };
+      if(!mapDet[key]) mapDet[key] = { articulo: nombre, cantidad: 0, precio: precio };
       mapDet[key].cantidad += (it.qty || it.cantidad || 1);
     });
   });
