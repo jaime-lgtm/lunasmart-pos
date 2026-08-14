@@ -1090,21 +1090,30 @@ function confirmMods(){
   var p=_modP; if(!p) return;
   if(p.sized && _modSize==='Personalizado' && !(_modCustomMonto>0)){ showToast('Escribe el monto a cobrar'); return; }
   var parts=[]; if(_modSize) parts.push(_modSize==='Personalizado'?'Monto libre':_modSize);
-  var missing=false;
+  var missing=false; var modDeltas=[];
+  function _agregarDeltaOpt(o,mult){
+    if(!o||!o.inv) return;
+    var inv=o.inv;
+    if(inv.modo==='agrega' && inv.agrega){ modDeltas.push({articulo:inv.agrega.articulo, cantidad:inv.agrega.cantidad*mult}); }
+    else if(inv.modo==='sustituye' && inv.quita && inv.pon){
+      modDeltas.push({articulo:inv.quita.articulo, cantidad:-inv.quita.cantidad*mult});
+      modDeltas.push({articulo:inv.pon.articulo, cantidad:inv.pon.cantidad*mult});
+    }
+  }
   (p.mods||[]).forEach(function(g,gi){
     var sel=_modSel[gi];
     if(g.type==='distribuir'){
       var suma=distribuirSuma(sel);
       if(g.req && suma!==g.total){ missing=true; return; }
-      (g.opts||[]).forEach(function(o,oi){ if(sel[oi]>0) parts.push(sel[oi]+' '+o.l); });
+      (g.opts||[]).forEach(function(o,oi){ if(sel[oi]>0){ parts.push(sel[oi]+' '+o.l); _agregarDeltaOpt(o,sel[oi]); } });
     }
-    else if(g.type==='multi'){ (sel||[]).forEach(function(oi){ if(g.opts[oi]) parts.push(g.opts[oi].l); }); if(g.req && (!sel||!sel.length)) missing=true; }
-    else { if(sel>-1 && g.opts[sel]) parts.push(g.opts[sel].l); else if(g.req) missing=true; }
+    else if(g.type==='multi'){ (sel||[]).forEach(function(oi){ if(g.opts[oi]){ parts.push(g.opts[oi].l); _agregarDeltaOpt(g.opts[oi],1); } }); if(g.req && (!sel||!sel.length)) missing=true; }
+    else { if(sel>-1 && g.opts[sel]){ parts.push(g.opts[sel].l); _agregarDeltaOpt(g.opts[sel],1); } else if(g.req) missing=true; }
   });
   if(missing){ showToast('Completa las opciones requeridas'); return; }
   var price=modsTotal();
   var label=parts.join(' · ');
-  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:_modQty,note:_modNote.trim(),mods:label,area:areaDe(p),size:(p.sized?_modSize:null)});
+  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:_modQty,note:_modNote.trim(),mods:label,area:areaDe(p),size:(p.sized?_modSize:null),modDeltas:modDeltas});
   renderTopbar(); renderCart(); closeMods();
 }
 function changeQty(uid,d){
@@ -1359,7 +1368,7 @@ function renderCheckout(){
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeCheckout(); });
 }
 function _construirPedidoDesdeCart(estado,metodo,pagos){
-  var itemsPedido=state.cart.map(function(l){return {id:l.id||null,name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra',size:l.size||null};});
+  var itemsPedido=state.cart.map(function(l){return {id:l.id||null,name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra',size:l.size||null,modDeltas:l.modDeltas||[]};});
   var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
   var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
   var editKey=state._editandoPedidoKey;
@@ -1445,7 +1454,7 @@ function confirmCobroPedido(){
   if(pagos.length>1) updatePayload.pagos=pagos;
   fbPedidosRef(state.sucursal).child(p._fbKey).update(updatePayload).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
-  procesarInventario((p.items||[]).map(function(l){return {id:l.id,name:l.name,qty:l.qty,size:l.size};}), suc);
+  procesarInventario((p.items||[]).map(function(l){return {id:l.id,name:l.name,qty:l.qty,size:l.size,modDeltas:l.modDeltas||[]};}), suc);
   var puntosUsadosPedido=p.puntosUsados||0;
   var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})};
   if(pagos.length>1) ventaRec.pagos=pagos;
@@ -1467,13 +1476,27 @@ function procesarInventario(lines,suc){
   if(!SYNC.configurado()){ return; } // sin token de sincronizacion no hay como descontar de verdad
   var acumulado={}; var sinReceta=[];
   lines.forEach(function(l){
+    var huboAlgo=false;
     var idReceta=_idRecetaDeLinea(l);
     var det=idReceta && RECETAS_CACHE.detallesPorReceta[idReceta];
-    if(!det || !det.length){ sinReceta.push(l.name); return; }
-    det.forEach(function(x){ acumulado[x.articulo]=(acumulado[x.articulo]||0)+(x.cantidad*l.qty); });
+    if(det && det.length){
+      huboAlgo=true;
+      det.forEach(function(x){ acumulado[x.articulo]=(acumulado[x.articulo]||0)+(x.cantidad*l.qty); });
+    }
+    // Deltas de modificadores (agregan o sustituyen ingrediente de la receta
+    // base) -- se aplican aunque el producto no tenga receta propia todavia.
+    (l.modDeltas||[]).forEach(function(d){
+      if(!d.articulo || !d.cantidad) return;
+      huboAlgo=true;
+      acumulado[d.articulo]=(acumulado[d.articulo]||0)+(d.cantidad*l.qty);
+    });
+    if(!huboAlgo) sinReceta.push(l.name);
   });
   if(sinReceta.length) showToast('Sin receta, no se descuenta: '+sinReceta.join(', '));
-  var items=Object.keys(acumulado).map(function(art){ return {articulo:art, cantidad:acumulado[art]}; });
+  // Una sustitucion puede dejar un ingrediente en 0 o negativo (si se quito
+  // mas de lo que la receta base aportaba) -- no tiene sentido descontar
+  // cantidades negativas, se acota en 0.
+  var items=Object.keys(acumulado).map(function(art){ return {articulo:art, cantidad:Math.max(0,acumulado[art])}; }).filter(function(it){ return it.cantidad>0; });
   if(!items.length) return;
   SYNC.descontarInventario(items, suc?suc.inventario:null).then(function(res){
     if(res && res.alertas && res.alertas.length){ res.alertas.forEach(function(a){ showToast('Reponer urgente: '+a); }); }
