@@ -662,6 +662,7 @@ var MESAS_MOCK = {
 /* MOCK: config modulos (estilo Parrot) */
 var CONFIG_ITEMS = [{t:"Sincronizaci\u00f3n Luna Smart", ic:"\uD83D\uDD04", badge:"Config", badgeClass:""},
   {t:'Mesas',ic:'\uD83E\uDE91'},
+  {t:'Repartidores',ic:'\uD83D\uDEF5'},
   {ic:'&#128421;', t:'Monitores de estacion', badge:'Barra y Cocina', badgeClass:'ok'},
   {ic:'&#127860;', t:'Areas de preparacion', badge:'2 areas', badgeClass:'ok'},
   {ic:'&#128276;', t:'Alarmas', badge:'Activas', badgeClass:'ok'},
@@ -1502,6 +1503,65 @@ function configMesas(){
     setNumMesas(suc,n); closeModal(); showToast('Mesas configuradas: '+n);
   });
 }
+/* ============ REPARTIDORES (reparto a domicilio con reparto propio) ============ */
+function fbRepartidoresRef(suc){ return fbDb.ref('repartidores/'+suc); }
+function configRepartidores(){
+  var suc=state.sucursal;
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:420px">'+
+    '<h2>Repartidores</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Se ofrece cada pedido a domicilio a todos los repartidores activos; el primero en aceptar se lo queda. Cada uno entra con su nombre y PIN desde su propio celular en <b>repartidor.html</b>.</div>'+
+    '<div id="repList" style="max-height:260px;overflow-y:auto;margin-bottom:14px"><div class="sub">Cargando...</div></div>'+
+    '<div style="border-top:1px solid var(--linea);padding-top:12px">'+
+    '<div class="sub" style="margin-bottom:8px">Agregar repartidor</div>'+
+    '<div class="field"><label>Nombre</label><input id="repNombre" type="text" placeholder="Ej. Juan Perez"></div>'+
+    '<div class="field"><label>PIN (4 a 6 digitos)</label><input id="repPin" type="text" inputmode="numeric" maxlength="6" placeholder="1234"></div>'+
+    '<button class="btn-confirm" id="repAgregar" style="width:100%;margin-top:6px">+ Agregar repartidor</button>'+
+    '</div>'+
+    '<div class="modal-actions" style="margin-top:14px"><button class="btn-cancel" id="mCancel" style="width:100%">Cerrar</button></div>'+
+    '</div></div>';
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('repAgregar').addEventListener('click',function(){
+    var nombre=(document.getElementById('repNombre').value||'').trim();
+    var pin=(document.getElementById('repPin').value||'').trim();
+    if(!nombre){ showToast('Escribe el nombre del repartidor'); return; }
+    if(!/^\d{4,6}$/.test(pin)){ showToast('El PIN debe ser numerico, de 4 a 6 digitos'); return; }
+    var ref=fbRepartidoresRef(suc).push();
+    ref.set({nombre:nombre, pin:pin, activo:true, ts:firebase.database.ServerValue.TIMESTAMP}).then(function(){
+      showToast('Repartidor agregado'); document.getElementById('repNombre').value=''; document.getElementById('repPin').value='';
+      _repRenderLista(suc);
+    }).catch(function(e){ showToast('Sin conexion -- intenta de nuevo'); console.error(e); });
+  });
+  _repRenderLista(suc);
+}
+function _repRenderLista(suc){
+  var cont=document.getElementById('repList'); if(!cont) return;
+  fbRepartidoresRef(suc).once('value').then(function(snap){
+    var val=snap.val()||{};
+    var ids=Object.keys(val);
+    if(!ids.length){ cont.innerHTML='<div class="sub">Aun no hay repartidores registrados.</div>'; return; }
+    cont.innerHTML=ids.map(function(id){
+      var r=val[id];
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--linea)">'+
+        '<div style="flex:1"><div style="font-weight:700">'+esc(r.nombre||'')+'</div><div class="sub" style="font-size:11px">PIN: '+esc(r.pin||'')+' &middot; '+(r.activo!==false?'Activo':'Inactivo')+'</div></div>'+
+        '<button class="btn" data-id="'+id+'" data-act="toggle" style="padding:6px 10px;font-size:12px">'+(r.activo!==false?'Desactivar':'Activar')+'</button>'+
+        '<button class="btn" data-id="'+id+'" data-act="del" style="padding:6px 10px;font-size:12px;color:#b00">Borrar</button>'+
+        '</div>';
+    }).join('');
+    cont.querySelectorAll('button[data-act]').forEach(function(b){
+      b.addEventListener('click',function(){
+        var id=b.dataset.id;
+        if(b.dataset.act==='del'){
+          if(!confirm('¿Borrar este repartidor?')) return;
+          fbRepartidoresRef(suc).child(id).remove().then(function(){ _repRenderLista(suc); });
+        } else {
+          var actual=val[id].activo!==false;
+          fbRepartidoresRef(suc).child(id).update({activo:!actual}).then(function(){ _repRenderLista(suc); });
+        }
+      });
+    });
+  });
+}
 function renderMesas(){
   var mesas=getMesas(state.sucursal);
   var html='<h2>Mapa de mesas</h2><div class="sub">Toca una mesa para tomar o continuar su orden</div><div class="mesa-grid">';
@@ -1513,8 +1573,16 @@ function renderMesas(){
 function kdsSetArea(a){ state.kdsArea=a; renderKds(); }
 function kdsMarcarListo(ix,area){
   var p=state.pedidos[ix]; if(!p||!p._fbKey) return;
-  fbActualizarEstadoPedido(state.sucursal, p._fbKey, area==='cocina'?'estadoCocina':'estadoBarra', 'listo');
-  showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista');
+  var campo=area==='cocina'?'estadoCocina':'estadoBarra';
+  var upd={}; upd[campo]='listo';
+  // Si es domicilio y con esta area quedan listas ambas (o la otra no aplica),
+  // se ofrece automaticamente a los repartidores -- sin boton aparte que tocar.
+  if(p.tipo==='domicilio' && !p.estadoReparto){
+    var otra=area==='cocina'?p.estadoBarra:p.estadoCocina;
+    if(!otra || otra==='listo') upd.estadoReparto='disponible';
+  }
+  fbPedidosRef(state.sucursal).child(p._fbKey).update(upd).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
+  showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista'+(upd.estadoReparto?' -- ofrecida a repartidores':''));
 }
 function renderKds(){
   var area=state.kdsArea||'todas';
@@ -1686,7 +1754,7 @@ function renderConfig(){
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 
 /* ============ CAJA / CORTE ============ */

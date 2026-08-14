@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Repartidor — Luna Smart</title>
+<style>
+:root{
+  --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
+  --terracota-claro:#d0632f; --beige:#e8d6b9; --beige-claro:#f5ecdd;
+  --verde-ok:#3f7d4e; --rojo:#c0392b; --gris:#8a7d6b; --linea:#e4dccb;
+  --sombra:0 4px 18px rgba(28,18,10,.14);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+html,body{height:100%;height:100dvh;}
+body{background:#faf6ef;color:var(--cafe);}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+input,select{font-family:inherit;font-size:16px;}
+.hidden{display:none !important;}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--cafe);color:var(--beige);padding:14px 22px;border-radius:12px;font-size:15px;box-shadow:var(--sombra);opacity:0;pointer-events:none;transition:.25s;z-index:9999;max-width:90vw;text-align:center;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ---- Login ---- */
+.login-wrap{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px;}
+.login-logo{font-size:40px;}
+.login-title{font-size:22px;font-weight:800;color:var(--cafe-medio);}
+.login-sub{font-size:13px;color:var(--gris);text-align:center;margin-bottom:8px;}
+.field{width:100%;max-width:340px;text-align:left;margin-bottom:12px;}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--cafe-medio);margin-bottom:4px;}
+.field input,.field select{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--linea);background:#fff;font-size:16px;}
+.btn-confirm{width:100%;max-width:340px;padding:14px;border-radius:12px;background:var(--terracota);color:#fff;font-weight:800;font-size:15px;}
+.btn-confirm:active{background:var(--terracota-claro);}
+.btn-ghost{padding:10px;color:var(--gris);font-size:13px;text-decoration:underline;}
+
+/* ---- App ---- */
+#app{display:flex;flex-direction:column;height:100dvh;height:100vh;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--cafe);color:var(--beige-claro);}
+.topbar .who{font-size:14px;font-weight:700;}
+.topbar .suc{font-size:11px;opacity:.7;}
+.topbar button{font-size:12px;color:var(--beige);opacity:.85;padding:8px 10px;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--linea);}
+.tabs button{flex:1;padding:13px;font-size:13px;font-weight:700;color:var(--gris);border-bottom:3px solid transparent;}
+.tabs button.on{color:var(--terracota);border-bottom-color:var(--terracota);}
+.tabs .badge{display:inline-block;min-width:18px;padding:1px 5px;border-radius:9px;background:var(--rojo);color:#fff;font-size:10px;margin-left:5px;}
+.list{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;}
+.empty{text-align:center;color:var(--gris);font-size:13px;padding:40px 20px;}
+.card{background:#fff;border-radius:16px;padding:14px;box-shadow:var(--sombra);}
+.card .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.card .folio{font-weight:800;font-size:14px;}
+.card .hora{font-size:11px;color:var(--gris);}
+.card .cliente{font-size:15px;font-weight:700;margin-bottom:2px;}
+.card .dir{font-size:13px;color:var(--cafe-medio);margin-bottom:2px;}
+.card .ref{font-size:12px;color:var(--gris);font-style:italic;margin-bottom:8px;}
+.card .tel a{color:var(--azul,#2f6f9e);font-size:13px;text-decoration:none;}
+.card .items{font-size:12px;color:var(--gris);margin:8px 0;border-top:1px dashed var(--linea);padding-top:8px;}
+.card .total{font-weight:800;font-size:16px;color:var(--terracota);}
+.card .foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;}
+.card .btn-accept{flex:1;padding:11px;border-radius:10px;background:var(--verde-ok);color:#fff;font-weight:800;font-size:13px;}
+.card .btn-deliver{flex:1;padding:11px;border-radius:10px;background:var(--terracota);color:#fff;font-weight:800;font-size:13px;}
+.card.asignado{border:2px solid var(--terracota-claro);}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- ============ LOGIN ============ -->
+<div class="login-wrap" id="scLogin">
+  <div class="login-logo">🛵</div>
+  <div class="login-title">Repartidor — Luna Smart</div>
+  <div class="login-sub">Entra con tu sucursal, nombre y PIN para ver los pedidos disponibles</div>
+  <div class="field">
+    <label>Sucursal</label>
+    <select id="lgSucursal"></select>
+  </div>
+  <div class="field">
+    <label>PIN</label>
+    <input id="lgPin" type="text" inputmode="numeric" maxlength="6" placeholder="Tu PIN de repartidor">
+  </div>
+  <button class="btn-confirm" id="lgEntrar">Entrar</button>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <div class="topbar">
+    <div>
+      <div class="who" id="topWho">—</div>
+      <div class="suc" id="topSuc">—</div>
+    </div>
+    <button id="btnSalir">Cerrar sesión</button>
+  </div>
+  <div class="tabs">
+    <button class="on" id="tabDisponibles">Disponibles <span class="badge hidden" id="badgeDisp">0</span></button>
+    <button id="tabMios">Mis pedidos <span class="badge hidden" id="badgeMios">0</span></button>
+  </div>
+  <div class="list" id="list"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM",
+  authDomain: "luna-smart-pos.firebaseapp.com",
+  databaseURL: "https://luna-smart-pos-default-rtdb.firebaseio.com",
+  projectId: "luna-smart-pos",
+  storageBucket: "luna-smart-pos.firebasestorage.app",
+  messagingSenderId: "29167679041",
+  appId: "1:29167679041:web:0959c2161d86552ded38c0"
+};
+firebase.initializeApp(firebaseConfig);
+var fbDb = firebase.database();
+var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
+
+var SUCURSALES = [
+  {id:'cafeteria', nombre:'Casa de la Cultura'},
+  {id:'grano',    nombre:'Venta cafe en grano'},
+  {id:'helfy',    nombre:'Helfy Fu'},
+  {id:'eventos',  nombre:'Sueno de Luna Eventos'},
+  {id:'barbacoa', nombre:'Barbacoa y Menudo'}
+];
+var TOPLABEL = {cafeteria:'Casa de la Cultura', grano:'Venta café en grano', helfy:'Helfy Fü', eventos:'Sueño de Luna Eventos', barbacoa:'Barbacoa y Menudo'};
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function money(n){ return '$'+(parseFloat(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+var toastTimer=null;
+function showToast(msg){
+  var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove('show'); },2600);
+}
+
+var SESSION = null;
+var pedidosListener = null;
+var pedidosCache = [];
+var tab = 'disponibles';
+
+function initLogin(){
+  var sel=document.getElementById('lgSucursal');
+  sel.innerHTML=SUCURSALES.map(function(s){ return '<option value="'+s.id+'">'+esc(s.nombre)+'</option>'; }).join('');
+  document.getElementById('lgEntrar').addEventListener('click',intentarLogin);
+  document.getElementById('lgPin').addEventListener('keydown',function(e){ if(e.key==='Enter') intentarLogin(); });
+
+  var saved=null;
+  try{ saved=JSON.parse(localStorage.getItem('repartidorSession')||'null'); }catch(e){}
+  if(saved && saved.suc && saved.id){
+    fbAuthReady.then(function(){
+      fbDb.ref('repartidores/'+saved.suc+'/'+saved.id).once('value').then(function(snap){
+        var r=snap.val();
+        if(r && r.activo!==false){ entrarConSesion(saved.suc, saved.id, r.nombre); }
+      });
+    });
+  }
+}
+
+function intentarLogin(){
+  var suc=document.getElementById('lgSucursal').value;
+  var pin=(document.getElementById('lgPin').value||'').trim();
+  if(!/^\d{4,6}$/.test(pin)){ showToast('Ingresa tu PIN (4 a 6 dígitos)'); return; }
+  var btn=document.getElementById('lgEntrar'); btn.disabled=true; btn.textContent='Entrando...';
+  fbAuthReady.then(function(){
+    return fbDb.ref('repartidores/'+suc).once('value');
+  }).then(function(snap){
+    var val=snap.val()||{};
+    var idEncontrado=null, nombreEncontrado=null;
+    Object.keys(val).forEach(function(id){
+      var r=val[id];
+      if(r.pin===pin && r.activo!==false){ idEncontrado=id; nombreEncontrado=r.nombre; }
+    });
+    btn.disabled=false; btn.textContent='Entrar';
+    if(!idEncontrado){ showToast('PIN incorrecto o repartidor inactivo'); return; }
+    entrarConSesion(suc, idEncontrado, nombreEncontrado);
+  }).catch(function(e){ btn.disabled=false; btn.textContent='Entrar'; showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
+}
+
+function entrarConSesion(suc, id, nombre){
+  SESSION = {suc:suc, id:id, nombre:nombre};
+  localStorage.setItem('repartidorSession', JSON.stringify(SESSION));
+  document.getElementById('scLogin').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('topWho').textContent=nombre;
+  document.getElementById('topSuc').textContent=TOPLABEL[suc]||suc;
+  escucharPedidos();
+}
+
+function cerrarSesion(){
+  localStorage.removeItem('repartidorSession');
+  if(pedidosListener && SESSION){ fbDb.ref('pedidos/'+SESSION.suc).off('value', pedidosListener); }
+  SESSION=null; pedidosCache=[];
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('scLogin').classList.remove('hidden');
+  document.getElementById('lgPin').value='';
+}
+document.getElementById('btnSalir').addEventListener('click',cerrarSesion);
+
+document.getElementById('tabDisponibles').addEventListener('click',function(){ setTab('disponibles'); });
+document.getElementById('tabMios').addEventListener('click',function(){ setTab('mios'); });
+function setTab(t){
+  tab=t;
+  document.getElementById('tabDisponibles').classList.toggle('on', t==='disponibles');
+  document.getElementById('tabMios').classList.toggle('on', t==='mios');
+  render();
+}
+
+function escucharPedidos(){
+  var ref=fbDb.ref('pedidos/'+SESSION.suc);
+  pedidosListener=function(snap){
+    var val=snap.val()||{};
+    pedidosCache=Object.keys(val).map(function(k){ var p=val[k]; p._fbKey=k; return p; })
+      .filter(function(p){ return p.tipo==='domicilio' && p.estadoReparto; });
+    pedidosCache.sort(function(a,b){ return (b._ts||0)-(a._ts||0); });
+    render();
+  };
+  ref.on('value', pedidosListener);
+}
+
+function render(){
+  var disponibles=pedidosCache.filter(function(p){ return p.estadoReparto==='disponible'; });
+  var mios=pedidosCache.filter(function(p){ return p.estadoReparto==='asignado' && p.repartidorId===SESSION.id; });
+
+  var bd=document.getElementById('badgeDisp'), bm=document.getElementById('badgeMios');
+  if(disponibles.length){ bd.textContent=disponibles.length; bd.classList.remove('hidden'); } else bd.classList.add('hidden');
+  if(mios.length){ bm.textContent=mios.length; bm.classList.remove('hidden'); } else bm.classList.add('hidden');
+
+  var lista = tab==='disponibles' ? disponibles : mios;
+  var cont=document.getElementById('list');
+  if(!lista.length){
+    cont.innerHTML='<div class="empty">'+(tab==='disponibles' ? 'No hay pedidos disponibles por ahora.' : 'No tienes pedidos asignados.')+'</div>';
+    return;
+  }
+  cont.innerHTML=lista.map(function(p){ return tarjetaPedido(p, tab==='mios'); }).join('');
+  cont.querySelectorAll('[data-accion="aceptar"]').forEach(function(b){
+    b.addEventListener('click',function(){ aceptarPedido(b.dataset.key); });
+  });
+  cont.querySelectorAll('[data-accion="entregar"]').forEach(function(b){
+    b.addEventListener('click',function(){ marcarEntregado(b.dataset.key); });
+  });
+}
+
+function tarjetaPedido(p, asignado){
+  var c=p.cliente||{};
+  var items=(p.items||[]).map(function(l){ return l.qty+'x '+l.name; }).join(', ');
+  return '<div class="card'+(asignado?' asignado':'')+'">'+
+    '<div class="top"><span class="folio">'+esc(p.id)+'</span><span class="hora">'+esc(p.hora||'')+'</span></div>'+
+    '<div class="cliente">'+esc(c.nombre||'Cliente')+'</div>'+
+    (c.direccion?'<div class="dir">📍 '+esc(c.direccion)+'</div>':'')+
+    (c.referencia?'<div class="ref">'+esc(c.referencia)+'</div>':'')+
+    (c.telefono?'<div class="tel"><a href="tel:'+esc(c.telefono)+'">📞 '+esc(c.telefono)+'</a></div>':'')+
+    (items?'<div class="items">'+esc(items)+'</div>':'')+
+    '<div class="foot"><span class="total">'+money(p.total)+'</span>'+
+      (asignado
+        ? '<button class="btn-deliver" data-accion="entregar" data-key="'+p._fbKey+'">✓ Marcar entregado</button>'
+        : '<button class="btn-accept" data-accion="aceptar" data-key="'+p._fbKey+'">Aceptar pedido</button>')+
+    '</div></div>';
+}
+
+function aceptarPedido(fbKey){
+  var ref=fbDb.ref('pedidos/'+SESSION.suc+'/'+fbKey+'/estadoReparto');
+  ref.transaction(function(actual){
+    if(actual==='disponible') return 'asignado';
+    return; // abortar -- ya lo tomo alguien mas
+  }).then(function(result){
+    if(!result.committed){ showToast('Ese pedido ya lo tomó otro repartidor'); return; }
+    fbDb.ref('pedidos/'+SESSION.suc+'/'+fbKey).update({
+      repartidorId: SESSION.id,
+      repartidorNombre: SESSION.nombre,
+      asignadoTs: firebase.database.ServerValue.TIMESTAMP
+    });
+    showToast('Pedido aceptado -- ya es tuyo');
+    setTab('mios');
+  }).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
+}
+
+function marcarEntregado(fbKey){
+  fbDb.ref('pedidos/'+SESSION.suc+'/'+fbKey).update({
+    estadoReparto: 'entregado',
+    entregadoTs: firebase.database.ServerValue.TIMESTAMP
+  }).then(function(){ showToast('Pedido marcado como entregado'); })
+    .catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
+}
+
+initLogin();
+</script>
+</body>
+</html>
