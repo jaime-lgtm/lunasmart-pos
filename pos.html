@@ -1345,6 +1345,9 @@ function _construirPedidoDesdeCart(estado,metodo,pagos){
   var nid=editKey?state._editandoPedidoId:('#'+fbRef.key.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase());
   var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:metodo,total:cartTotalFinal(),estado:estado,hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:hayBarra?'pendiente':'listo',estadoCocina:hayCocina?'pendiente':'listo',_ts:firebase.database.ServerValue.TIMESTAMP};
   if(pagos && pagos.length) pedidoObj.pagos=pagos;
+  // Se ofrece al repartidor desde que entra el pedido, aunque siga en preparacion --
+  // asi puede ir en camino y no hasta que la Estacion lo marque listo.
+  if(pedidoObj.tipo==='domicilio') pedidoObj.estadoReparto='disponible';
   return {ref:fbRef,obj:pedidoObj};
 }
 function confirmSale(){
@@ -1356,7 +1359,7 @@ function confirmSale(){
   var items=state.cart.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
   API.registrarVenta({items:items,metodoPago:metodo,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   var built=_construirPedidoDesdeCart('pagado',metodo,pagos);
-  built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
+  built.ref.set(built.obj).then(function(){ if(built.obj.tipo==='domicilio') _avisarGrupoRepartidores(built.obj); }).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
   var telCliente=(state.cliente&&state.cliente.telefono)||'';
   var puntosUsadosMonto=puntosMontoUsado();
   var puntosGanados=0;
@@ -1382,7 +1385,7 @@ function guardarPedidoAbierto(){
   if(!state.cart.length){ showToast('La orden esta vacia'); return; }
   var esEdicion=!!state._editandoPedidoKey;
   var built=_construirPedidoDesdeCart('abierto',null);
-  built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
+  built.ref.set(built.obj).then(function(){ if(built.obj.tipo==='domicilio' && !esEdicion) _avisarGrupoRepartidores(built.obj); }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
   state._editandoPedidoKey=null; state._editandoPedidoId=null;
   state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
@@ -1505,17 +1508,24 @@ function configMesas(){
 }
 /* ============ REPARTIDORES (reparto a domicilio con reparto propio) ============ */
 function fbRepartidoresRef(suc){ return fbDb.ref('repartidores/'+suc); }
+function fbRepartidoresConfigRef(suc){ return fbDb.ref('repartidores/'+suc+'/_config'); }
 function configRepartidores(){
   var suc=state.sucursal;
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:420px">'+
     '<h2>Repartidores</h2>'+
-    '<div class="sub" style="margin-bottom:12px">Se ofrece cada pedido a domicilio a todos los repartidores activos; el primero en aceptar se lo queda. Cada uno entra con su nombre y PIN desde su propio celular en <b>repartidor.html</b>.</div>'+
-    '<div id="repList" style="max-height:260px;overflow-y:auto;margin-bottom:14px"><div class="sub">Cargando...</div></div>'+
+    '<div class="sub" style="margin-bottom:12px">El pedido a domicilio se ve disponible desde que entra, aunque siga en preparación. El primero en aceptarlo en <b>repartidor.html</b> se lo queda; cuando la Estación lo marca listo, se ofrece avisarle por WhatsApp.</div>'+
+    '<div id="repList" style="max-height:220px;overflow-y:auto;margin-bottom:14px"><div class="sub">Cargando...</div></div>'+
     '<div style="border-top:1px solid var(--linea);padding-top:12px">'+
     '<div class="sub" style="margin-bottom:8px">Agregar repartidor</div>'+
     '<div class="field"><label>Nombre</label><input id="repNombre" type="text" placeholder="Ej. Juan Perez"></div>'+
+    '<div class="field"><label>Teléfono (WhatsApp)</label><input id="repTel" type="tel" inputmode="numeric" maxlength="10" placeholder="10 dígitos"></div>'+
     '<div class="field"><label>PIN (4 a 6 digitos)</label><input id="repPin" type="text" inputmode="numeric" maxlength="6" placeholder="1234"></div>'+
     '<button class="btn-confirm" id="repAgregar" style="width:100%;margin-top:6px">+ Agregar repartidor</button>'+
+    '</div>'+
+    '<div style="border-top:1px solid var(--linea);padding-top:12px;margin-top:14px">'+
+    '<div class="sub" style="margin-bottom:8px">Grupo de WhatsApp para avisar pedidos nuevos (opcional)</div>'+
+    '<div class="field"><input id="repGrupoWA" type="text" placeholder="https://chat.whatsapp.com/..."></div>'+
+    '<button class="btn-ghost" id="repGuardarGrupo" style="border:1px solid var(--linea);border-radius:12px;padding:10px 16px;background:#fff;font-weight:700;color:var(--cafe-medio);width:100%">Guardar link del grupo</button>'+
     '</div>'+
     '<div class="modal-actions" style="margin-top:14px"><button class="btn-cancel" id="mCancel" style="width:100%">Cerrar</button></div>'+
     '</div></div>';
@@ -1523,14 +1533,24 @@ function configRepartidores(){
   document.getElementById('mCancel').addEventListener('click',closeModal);
   document.getElementById('repAgregar').addEventListener('click',function(){
     var nombre=(document.getElementById('repNombre').value||'').trim();
+    var tel=_normTelLealtad(document.getElementById('repTel').value);
     var pin=(document.getElementById('repPin').value||'').trim();
     if(!nombre){ showToast('Escribe el nombre del repartidor'); return; }
+    if(tel.length!==10){ showToast('El teléfono debe tener 10 dígitos'); return; }
     if(!/^\d{4,6}$/.test(pin)){ showToast('El PIN debe ser numerico, de 4 a 6 digitos'); return; }
     var ref=fbRepartidoresRef(suc).push();
-    ref.set({nombre:nombre, pin:pin, activo:true, ts:firebase.database.ServerValue.TIMESTAMP}).then(function(){
-      showToast('Repartidor agregado'); document.getElementById('repNombre').value=''; document.getElementById('repPin').value='';
+    ref.set({nombre:nombre, telefono:tel, pin:pin, activo:true, ts:firebase.database.ServerValue.TIMESTAMP}).then(function(){
+      showToast('Repartidor agregado'); document.getElementById('repNombre').value=''; document.getElementById('repTel').value=''; document.getElementById('repPin').value='';
       _repRenderLista(suc);
     }).catch(function(e){ showToast('Sin conexion -- intenta de nuevo'); console.error(e); });
+  });
+  fbRepartidoresConfigRef(suc).once('value').then(function(snap){
+    var v=snap.val(); if(v){ var inp=document.getElementById('repGrupoWA'); if(inp) inp.value=v; }
+  });
+  document.getElementById('repGuardarGrupo').addEventListener('click',function(){
+    var link=(document.getElementById('repGrupoWA').value||'').trim();
+    fbRepartidoresConfigRef(suc).set(link).then(function(){ showToast('Link del grupo guardado'); })
+      .catch(function(e){ showToast('Sin conexion -- intenta de nuevo'); console.error(e); });
   });
   _repRenderLista(suc);
 }
@@ -1538,12 +1558,12 @@ function _repRenderLista(suc){
   var cont=document.getElementById('repList'); if(!cont) return;
   fbRepartidoresRef(suc).once('value').then(function(snap){
     var val=snap.val()||{};
-    var ids=Object.keys(val);
+    var ids=Object.keys(val).filter(function(id){ return id!=='_config'; });
     if(!ids.length){ cont.innerHTML='<div class="sub">Aun no hay repartidores registrados.</div>'; return; }
     cont.innerHTML=ids.map(function(id){
       var r=val[id];
       return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--linea)">'+
-        '<div style="flex:1"><div style="font-weight:700">'+esc(r.nombre||'')+'</div><div class="sub" style="font-size:11px">PIN: '+esc(r.pin||'')+' &middot; '+(r.activo!==false?'Activo':'Inactivo')+'</div></div>'+
+        '<div style="flex:1"><div style="font-weight:700">'+esc(r.nombre||'')+'</div><div class="sub" style="font-size:11px">'+esc(r.telefono||'sin teléfono')+' &middot; PIN: '+esc(r.pin||'')+' &middot; '+(r.activo!==false?'Activo':'Inactivo')+'</div></div>'+
         '<button class="btn" data-id="'+id+'" data-act="toggle" style="padding:6px 10px;font-size:12px">'+(r.activo!==false?'Desactivar':'Activar')+'</button>'+
         '<button class="btn" data-id="'+id+'" data-act="del" style="padding:6px 10px;font-size:12px;color:#b00">Borrar</button>'+
         '</div>';
@@ -1562,6 +1582,28 @@ function _repRenderLista(suc){
     });
   });
 }
+function _avisarGrupoRepartidores(p){
+  fbRepartidoresConfigRef(state.sucursal).once('value').then(function(snap){
+    var link=snap.val(); if(!link) return;
+    var msg='🛵 Pedido nuevo a domicilio '+p.id+' -- '+((p.cliente&&p.cliente.nombre)||'Cliente')+'. Entra a repartidor.html para tomarlo.';
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(msg).catch(function(){}); }
+    window.open(link,'_blank');
+    showToast('Mensaje copiado -- pégalo en el grupo de WhatsApp');
+  });
+}
+function _avisarRepartidorListo(p){
+  if(!p.repartidorId) return;
+  fbRepartidoresRef(state.sucursal).child(p.repartidorId).once('value').then(function(snap){
+    var r=snap.val(); if(!r) return;
+    var tel=_normTelLealtad(r.telefono);
+    if(tel.length!==10) return;
+    var msg='🛵 '+(r.nombre||'')+', tu pedido '+p.id+' ya está listo para recoger.'+((p.cliente&&p.cliente.direccion)?(' Entrega: '+p.cliente.direccion):'');
+    document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>¿Avisar a '+esc(r.nombre||'repartidor')+'?</h2>'+
+      '<div class="sub" style="margin-bottom:12px">Pedido '+esc(p.id)+' listo para recoger</div>'+
+      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Ahora no</button><button class="btn-confirm" id="mOk">📲 Enviar WhatsApp</button></div></div></div>';
+    bindModal(function(){ closeModal(); window.open('https://wa.me/52'+tel+'?text='+encodeURIComponent(msg),'_blank'); });
+  });
+}
 function renderMesas(){
   var mesas=getMesas(state.sucursal);
   var html='<h2>Mapa de mesas</h2><div class="sub">Toca una mesa para tomar o continuar su orden</div><div class="mesa-grid">';
@@ -1575,14 +1617,13 @@ function kdsMarcarListo(ix,area){
   var p=state.pedidos[ix]; if(!p||!p._fbKey) return;
   var campo=area==='cocina'?'estadoCocina':'estadoBarra';
   var upd={}; upd[campo]='listo';
-  // Si es domicilio y con esta area quedan listas ambas (o la otra no aplica),
-  // se ofrece automaticamente a los repartidores -- sin boton aparte que tocar.
-  if(p.tipo==='domicilio' && !p.estadoReparto){
-    var otra=area==='cocina'?p.estadoBarra:p.estadoCocina;
-    if(!otra || otra==='listo') upd.estadoReparto='disponible';
-  }
-  fbPedidosRef(state.sucursal).child(p._fbKey).update(upd).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
-  showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista'+(upd.estadoReparto?' -- ofrecida a repartidores':''));
+  var otra=area==='cocina'?p.estadoBarra:p.estadoCocina;
+  var quedaListo=(!otra || otra==='listo');
+  fbPedidosRef(state.sucursal).child(p._fbKey).update(upd).then(function(){
+    // Si ya tiene repartidor asignado, se ofrece avisarle por WhatsApp que ya puede recogerlo.
+    if(p.tipo==='domicilio' && quedaListo && p.repartidorId) _avisarRepartidorListo(Object.assign({},p,upd));
+  }).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
+  showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista');
 }
 function renderKds(){
   var area=state.kdsArea||'todas';
