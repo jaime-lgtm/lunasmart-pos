@@ -636,6 +636,36 @@ function fbDejarDeEscucharCatalogo(){
   fbCatalogoListener=null; fbCatalogoListenerSuc=null;
 }
 
+/* ==== RECETAS: cache de ingredientes por receta, para descontar inventario al vender ==== */
+var RECETAS_CACHE={detallesPorReceta:{}};
+function cargarRecetasCache(){
+  try{
+    var cache=localStorage.getItem('ls_recetas_det');
+    if(cache) RECETAS_CACHE.detallesPorReceta=JSON.parse(cache);
+  }catch(e){}
+  var url=SYNC.getUrl();
+  fetch(url+'?accion=getBD_RECETAS_DETALLES&_='+Date.now()).then(function(r){return r.json();}).then(function(res){
+    if(!res||res.status!=='ok'||!res.data) return;
+    var rows=res.data.slice(1); // fila 0 = encabezados
+    var det={};
+    rows.forEach(function(row){
+      var idReceta=String(row[0]||'').trim(); if(!idReceta) return;
+      var art=String(row[1]||'').trim(); var cant=parseFloat(row[2])||0;
+      if(!art||!cant) return;
+      (det[idReceta]=det[idReceta]||[]).push({articulo:art, cantidad:cant});
+    });
+    RECETAS_CACHE.detallesPorReceta=det;
+    try{ localStorage.setItem('ls_recetas_det', JSON.stringify(det)); }catch(e){}
+  }).catch(function(e){ console.error('cargarRecetasCache', e); });
+}
+function _idRecetaDeLinea(l){
+  var prods=CATALOG[state.sucursal]||[];
+  var p=prods.filter(function(x){return x.id===l.id;})[0] || prods.filter(function(x){return x.name===l.name;})[0];
+  if(!p) return null;
+  if(p.sized && l.size) return (p.recetas && p.recetas[l.size]) || null;
+  return p.idReceta || null;
+}
+
 var SUCURSALES = [
   {id:'cafeteria', nombre:'Casa de la Cultura',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:true},
   {id:'grano',    nombre:'Venta cafe en grano',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:false},
@@ -645,13 +675,6 @@ var SUCURSALES = [
 ];
 
 var CATALOG = {}; // Se llena en vivo desde Firebase (fbEscucharCatalogo) -- antes estaba hardcodeado aqui.
-
-var RECIPES = {
-  'Copa de fruta':[{name:'MELON FRUTA',qty:70},{name:'PAPAYA',qty:70},{name:'MANGO',qty:70}],
-  'Barbacoa de res (orden)':[{name:'CARNE DE RES',qty:300},{name:'CONSOME BASE',qty:200}],
-  'Menudo (orden)':[{name:'PANZA DE RES',qty:250},{name:'CONSOME BASE',qty:200}],
-  'Cafe Piedras Negras 250g':[{name:'CAFE VERDE',qty:250}]
-};
 
 /* MOCK: mesas por sucursal */
 var MESAS_MOCK = {
@@ -755,9 +778,7 @@ var PEDIDOS_ONLINE = { enabled:false, endpoint:'', poll:function(cb){ /* TODO ba
 var API = {
   login: function(pin,suc){ return Promise.resolve(USERS_MOCK[pin]||null); },
   getProductosPorSucursal: function(suc){ return Promise.resolve(CATALOG[suc]||[]); },
-  getRecetaProducto: function(n){ return Promise.resolve(RECIPES[n]||null); },
   registrarVenta: function(p){ console.log('[MOCK registrarVenta]',p); return Promise.resolve({ok:true,id_ingreso:'MOCK-'+Date.now()}); },
-  descontarInventario: function(i,s){ console.log('[MOCK descontarInventario]',s,i); return Promise.resolve({ok:true,alertas:[]}); },
   cerrarTurno: function(p){ console.log('[MOCK cerrarTurno]',p); return Promise.resolve({ok:true}); }
 };
 
@@ -800,6 +821,7 @@ function doLogin(){
     fbEscucharMesas(suc);
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
+    cargarRecetasCache();
     showScreen('scApp'); renderTopbar();
     fbAuthReady.then(function(){
       return Promise.all([
@@ -1337,7 +1359,7 @@ function renderCheckout(){
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeCheckout(); });
 }
 function _construirPedidoDesdeCart(estado,metodo,pagos){
-  var itemsPedido=state.cart.map(function(l){return {name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra'};});
+  var itemsPedido=state.cart.map(function(l){return {id:l.id||null,name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra',size:l.size||null};});
   var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
   var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
   var editKey=state._editandoPedidoKey;
@@ -1422,6 +1444,8 @@ function confirmCobroPedido(){
   var updatePayload={estado:'pagado',metodo:metodo};
   if(pagos.length>1) updatePayload.pagos=pagos;
   fbPedidosRef(state.sucursal).child(p._fbKey).update(updatePayload).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
+  var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
+  procesarInventario((p.items||[]).map(function(l){return {id:l.id,name:l.name,qty:l.qty,size:l.size};}), suc);
   var puntosUsadosPedido=p.puntosUsados||0;
   var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})};
   if(pagos.length>1) ventaRec.pagos=pagos;
@@ -1440,11 +1464,20 @@ function confirmCobroPedido(){
   ofrecerWhatsAppTicket(ticketData);
 }
 function procesarInventario(lines,suc){
-  lines.forEach(function(l){ API.getRecetaProducto(l.name).then(function(r){
-    if(!r){ showToast('Aviso: "'+l.name+'" sin receta, no se descuenta'); return; }
-    var ings=r.map(function(x){return {name:x.name,usado:x.qty*l.qty};});
-    API.descontarInventario(ings,suc?suc.inventario:null).then(function(res){ if(res.alertas&&res.alertas.length){ res.alertas.forEach(function(a){ showToast('Reponer urgente: '+a); }); } });
-  }); });
+  if(!SYNC.configurado()){ return; } // sin token de sincronizacion no hay como descontar de verdad
+  var acumulado={}; var sinReceta=[];
+  lines.forEach(function(l){
+    var idReceta=_idRecetaDeLinea(l);
+    var det=idReceta && RECETAS_CACHE.detallesPorReceta[idReceta];
+    if(!det || !det.length){ sinReceta.push(l.name); return; }
+    det.forEach(function(x){ acumulado[x.articulo]=(acumulado[x.articulo]||0)+(x.cantidad*l.qty); });
+  });
+  if(sinReceta.length) showToast('Sin receta, no se descuenta: '+sinReceta.join(', '));
+  var items=Object.keys(acumulado).map(function(art){ return {articulo:art, cantidad:acumulado[art]}; });
+  if(!items.length) return;
+  SYNC.descontarInventario(items, suc?suc.inventario:null).then(function(res){
+    if(res && res.alertas && res.alertas.length){ res.alertas.forEach(function(a){ showToast('Reponer urgente: '+a); }); }
+  }).catch(function(e){ console.error('descontarInventario', e); });
 }
 
 /* ============ MESAS ============ */
@@ -1871,6 +1904,12 @@ var SYNC = {
     if(!token) return Promise.resolve({ok:false, encontrado:false});
     var body = { token: token, accion: "obtenerCorteDia", datos: { sucursal: sucursal, turno: turno, fecha: fecha } };
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); }).catch(function(){ return {ok:false, encontrado:false}; });
+  },
+  descontarInventario: function(items, sucursalInventario){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token || !sucursalInventario) return Promise.resolve({status:'ok', actualizados:0});
+    var body = { token: token, accion: "descontarInventarioVenta", datos: { sucursal: sucursalInventario, items: items } };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
   }
 };
 var _reenviarEnCurso=false;
