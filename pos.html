@@ -1093,7 +1093,11 @@ function confirmMods(){
   var missing=false; var modDeltas=[];
   function _agregarDeltaOpt(o,mult){
     if(!o||!o.inv) return;
-    var inv=o.inv;
+    // Cada tamaño tiene su propia receta (con cantidades distintas), asi que
+    // el efecto en inventario del modificador tambien se guarda por tamaño.
+    var key=p.sized?_modSize:'__default__';
+    var inv=o.inv[key];
+    if(!inv) return;
     if(inv.modo==='agrega' && inv.agrega){ modDeltas.push({articulo:inv.agrega.articulo, cantidad:inv.agrega.cantidad*mult}); }
     else if(inv.modo==='sustituye' && inv.quita && inv.pon){
       modDeltas.push({articulo:inv.quita.articulo, cantidad:-inv.quita.cantidad*mult});
