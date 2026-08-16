@@ -1145,6 +1145,7 @@ function confirmMods(){
     var inv=o.inv[key];
     if(!inv) return;
     if(inv.modo==='agrega' && inv.agrega){ modDeltas.push({articulo:inv.agrega.articulo, cantidad:inv.agrega.cantidad*mult}); }
+    else if(inv.modo==='quita' && inv.quita){ modDeltas.push({articulo:inv.quita.articulo, cantidad:-inv.quita.cantidad*mult}); }
     else if(inv.modo==='sustituye' && inv.quita && inv.pon){
       modDeltas.push({articulo:inv.quita.articulo, cantidad:-inv.quita.cantidad*mult});
       modDeltas.push({articulo:inv.pon.articulo, cantidad:inv.pon.cantidad*mult});
@@ -1555,6 +1556,7 @@ function procesarInventario(lines,suc){
   if(!items.length) return;
   SYNC.descontarInventario(items, suc?suc.inventario:null).then(function(res){
     if(res && res.alertas && res.alertas.length){ res.alertas.forEach(function(a){ showToast('Reponer urgente: '+a); }); }
+    if(res && res.noEncontrados && res.noEncontrados.length){ showToast('No existen en Inventario (no se descontaron): '+res.noEncontrados.join(', ')); }
   }).catch(function(e){ console.error('descontarInventario', e); });
 }
 
