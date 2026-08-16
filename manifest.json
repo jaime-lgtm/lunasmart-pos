@@ -1,0 +1,12 @@
+{
+  "name": "Luna Smart POS",
+  "short_name": "Luna Smart",
+  "start_url": "/pos.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#1c120a",
+  "theme_color": "#1c120a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

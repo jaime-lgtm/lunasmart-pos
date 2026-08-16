@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Luna Smart POS &mdash; Sueno de Luna</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#1c120a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon.svg">
 <style>
 /* ============================================================
    LUNA SMART POS -- estilos (flujo inspirado en Parrot)
@@ -344,6 +351,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
     <span class="spacer"></span>
     <span class="suc-pill" id="tbSucursal">&mdash;</span>
     <span id="tbUser" style="font-size:13px;color:var(--gris);padding:0 8px;">&mdash;</span>
+    <button class="logout" id="btnFullscreen" title="Pantalla completa (oculta la barra del navegador)">&#9974;</button>
     <button class="logout" id="btnLogout">&#8617; Cerrar</button>
   </div>
 
@@ -2245,6 +2253,11 @@ function _construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulad
 function initApp(){
   initLogin();
   document.getElementById('btnLogout').addEventListener('click',logout);
+  var __btnFs=document.getElementById('btnFullscreen');
+  if(__btnFs) __btnFs.addEventListener('click',function(){
+    if(!document.fullscreenElement){ (document.documentElement.requestFullscreen||function(){}).call(document.documentElement).catch(function(){ showToast('Este navegador no permite pantalla completa -- usa "Agregar a pantalla de inicio" desde el menu de Chrome'); }); }
+    else { document.exitFullscreen(); }
+  });
   document.getElementById('btnClearCart').addEventListener('click',clearCart);
   document.getElementById('btnCobrar').addEventListener('click',openCheckout);
   document.getElementById('btnNota').addEventListener('click',openNota);
