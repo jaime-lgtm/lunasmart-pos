@@ -833,7 +833,7 @@ function doLogin(){
       var hayVentasEnCurso = res[1].val() && Object.keys(res[1].val()).length>0;
       if((ce && ce.abierta===true) || hayVentasEnCurso){
         state.cajaAbierta=true;
-        if(ce){ state.cajaInicial=(typeof ce.cajaInicial==='number')?ce.cajaInicial:state.cajaInicial; state.turno=ce.turno||state.turno; }
+        if(ce){ state.cajaInicial=(typeof ce.cajaInicial==='number')?ce.cajaInicial:state.cajaInicial; state.turno=ce.turno||state.turno; state.cajaMovimientos=ce.movimientos||[]; }
         goMenu();
       } else {
         pedirEfectivoInicial(true);
@@ -1904,9 +1904,15 @@ function renderCaja(){
   var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
   var est=productosEstrella(); var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var verDesglose=esRolSupervisorAdmin();
+  var mov=cajaMovTotales();
+  var esperadoCaja=(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros;
   document.getElementById('cajaContent').innerHTML=
     '<div id="printArea"><h2>Caja &mdash; '+esc(suc?suc.nombre:'')+'</h2><div class="sub">'+(state.cajaAbierta?'Caja abierta':'Caja cerrada')+' &middot; '+state.turnoSales.length+' ventas en el turno</div>'+
-    '<div class="card"><h3>Estado de caja</h3><div class="caja-info"><div><div class="l">Efectivo inicial</div><div class="v">'+money(state.cajaInicial)+'</div></div></div>'+
+    '<div class="card"><h3>Estado de caja</h3><div class="caja-info"><div><div class="l">Efectivo inicial</div><div class="v">'+money(state.cajaInicial)+'</div></div>'+
+      (mov.retiros>0?'<div><div class="l">Retiros</div><div class="v" style="color:var(--rojo)">-'+money(mov.retiros)+'</div></div>':'')+
+      (mov.depositos>0?'<div><div class="l">Dep&oacute;sitos</div><div class="v" style="color:#1a7f37">+'+money(mov.depositos)+'</div></div>':'')+
+      ((mov.retiros>0||mov.depositos>0)?'<div><div class="l">Efectivo esperado en caja</div><div class="v" style="font-weight:800">'+money(esperadoCaja)+'</div></div>':'')+
+      '</div>'+
       '<div class="caja-ops"><button class="caja-op" data-op="corte"><span class="ci">&#128203;</span>Corte de caja</button><button class="caja-op" data-op="deposito"><span class="ci">&#11015;</span>Depositar</button><button class="caja-op" data-op="retiro"><span class="ci">&#11014;</span>Retirar</button><button class="caja-op" data-op="cajon"><span class="ci">&#128230;</span>Abrir caj&oacute;n</button></div></div>'+
     (verDesglose?('<div class="card"><h3>Desglose por metodo de pago</h3><div class="pay-summary">'+
       '<div class="pill"><div class="l">Efectivo</div><div class="v">'+money(t.efectivo)+'</div></div>'+
@@ -2003,8 +2009,8 @@ function pedirEfectivoInicial(obligatorio){
     var m=parseFloat(document.getElementById('iniMonto').value)||0;
     if(m<0){ showToast('Monto inv\u00e1lido'); return; }
     if(!window.__turnoSel){ showToast("Selecciona el turno"); return; }
-    state.turno = window.__turnoSel; state.cajaInicial=m; state.cajaAbierta=true;
-    fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:true, cajaInicial:m, turno:window.__turnoSel}).catch(function(){}); });
+    state.turno = window.__turnoSel; state.cajaInicial=m; state.cajaAbierta=true; state.cajaMovimientos=[];
+    fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:true, cajaInicial:m, turno:window.__turnoSel, movimientos:[]}).catch(function(){}); });
     closeModal(); renderCaja(); renderTopbar();
     showToast('Caja abierta con efectivo inicial '+money(m));
     if(obligatorio) goMenu();
@@ -2025,6 +2031,14 @@ function _requiereCajaAbierta(){
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
   return false;
 }
+// El efectivo inicial es un hecho fijo del momento en que se abrio la caja
+// -- los retiros/depositos se llevan aparte, nunca deben mutarlo, o el
+// numero deja de tener sentido (ej. "efectivo inicial: -$335").
+function cajaMovTotales(){
+  var retiros=0, depositos=0;
+  (state.cajaMovimientos||[]).forEach(function(m){ if(m.tipo==='retiro') retiros+=m.monto; else depositos+=m.monto; });
+  return {retiros:retiros, depositos:depositos};
+}
 function cajaOp(op){
   if(op==='cajon'){ showToast('Abriendo caj&oacute;n...'); return; }
   if(op==='corte'){ abrirResumenCierre(false); return; }
@@ -2033,7 +2047,15 @@ function cajaOp(op){
     '<div class="field"><label>Monto</label><input id="opMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
     '<div class="field"><label>Motivo</label><input id="opMotivo" placeholder="Ej. pago proveedor, fondo..."></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Confirmar</button></div></div></div>';
-  bindModal(function(){ var m=parseFloat(document.getElementById('opMonto').value)||0; if(m<=0){ showToast('Monto invalido'); return; } if(op==='retiro'){ state.cajaInicial-=m; } else { state.cajaInicial+=m; } closeModal(); renderCaja(); showToast(titulo+': '+money(m)); });
+  bindModal(function(){
+    var m=parseFloat(document.getElementById('opMonto').value)||0;
+    if(m<=0){ showToast('Monto invalido'); return; }
+    var motivo=(document.getElementById('opMotivo').value||'').trim();
+    state.cajaMovimientos=state.cajaMovimientos||[];
+    state.cajaMovimientos.push({tipo:op, monto:m, motivo:motivo, ts:Date.now()});
+    fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).update({movimientos:state.cajaMovimientos}).catch(function(){}); });
+    closeModal(); renderCaja(); showToast(titulo+': '+money(m));
+  });
 }
 function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declaradoTransferencia,esperadoTransferencia,onDone){
   var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
@@ -2057,8 +2079,10 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   });
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
   var puntosCanjeados = state.turnoSales.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
-  var payload = { corteId: (sucSheet||state.sucursal||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: 0, depositos: 0, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart", detalles: detalles };
-  if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
+  var mov = cajaMovTotales();
+  var movTxt = (state.cajaMovimientos||[]).map(function(m){ return (m.tipo==='retiro'?'Retiro ':'Depósito ')+money(m.monto)+(m.motivo?' ('+m.motivo+')':''); }).join('; ');
+  var payload = { corteId: (sucSheet||state.sucursal||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), sucursal: sucSheet, cliente: turno, inicioCaja: state.cajaInicial || 0, retiros: mov.retiros, depositos: mov.depositos, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart"+(movTxt?(" | "+movTxt):""), detalles: detalles };
+  if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
   function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:false}).catch(function(){}); }); renderCaja(); renderTopbar(); if(typeof onDone==='function') onDone(payload); }
@@ -2078,7 +2102,8 @@ function abrirResumenCierre(finalDelDia){
   if(!state.turnoSales.length){ showToast('No hay ventas que cerrar'); return; }
   var t=totalesPorMetodo();
   var total=t.efectivo+t.tarjeta+t.mercadopago+t.transferencia+t.rappi;
-  var esperado=(state.cajaInicial||0)+t.efectivo;
+  var mov=cajaMovTotales();
+  var esperado=(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros;
   var esperadoTerminal=t.tarjeta;
   var esperadoTransferencia=t.transferencia;
   var turno=state.turno||'TURNO MAÑANA';
