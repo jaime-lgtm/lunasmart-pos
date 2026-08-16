@@ -1421,6 +1421,9 @@ function guardarPedidoAbierto(){
   var esEdicion=!!state._editandoPedidoKey;
   var built=_construirPedidoDesdeCart('abierto',null);
   built.ref.set(built.obj).then(function(){ if(built.obj.tipo==='domicilio' && !esEdicion) _avisarGrupoRepartidores(built.obj); }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
+  // La mesa solo se marca ocupada hasta que de verdad hay una cuenta
+  // guardada detras -- y con el total real, no con $0.
+  if(built.obj.tipo==='aqui' && built.obj.mesa) marcarMesaOcupada(state.sucursal, built.obj.mesa, built.obj.total);
   state._editandoPedidoKey=null; state._editandoPedidoId=null;
   state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
@@ -1667,10 +1670,16 @@ function _avisarRepartidorListo(p){
 function renderMesas(){
   var mesas=getMesas(state.sucursal);
   var html='<h2>Mapa de mesas</h2><div class="sub">Toca una mesa para tomar o continuar su orden</div><div class="mesa-grid">';
-  html+=mesas.map(function(m){ return '<button class="mesa '+m.estado+'" data-n="'+m.n+'"><div class="mn">Mesa '+m.n+'</div><div class="ms">'+(m.estado==='libre'?'Disponible':'Ocupada')+'</div>'+(m.total?'<div class="mt">'+money(m.total)+'</div>':'')+'</button>'; }).join('');
+  html+=mesas.map(function(m){
+    return '<div class="mesa-wrap" style="position:relative">'+
+      '<button class="mesa '+m.estado+'" data-n="'+m.n+'" style="width:100%"><div class="mn">Mesa '+m.n+'</div><div class="ms">'+(m.estado==='libre'?'Disponible':'Ocupada')+'</div>'+(m.total?'<div class="mt">'+money(m.total)+'</div>':'')+'</button>'+
+      (m.estado==='ocupada'?'<button class="mesa-liberar" data-n="'+m.n+'" title="Liberar mesa" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:var(--rojo);color:#fff;font-size:14px;line-height:24px;border:none;cursor:pointer;padding:0">&times;</button>':'')+
+      '</div>';
+  }).join('');
   html+='</div>';
   document.getElementById('mesasContent').innerHTML=html;
   document.querySelectorAll('#mesasContent .mesa').forEach(function(b){ b.addEventListener('click',function(){ selectMesa(parseInt(b.dataset.n,10)); }); });
+  document.querySelectorAll('#mesasContent .mesa-liberar').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); confirmarLiberarMesa(parseInt(b.dataset.n,10)); }); });
 }
 function kdsSetArea(a){ state.kdsArea=a; renderKds(); }
 function kdsMarcarListo(ix,area){
@@ -1708,10 +1717,27 @@ function renderKds(){
   document.getElementById('kdsContent').innerHTML=html;
 }
 function selectMesa(n){
-  state.mesa=n; state.tipoOrden='aqui'; state.view='menu';
-  marcarMesaOcupada(state.sucursal,n,0);
+  // Si la mesa ya tiene una cuenta abierta real, se continua esa cuenta
+  // (se carga lo que ya lleva consumido) en vez de empezar una nueva.
+  var abierto=state.pedidos.filter(function(p){ return p.tipo==='aqui' && p.mesa===n && p.estado==='abierto'; })[0];
+  if(abierto){ editarPedido(state.pedidos.indexOf(abierto)); return; }
+  // No hay cuenta real detras -- si la mesa habia quedado marcada ocupada
+  // (ej. se toco sin llegar a guardar nada), se libera sola en vez de
+  // quedarse "fantasma" bloqueando la mesa.
+  liberarMesa(state.sucursal,n);
+  state.mesa=n; state.tipoOrden='aqui'; state.view='menu'; state.cart=[];
+  state._editandoPedidoKey=null; state._editandoPedidoId=null;
   var prods=CATALOG[state.sucursal]||[]; state.menu=menusOf(prods)[0]; state.sub=null;
   renderTopbar(); showAppView('pos'); renderPos(); showToast('Mesa '+n+' seleccionada');
+}
+function confirmarLiberarMesa(n){
+  var abierto=state.pedidos.filter(function(p){ return p.tipo==='aqui' && p.mesa===n && p.estado==='abierto'; })[0];
+  if(abierto){
+    if(!confirm('La mesa '+n+' tiene una cuenta abierta de '+money(abierto.total)+'. ¿Cancelarla y liberar la mesa? Esta acción no se puede deshacer.')) return;
+    fbPedidosRef(state.sucursal).child(abierto._fbKey).update({estado:'cancelado',estadoBarra:'listo',estadoCocina:'listo'}).catch(function(e){ console.error(e); });
+  }
+  liberarMesa(state.sucursal,n);
+  showToast('Mesa '+n+' liberada');
 }
 
 /* ============ PEDIDOS (historial) ============ */
@@ -1818,7 +1844,7 @@ function editarPedido(ix){
   var p=state.pedidos[ix]; if(!p||!p._fbKey||p.estado!=='abierto') return;
   state.cart=(p.items||[]).map(function(l){
     var prodCat=(CATALOG[state.sucursal]||[]).filter(function(x){return x.name===l.name;})[0];
-    return {uid:Date.now()+Math.random(),id:prodCat?prodCat.id:null,name:l.name,price:l.price,qty:l.qty,note:l.note||'',area:l.area||'barra',mods:l.mods||''};
+    return {uid:Date.now()+Math.random(),id:l.id||(prodCat?prodCat.id:null),name:l.name,price:l.price,qty:l.qty,note:l.note||'',area:l.area||'barra',mods:l.mods||'',size:l.size||null,modDeltas:l.modDeltas||[]};
   });
   state.tipoOrden=p.mesa?'aqui':p.tipo;
   state.mesa=p.mesa||null;
