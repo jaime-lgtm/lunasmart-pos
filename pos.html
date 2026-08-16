@@ -674,6 +674,36 @@ function _idRecetaDeLinea(l){
   return p.idReceta || null;
 }
 
+/* ==== MODIFICADORES: biblioteca compartida (Leche, Endulzante, etc.) ====
+   Un producto puede usar modificadores de la biblioteca (p.modAsignados,
+   un arreglo de IDs) y/o modificadores propios embebidos (p.mods, para
+   los de un solo producto que no vale la pena compartir). El efecto de
+   inventario (agrega/sustituye) siempre vive en el producto -- p.modInv --
+   porque depende de la receta de ESE producto, no del modificador en si. */
+var MODIFICADORES_CACHE={};
+function cargarModificadoresCache(suc){
+  fbAuthReady.then(function(){
+    fbDb.ref('modificadores/'+suc).on('value', function(snap){ MODIFICADORES_CACHE[suc]=snap.val()||{}; });
+  });
+}
+function _tieneModificadores(p){ return !!((p.mods&&p.mods.length)||(p.modAsignados&&p.modAsignados.length)); }
+function _resolverModsProducto(p){
+  var lib=MODIFICADORES_CACHE[state.sucursal]||{};
+  var TIPO_A_UI={unico:'single', multiple:'multi', cantidad:'distribuir'};
+  var deLaBiblioteca=(p.modAsignados||[]).map(function(modId){
+    var m=lib[modId]; if(!m) return null;
+    var tipo=TIPO_A_UI[m.tipo]||'single';
+    var grupo={label:m.nombre, type:tipo, req:!!m.obligatorio,
+      opts:(m.opciones||[]).map(function(o,oi){
+        var inv=p.modInv && p.modInv[modId] && p.modInv[modId][oi];
+        return {l:o.l, p:o.p||0, inv:inv||undefined};
+      })};
+    if(tipo==='distribuir'){ grupo.min=m.minCant||0; grupo.max=m.maxCant||0; }
+    return grupo;
+  }).filter(Boolean);
+  return Object.assign({}, p, {mods: deLaBiblioteca.concat(p.mods||[])});
+}
+
 var SUCURSALES = [
   {id:'cafeteria', nombre:'Casa de la Cultura',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:true},
   {id:'grano',    nombre:'Venta cafe en grano',   tipoVenta:'CAFETERIA',  inventario:'CASA DE LA CULTURA', mesas:false},
@@ -830,6 +860,7 @@ function doLogin(){
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
     cargarRecetasCache();
+    cargarModificadoresCache(suc);
     showScreen('scApp'); renderTopbar();
     fbAuthReady.then(function(){
       return Promise.all([
@@ -986,6 +1017,7 @@ function addToCart(p){
 
 var _modP=null, _modSize=null, _modSel={}, _modNote='', _modCustomMonto=0, _modQty=1;
 function openMods(p){
+  p=_resolverModsProducto(p);
   _modP=p; _modSel={}; _modSize=null; _modNote=''; _modCustomMonto=0; _modQty=1;
   if(p.sized && p.prices){ _modSize=Object.keys(p.prices)[0]; }
   (p.mods||[]).forEach(function(g,gi){
@@ -1034,9 +1066,12 @@ function renderMods(){
   (p.mods||[]).forEach(function(g,gi){
     if(g.type==='distribuir'){
       var suma=distribuirSuma(_modSel[gi]);
-      var ok=(suma===g.total);
+      var gMin=(typeof g.min==='number')?g.min:(g.req?g.total:0);
+      var gMax=(typeof g.max==='number')?g.max:g.total;
+      var ok=(suma>=gMin && suma<=gMax);
+      var metaTxt=(gMin===gMax)?String(gMax):(gMin+' a '+gMax);
       h+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
-      h+='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:'+(ok?'#2e7d32':'var(--terracota)')+'">Llevas '+suma+' de '+g.total+(ok?' ✓':'')+'</div>';
+      h+='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:'+(ok?'#2e7d32':'var(--terracota)')+'">Llevas '+suma+' de '+metaTxt+(ok?' ✓':'')+'</div>';
       (g.opts||[]).forEach(function(o,oi){
         var cant=(_modSel[gi]||[])[oi]||0;
         h+='<div class="mopt" style="display:flex;align-items:center;justify-content:space-between;gap:10px">'+
@@ -1074,8 +1109,11 @@ function renderMods(){
   box.querySelectorAll('.mdist-btn').forEach(function(b){
     b.addEventListener('click',function(){
       var gi=parseInt(b.dataset.gi,10), oi=parseInt(b.dataset.oi,10), d=parseInt(b.dataset.d,10);
+      var g=(p.mods||[])[gi];
       var arr=_modSel[gi]||[]; var nuevo=(arr[oi]||0)+d;
       if(nuevo<0) nuevo=0;
+      var gMax=g&&((typeof g.max==='number')?g.max:g.total);
+      if(d>0 && typeof gMax==='number'){ var otros=distribuirSuma(arr)-(arr[oi]||0); if(otros+nuevo>gMax) return; }
       arr[oi]=nuevo; _modSel[gi]=arr;
       renderMods();
     });
@@ -1116,7 +1154,9 @@ function confirmMods(){
     var sel=_modSel[gi];
     if(g.type==='distribuir'){
       var suma=distribuirSuma(sel);
-      if(g.req && suma!==g.total){ missing=true; return; }
+      var gMin=(typeof g.min==='number')?g.min:(g.req?g.total:0);
+      var gMax=(typeof g.max==='number')?g.max:g.total;
+      if(suma<gMin || suma>gMax){ missing=true; return; }
       (g.opts||[]).forEach(function(o,oi){ if(sel[oi]>0){ parts.push(sel[oi]+' '+o.l); _agregarDeltaOpt(o,sel[oi]); } });
     }
     else if(g.type==='multi'){ (sel||[]).forEach(function(oi){ if(g.opts[oi]){ parts.push(g.opts[oi].l); _agregarDeltaOpt(g.opts[oi],1); } }); if(g.req && (!sel||!sel.length)) missing=true; }
@@ -1171,10 +1211,10 @@ function renderProducts(){
   grid.innerHTML=prods.map(function(p){
     var d = p.desc ? '<span class="pd">'+esc(p.desc)+'</span>' : '';
     var pr = (p.sized && p.prices) ? ('desde '+money(p.price)) : money(p.price);
-    var badge = (p.mods&&p.mods.length)||p.sized ? '<span class="pmods">+ opciones</span>' : '';
+    var badge = _tieneModificadores(p)||p.sized ? '<span class="pmods">+ opciones</span>' : '';
     return '<button class="prod-btn" data-id="'+p.id+'"><span class="pn">'+esc(p.name)+'</span>'+d+'<span class="pp">'+pr+'</span>'+badge+'</button>';
   }).join('');
-  grid.querySelectorAll('.prod-btn').forEach(function(b){ b.addEventListener('click',function(){ if(!_requiereCajaAbierta()) return; var p=(CATALOG[state.sucursal]||[]).filter(function(x){return x.id===b.dataset.id;})[0]; if(!p) return; if((p.mods&&p.mods.length)||p.sized){ openMods(p); } else { addToCart(p); } }); });
+  grid.querySelectorAll('.prod-btn').forEach(function(b){ b.addEventListener('click',function(){ if(!_requiereCajaAbierta()) return; var p=(CATALOG[state.sucursal]||[]).filter(function(x){return x.id===b.dataset.id;})[0]; if(!p) return; if(_tieneModificadores(p)||p.sized){ openMods(p); } else { addToCart(p); } }); });
 }
 function renderCart(){
   var host=document.getElementById('cartLines');
