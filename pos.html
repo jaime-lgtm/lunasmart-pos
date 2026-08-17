@@ -687,6 +687,20 @@ function cargarModificadoresCache(suc){
   });
 }
 function _tieneModificadores(p){ return !!((p.mods&&p.mods.length)||(p.modAsignados&&p.modAsignados.length)); }
+var CATEGORIAS_ORDEN_CACHE={};
+function cargarCategoriasOrdenCache(suc){
+  fbAuthReady.then(function(){
+    fbDb.ref('categoriasOrden/'+suc).on('value', function(snap){ CATEGORIAS_ORDEN_CACHE[suc]=snap.val()||{}; });
+  });
+}
+// Ordena una lista de nombres: primero segun el orden guardado desde el
+// admin, y lo que no este ahi (categorias nuevas) al final, alfabetico.
+function _ordenarConGuardado(nombres, ordenGuardado){
+  var guardado=ordenGuardado||[];
+  var enGuardado=guardado.filter(function(n){return nombres.indexOf(n)>-1;});
+  var resto=nombres.filter(function(n){return guardado.indexOf(n)<0;}).sort(function(a,b){return String(a).localeCompare(String(b),'es');});
+  return enGuardado.concat(resto);
+}
 function _resolverModsProducto(p){
   var lib=MODIFICADORES_CACHE[state.sucursal]||{};
   var TIPO_A_UI={unico:'single', multiple:'multi', cantidad:'distribuir'};
@@ -861,6 +875,7 @@ function doLogin(){
     fbEscucharCatalogo(suc);
     cargarRecetasCache();
     cargarModificadoresCache(suc);
+    cargarCategoriasOrdenCache(suc);
     showScreen('scApp'); renderTopbar();
     fbAuthReady.then(function(){
       return Promise.all([
@@ -995,8 +1010,22 @@ function selectTipoOrden(tipo){
 }
 
 /* ============ CATALOGO 2 NIVELES ============ */
-function menusOf(prods){ var s=[]; var hasFav=false; prods.forEach(function(p){ if(p.fav===true)hasFav=true; if(s.indexOf(p.menu)<0) s.push(p.menu); }); s.sort(function(a,b){return String(a).localeCompare(String(b),'es');}); if(hasFav) s.unshift('Favoritos'); return s; }
-function subsOf(prods,menu){ var s=[]; prods.forEach(function(p){ if(p.menu===menu && s.indexOf(p.sub)<0) s.push(p.sub); }); s.sort(function(a,b){return String(a).localeCompare(String(b),'es');}); s.unshift('Todos'); return s; }
+function menusOf(prods){
+  var s=[]; var hasFav=false;
+  prods.forEach(function(p){ if(p.fav===true)hasFav=true; if(s.indexOf(p.menu)<0) s.push(p.menu); });
+  var orden=(CATEGORIAS_ORDEN_CACHE[state.sucursal]||{}).categorias;
+  s=_ordenarConGuardado(s,orden);
+  if(hasFav) s.unshift('Favoritos');
+  return s;
+}
+function subsOf(prods,menu){
+  var s=[];
+  prods.forEach(function(p){ if(p.menu===menu && s.indexOf(p.sub)<0) s.push(p.sub); });
+  var ordenSub=((CATEGORIAS_ORDEN_CACHE[state.sucursal]||{}).subcategorias||{})[menu];
+  s=_ordenarConGuardado(s,ordenSub);
+  s.unshift('Todos');
+  return s;
+}
 function currentProducts(){
   var prods=CATALOG[state.sucursal]||[];
   var isFav=(state.menu==='Favoritos');
