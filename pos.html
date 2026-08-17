@@ -2061,10 +2061,35 @@ function renderCaja(){
       '<div class="pill"><div class="l">Rappi/Uber</div><div class="v">'+money(t.rappi)+'</div></div>'+
     '</div><div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'):'')+
     '<div class="card"><h3>Art&iacute;culos estrella del turno</h3>'+(est.length?est.map(function(e){return '<div class="star-row"><span>'+esc(e.name)+'</span><b>'+e.qty+'</b></div>';}).join(''):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div></div>'+
-    '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>';
+    '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>'+
+    '<div style="text-align:center;margin-top:8px"><button id="btnCerrarSinCorte" style="background:none;border:none;color:var(--rojo);font-size:13px;text-decoration:underline;cursor:pointer;padding:8px">&iquest;Caja de pruebas atorada o turno equivocado? Cerrar caja sin corte</button></div>';
   document.querySelectorAll('#cajaContent .caja-op').forEach(function(b){ b.addEventListener('click',function(){ cajaOp(b.dataset.op); }); });
   document.getElementById('btnPrint').addEventListener('click',function(){ window.print(); });
   document.getElementById('btnCerrarTurno').addEventListener('click',function(){ abrirResumenCierre(true); });
+  document.getElementById('btnCerrarSinCorte').addEventListener('click',cerrarCajaSinCorte);
+}
+/** Cierra la caja/turno sin pasar por el corte -- para destrabar una caja abierta
+    por pruebas o un turno anterior que no aplica (ej. quedo abierta con "Turno Manana"
+    de ayer y hoy es Turno Tarde). Descarta ventas/pedidos pendientes de ese turno, por
+    eso pide confirmacion explicita y lista que se va a perder antes de continuar. */
+function cerrarCajaSinCorte(){
+  var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
+  var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; });
+  var nVentas=state.turnoSales.length;
+  var partes=[];
+  if(nVentas>0) partes.push(nVentas+' venta(s) de este turno (NO se enviarán a INGRESOS)');
+  if(__pend.length) partes.push(__pend.length+' orden(es) pendiente(s) en monitores');
+  if(__abiertas.length) partes.push(__abiertas.length+' cuenta(s) abierta(s) sin cobrar');
+  var msg = partes.length
+    ? ('Vas a cerrar la caja SIN hacer corte. Se perderá: '+partes.join(', ')+'. Úselo solo para destrabar una caja de pruebas o un turno que ya no aplica -- no para el cierre normal del día. ¿Continuar?')
+    : '¿Cerrar la caja? No hay ventas ni pendientes en este turno, así que no hay nada que perder.';
+  if(!confirm(msg)) return;
+  fbLimpiarTurnoSales(state.sucursal);
+  fbLimpiarPedidos(state.sucursal);
+  state.turno=null; state.cajaAbierta=false; state.cajaInicial=0; state.cajaMovimientos=[];
+  fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:false}).catch(function(){}); });
+  renderCaja(); renderTopbar();
+  showToast('Caja cerrada sin corte');
 }
 /* ==== SINCRONIZACION CON LUNA SMART (Google Sheets via Apps Script) ==== */
 var SYNC = {
