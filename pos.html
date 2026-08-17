@@ -374,6 +374,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
     <span class="spacer"></span>
     <span class="suc-pill" id="tbSucursal">&mdash;</span>
     <span id="tbUser" style="font-size:13px;color:var(--gris);padding:0 8px;">&mdash;</span>
+    <button class="logout" id="btnActualizar" title="Actualizar la app a la ultima version">&#8635;</button>
     <button class="logout" id="btnFullscreen" title="Pantalla completa (oculta la barra del navegador)">&#9974;</button>
     <button class="logout" id="btnLogout">&#8617; Cerrar</button>
   </div>
@@ -921,6 +922,16 @@ function doLogin(){
   });
 }
 function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
+/* Instalada como app (pantalla completa, sin barra de navegador) no hay boton
+   de recargar del navegador -- este es el unico modo de forzar que la tablet
+   baje la version mas nueva en vez de seguir usando la que ya tenia en cache. */
+function forzarActualizacion(){
+  if(state.cart && state.cart.length){
+    if(!confirm('Tienes un pedido sin guardar en el carrito -- si actualizas ahora se pierde. ¿Continuar de todas formas?')) return;
+  }
+  showToast('Actualizando LunaSmart POS...');
+  setTimeout(function(){ location.href = location.pathname + '?_v=' + Date.now(); }, 250);
+}
 function seedPedidos(){ /* MOCK historial */ return [
   {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:'',area:'barra'},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez',area:'cocina'},{name:'Espresso',qty:1,price:38,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'pendiente'},
   {id:'#1043',tipo:'aqui',metodo:'tarjeta',total:410,estado:'pagado',hora:'10:45',mesa:3,descuento:{tipo:null,valor:0},items:[{name:'Latte',qty:2,price:58,note:'deslactosado',area:'barra'},{name:'Rebanada de pastel',qty:2,price:75,note:'',area:'cocina'},{name:'Sandwich jamon y queso',qty:1,price:85,note:'',area:'cocina'},{name:'Cold Brew',qty:1,price:59,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'listo'},
@@ -2479,6 +2490,7 @@ function _construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulad
 function initApp(){
   initLogin();
   document.getElementById('btnLogout').addEventListener('click',logout);
+  document.getElementById('btnActualizar').addEventListener('click',forzarActualizacion);
   var __btnFs=document.getElementById('btnFullscreen');
   if(__btnFs) __btnFs.addEventListener('click',function(){
     if(!document.fullscreenElement){ (document.documentElement.requestFullscreen||function(){}).call(document.documentElement).catch(function(){ showToast('Este navegador no permite pantalla completa -- usa "Agregar a pantalla de inicio" desde el menu de Chrome'); }); }
