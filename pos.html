@@ -995,8 +995,8 @@ function selectTipoOrden(tipo){
 }
 
 /* ============ CATALOGO 2 NIVELES ============ */
-function menusOf(prods){ var s=[]; var hasFav=false; prods.forEach(function(p){ if(p.fav===true)hasFav=true; if(s.indexOf(p.menu)<0) s.push(p.menu); }); if(hasFav) s.unshift('Favoritos'); return s; }
-function subsOf(prods,menu){ var s=['Todos']; prods.forEach(function(p){ if(p.menu===menu && s.indexOf(p.sub)<0) s.push(p.sub); }); return s; }
+function menusOf(prods){ var s=[]; var hasFav=false; prods.forEach(function(p){ if(p.fav===true)hasFav=true; if(s.indexOf(p.menu)<0) s.push(p.menu); }); s.sort(function(a,b){return String(a).localeCompare(String(b),'es');}); if(hasFav) s.unshift('Favoritos'); return s; }
+function subsOf(prods,menu){ var s=[]; prods.forEach(function(p){ if(p.menu===menu && s.indexOf(p.sub)<0) s.push(p.sub); }); s.sort(function(a,b){return String(a).localeCompare(String(b),'es');}); s.unshift('Todos'); return s; }
 function currentProducts(){
   var prods=CATALOG[state.sucursal]||[];
   var isFav=(state.menu==='Favoritos');
@@ -1005,7 +1005,7 @@ function currentProducts(){
     var okSub=isFav?true:(!state.sub||p.sub===state.sub);
     var okSearch=!state.search||(p.name.toLowerCase().indexOf(state.search.toLowerCase())>=0);
     return okMenu&&okSub&&okSearch;
-  });
+  }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name),'es'); });
 }
 function selectMenu(m){ state.menu=m; state.sub=null; renderPos(); }
 function selectSub(s){ state.sub=s; renderPos(); }
@@ -1015,10 +1015,10 @@ function addToCart(p){
   renderTopbar(); renderCart();
 }
 
-var _modP=null, _modSize=null, _modSel={}, _modNote='', _modCustomMonto=0, _modQty=1;
+var _modP=null, _modSize=null, _modSel={}, _modNote='', _modCustomMonto=0, _modQty=1, _modEditUid=null;
 function openMods(p){
   p=_resolverModsProducto(p);
-  _modP=p; _modSel={}; _modSize=null; _modNote=''; _modCustomMonto=0; _modQty=1;
+  _modP=p; _modSel={}; _modSize=null; _modNote=''; _modCustomMonto=0; _modQty=1; _modEditUid=null;
   if(p.sized && p.prices){ _modSize=Object.keys(p.prices)[0]; }
   (p.mods||[]).forEach(function(g,gi){
     if(g.type==='distribuir'){ _modSel[gi]=(g.opts||[]).map(function(){return 0;}); }
@@ -1028,7 +1028,24 @@ function openMods(p){
   renderMods();
   document.getElementById('modsBackdrop').classList.add('show');
 }
-function closeMods(){ document.getElementById('modsBackdrop').classList.remove('show'); _modP=null; }
+// Reabre el editor de modificadores para un articulo YA en el carrito, con
+// todo precargado -- al guardar se actualiza esa misma linea en vez de
+// agregar una nueva, para no tener que borrar y volver a capturar todo.
+function abrirEdicionCarrito(uid){
+  var l=state.cart.filter(function(x){return x.uid==uid;})[0]; if(!l) return;
+  var prodCat=(CATALOG[state.sucursal]||[]).filter(function(x){return x.id===l.id;})[0];
+  if(!prodCat){ showToast('Ya no se encuentra este artículo en el catálogo, no se puede editar'); return; }
+  var p=_resolverModsProducto(prodCat);
+  _modP=p; _modEditUid=uid;
+  _modSel=l.modSel?JSON.parse(JSON.stringify(l.modSel)):{};
+  _modSize=l.size||((p.sized&&p.prices)?Object.keys(p.prices)[0]:null);
+  _modNote=l.note||'';
+  _modCustomMonto=(_modSize==='Personalizado')?(l.price||0):0;
+  _modQty=l.qty||1;
+  renderMods();
+  document.getElementById('modsBackdrop').classList.add('show');
+}
+function closeMods(){ document.getElementById('modsBackdrop').classList.remove('show'); _modP=null; _modEditUid=null; }
 function modsTotal(){
   var p=_modP; if(!p) return 0;
   var base = (p.sized && p.prices && _modSize!=null)? (_modSize==='Personalizado'?(_modCustomMonto||0):p.prices[_modSize]) : p.price;
@@ -1166,7 +1183,13 @@ function confirmMods(){
   if(missing){ showToast('Completa las opciones requeridas'); return; }
   var price=modsTotal();
   var label=parts.join(' · ');
-  state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:price,qty:_modQty,note:_modNote.trim(),mods:label,area:areaDe(p),size:(p.sized?_modSize:null),modDeltas:modDeltas});
+  var lineaObj={uid:(_modEditUid||(Date.now()+Math.random())),id:p.id,name:p.name,price:price,qty:_modQty,note:_modNote.trim(),mods:label,area:areaDe(p),size:(p.sized?_modSize:null),modDeltas:modDeltas,modSel:JSON.parse(JSON.stringify(_modSel))};
+  if(_modEditUid){
+    var idxEdit=state.cart.findIndex(function(x){return x.uid==_modEditUid;});
+    if(idxEdit>-1) state.cart[idxEdit]=lineaObj; else state.cart.push(lineaObj);
+  } else {
+    state.cart.push(lineaObj);
+  }
   renderTopbar(); renderCart(); closeMods();
 }
 function changeQty(uid,d){
@@ -1223,13 +1246,14 @@ function renderCart(){
   if(!state.cart.length){ host.innerHTML=bannerEdicion+'<div class="cart-empty">Toca un art&iacute;culo para agregarlo</div>'; }
   else{
     host.innerHTML=bannerEdicion+state.cart.map(function(l){
-      return '<div class="cart-line"><div class="info"><div class="n">'+esc(l.name)+'</div><div class="u">'+money(l.price)+' c/u</div>'+
+      return '<div class="cart-line" data-uid="'+l.uid+'" style="cursor:pointer" title="Toca para modificar"><div class="info"><div class="n">'+esc(l.name)+'</div><div class="u">'+money(l.price)+' c/u</div>'+
         (l.mods?'<div class="cmods">'+esc(l.mods)+'</div>':'')+
         (l.note?'<div class="note">&#9998; '+esc(l.note)+'</div>':'')+'</div>'+
         '<div class="qty"><button data-uid="'+l.uid+'" data-d="-1">&minus;</button><span class="q">'+l.qty+'</span><button data-uid="'+l.uid+'" data-d="1">&plus;</button></div>'+
         '<div class="sub">'+money(l.price*l.qty)+'</div></div>';
     }).join('');
-    host.querySelectorAll('.qty button').forEach(function(b){ b.addEventListener('click',function(){ changeQty(b.dataset.uid, parseInt(b.dataset.d,10)); }); });
+    host.querySelectorAll('.qty button').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); changeQty(b.dataset.uid, parseInt(b.dataset.d,10)); }); });
+    host.querySelectorAll('.cart-line').forEach(function(row){ row.addEventListener('click',function(){ abrirEdicionCarrito(row.dataset.uid); }); });
   }
   var __bn=document.getElementById('btnNota'); if(__bn){ var __cn=(state.cliente&&state.cliente.nombre)||''; __bn.innerHTML=__cn?('&#128100; '+esc(__cn)):'&#128100; Cliente'; }
   var sub=cartSubtotal(); var desc=cartDescuentoMonto(); var puntosMonto=puntosMontoUsado(); var base=sub-desc-puntosMonto; var iva=base*CONFIG.IVA_RATE/(1+CONFIG.IVA_RATE);
