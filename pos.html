@@ -254,7 +254,8 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .mods-head{ padding:18px 20px 12px; background:var(--cafe); color:var(--beige); }
 .mods-head .mh-t{ font-size:19px; font-weight:700; }
 .mods-head .mh-d{ font-size:13px; opacity:.85; margin-top:4px; }
-.mods-body{ padding:8px 20px; overflow-y:auto; flex:1; }
+.mods-bodywrap{ flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; }
+.mods-body{ padding:8px 20px; }
 .mgroup{ padding:12px 0; border-bottom:1px solid #eee; }
 .mg-l{ font-weight:700; color:var(--cafe-medio); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
 .mg-l .req{ font-size:10px; background:var(--terracota); color:#fff; padding:2px 7px; border-radius:10px; font-weight:600; }
@@ -262,6 +263,24 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .mopt{ display:flex; justify-content:space-between; align-items:center; padding:9px 0; font-size:15px; cursor:pointer; }
 .mopt input{ margin-right:9px; transform:scale(1.2); accent-color:var(--terracota); }
 .mopt .op{ color:var(--terracota); font-weight:600; font-size:14px; }
+/* Grupos tipo "Cantidad" (endulzante, shots extra...): opciones como chips
+   compactos que se tocan para agregar; lo ya elegido se muestra aparte en
+   .mods-side (panel "Seleccionado"), no como fila grande con +/- inline. */
+.mdist-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+.mdist-chip{ border:1.5px solid var(--linea); background:#fff; border-radius:20px; padding:9px 15px; font-size:13px; font-weight:700; color:var(--cafe); cursor:pointer; }
+.mdist-chip.sel{ border-color:var(--terracota); background:#fdf3ee; color:var(--terracota); }
+.mdist-chip .op{ color:var(--terracota); font-weight:800; }
+.mdist-chip b{ margin-left:4px; }
+.mods-side{ order:-1; padding:14px 20px; border-bottom:1px solid #eee; display:flex; flex-direction:column; gap:8px; background:var(--beige-claro); }
+.mods-side-t{ font-size:12px; font-weight:800; color:var(--gris); text-transform:uppercase; letter-spacing:.4px; }
+.mside-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; background:#fff; border:1px solid var(--linea); border-radius:10px; padding:8px 10px; font-size:13px; font-weight:700; color:var(--cafe); }
+.mside-x{ border:none; background:none; color:var(--rojo); font-size:17px; font-weight:800; cursor:pointer; line-height:1; padding:2px 6px; flex-shrink:0; }
+.mside-empty{ font-size:12px; color:var(--gris); font-style:italic; }
+@media(min-width:640px){
+  .mods-bodywrap{ flex-direction:row; overflow:hidden; }
+  .mods-body{ overflow-y:auto; flex:1; min-width:0; }
+  .mods-side{ order:0; width:230px; flex:0 0 230px; overflow-y:auto; border-bottom:none; border-left:1px solid #eee; }
+}
 .mods-foot{ padding:14px 20px calc(14px + env(safe-area-inset-bottom)); border-top:1px solid #eee; display:flex; gap:10px; }
 .mods-foot .btn-ghost{ flex:0 0 auto; padding:14px 18px; border:1px solid #ccc; background:#fff; border-radius:12px; font-size:15px; }
 .mods-foot .btn-primary{ flex:1; padding:14px; background:var(--terracota); color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:700; }
@@ -1093,62 +1112,73 @@ function modsTotal(){
 }
 function distribuirSuma(sel){ return (sel||[]).reduce(function(a,b){return a+(b||0);},0); }
 function szLabel(sn){var oz={'El Chico':'12 oz','El Mayor':'20 oz'};return oz[sn]?sn+' '+oz[sn]:sn;}
+function _modSideRowsHTML(p){
+  var rows=[];
+  (p.mods||[]).forEach(function(g,gi){
+    if(g.type!=='distribuir') return;
+    (g.opts||[]).forEach(function(o,oi){
+      var cant=(_modSel[gi]||[])[oi]||0;
+      if(cant<=0) return;
+      rows.push('<div class="mside-row"><span>x'+cant+' '+esc(o.l)+(o.p?' &middot; '+money(o.p*cant):'')+'</span><button type="button" class="mside-x" data-gi="'+gi+'" data-oi="'+oi+'">&times;</button></div>');
+    });
+  });
+  return rows.length?rows.join(''):'<div class="mside-empty">Sin extras seleccionados</div>';
+}
 function renderMods(){
   var p=_modP; if(!p) return;
   var h='<div class="mods-head"><div class="mh-t">'+esc(p.name)+'</div>'+(p.desc?'<div class="mh-d">'+esc(p.desc)+'</div>':'')+'</div>';
-  h+='<div class="mods-body">';
-  h+='<div class="mgroup"><div class="mg-l">Cantidad</div><div style="display:flex;align-items:center;justify-content:center;gap:18px;padding:6px 0">'+
+  var hBody='<div class="mods-body">';
+  hBody+='<div class="mgroup"><div class="mg-l">Cantidad</div><div style="display:flex;align-items:center;justify-content:center;gap:18px;padding:6px 0">'+
     '<button type="button" id="modQtyMinus" style="width:44px;height:44px;border-radius:12px;border:1px solid var(--linea);background:var(--beige-claro);font-size:22px;font-weight:800;color:var(--cafe-medio)">&minus;</button>'+
     '<span id="modQtyVal" style="font-size:22px;font-weight:800;min-width:30px;text-align:center">'+_modQty+'</span>'+
     '<button type="button" id="modQtyPlus" style="width:44px;height:44px;border-radius:12px;border:1px solid var(--linea);background:var(--beige-claro);font-size:22px;font-weight:800;color:var(--cafe-medio)">&plus;</button>'+
     '</div></div>';
   if(p.sized && p.prices){
-    h+='<div class="mgroup"><div class="mg-l">Tama&ntilde;o<span class="req">Requerido</span></div>';
+    hBody+='<div class="mgroup"><div class="mg-l">Tama&ntilde;o<span class="req">Requerido</span></div>';
     Object.keys(p.prices).forEach(function(sn){
       var esLibre=(sn==='Personalizado');
-      h+='<label class="mopt"><span><input type="radio" name="msize" data-sz="'+esc(sn)+'"'+(_modSize===sn?' checked':'')+'> '+esc(szLabel(sn))+'</span><span class="op">'+(esLibre?'monto libre':money(p.prices[sn]))+'</span></label>';
+      hBody+='<label class="mopt"><span><input type="radio" name="msize" data-sz="'+esc(sn)+'"'+(_modSize===sn?' checked':'')+'> '+esc(szLabel(sn))+'</span><span class="op">'+(esLibre?'monto libre':money(p.prices[sn]))+'</span></label>';
     });
     if(_modSize==='Personalizado'){
-      h+='<div class="field" style="margin-top:8px"><label>&iquest;Cu&aacute;nto va a pagar?</label><input type="number" id="modCustomMontoInp" inputmode="decimal" placeholder="0.00" value="'+(_modCustomMonto||'')+'" style="font-size:18px;font-weight:700;text-align:right"></div>';
+      hBody+='<div class="field" style="margin-top:8px"><label>&iquest;Cu&aacute;nto va a pagar?</label><input type="number" id="modCustomMontoInp" inputmode="decimal" placeholder="0.00" value="'+(_modCustomMonto||'')+'" style="font-size:18px;font-weight:700;text-align:right"></div>';
     }
-    h+='</div>';
+    hBody+='</div>';
   }
+  var tieneDistribuir=false;
   (p.mods||[]).forEach(function(g,gi){
     if(g.type==='distribuir'){
+      tieneDistribuir=true;
       var suma=distribuirSuma(_modSel[gi]);
       var gMin=(typeof g.min==='number')?g.min:(g.req?g.total:0);
       var gMax=(typeof g.max==='number')?g.max:g.total;
       var ok=(suma>=gMin && suma<=gMax);
       var metaTxt=(gMin===gMax)?String(gMax):(gMin+' a '+gMax);
-      h+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
-      h+='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:'+(ok?'#2e7d32':'var(--terracota)')+'">Llevas '+suma+' de '+metaTxt+(ok?' ✓':'')+'</div>';
+      hBody+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
+      hBody+='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:'+(ok?'#2e7d32':'var(--terracota)')+'">Llevas '+suma+' de '+metaTxt+(ok?' ✓':'')+'</div>';
+      hBody+='<div class="mdist-chips">';
       (g.opts||[]).forEach(function(o,oi){
         var cant=(_modSel[gi]||[])[oi]||0;
-        h+='<div class="mopt" style="display:flex;align-items:center;justify-content:space-between;gap:10px">'+
-          '<span>'+esc(o.l)+(o.p?' <span class="op">+'+money(o.p)+' c/u</span>':'')+'</span>'+
-          '<span style="display:flex;align-items:center;gap:10px">'+
-            '<button type="button" class="mdist-btn" data-gi="'+gi+'" data-oi="'+oi+'" data-d="-1" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--linea);background:var(--beige-claro);font-size:17px;font-weight:800">&minus;</button>'+
-            '<span style="min-width:20px;text-align:center;font-weight:800">'+cant+'</span>'+
-            '<button type="button" class="mdist-btn" data-gi="'+gi+'" data-oi="'+oi+'" data-d="1" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--linea);background:var(--beige-claro);font-size:17px;font-weight:800">&plus;</button>'+
-          '</span></div>';
+        hBody+='<button type="button" class="mdist-chip'+(cant>0?' sel':'')+'" data-gi="'+gi+'" data-oi="'+oi+'">'+esc(o.l)+(o.p?' <span class="op">+'+money(o.p)+'</span>':'')+(cant>0?' <b>x'+cant+'</b>':'')+'</button>';
       });
-      h+='</div>';
+      hBody+='</div></div>';
       return;
     }
-    h+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
+    hBody+='<div class="mgroup"><div class="mg-l">'+esc(g.label)+(g.req?'<span class="req">Requerido</span>':'<span class="opc">Opcional</span>')+'</div>';
     (g.opts||[]).forEach(function(o,oi){
       var checked;
       if(g.type==='multi'){ checked=(_modSel[gi]||[]).indexOf(oi)>-1; }
       else { checked=_modSel[gi]===oi; }
       var inp = g.type==='multi'?'checkbox':'radio';
       var extra = o.p? '<span class="op">+'+money(o.p)+'</span>':'';
-      h+='<label class="mopt"><span><input type="'+inp+'" name="mg'+gi+'" data-gi="'+gi+'" data-oi="'+oi+'"'+(checked?' checked':'')+'> '+esc(o.l)+'</span>'+extra+'</label>';
+      hBody+='<label class="mopt"><span><input type="'+inp+'" name="mg'+gi+'" data-gi="'+gi+'" data-oi="'+oi+'"'+(checked?' checked':'')+'> '+esc(o.l)+'</span>'+extra+'</label>';
     });
-    h+='</div>';
+    hBody+='</div>';
   });
-  h+='<div class="mgroup"><div class="mg-l">Notas<span class="opc">Opcional</span></div>'+
+  hBody+='<div class="mgroup"><div class="mg-l">Notas<span class="opc">Opcional</span></div>'+
     '<textarea id="modNoteTxt" placeholder="Ej. sin az&uacute;car, extra caliente..." style="width:100%;padding:12px;border:1px solid var(--linea);border-radius:12px;background:var(--beige-claro);min-height:70px;resize:vertical;font-family:inherit;font-size:15px;">'+esc(_modNote)+'</textarea></div>';
-  h+='</div>';
+  hBody+='</div>';
+  var hSide=tieneDistribuir?('<div class="mods-side"><div class="mods-side-t">Seleccionado</div><div id="modsSideList">'+_modSideRowsHTML(p)+'</div></div>'):'';
+  h+='<div class="mods-bodywrap">'+hBody+hSide+'</div>';
   h+='<div class="mods-foot"><button class="btn-ghost" id="modsCancel">Cancelar</button><button class="btn-primary" id="modsAdd">Agregar &middot; <span id="modsTot">'+money(modsTotal()*_modQty)+'</span></button></div>';
   var box=document.getElementById('modsBox'); box.innerHTML=h;
   var __noteEl=document.getElementById('modNoteTxt'); if(__noteEl) __noteEl.addEventListener('input',function(){ _modNote=__noteEl.value; });
@@ -1156,15 +1186,21 @@ function renderMods(){
   document.getElementById('modQtyMinus').addEventListener('click',function(){ if(_modQty>1){ _modQty--; document.getElementById('modQtyVal').textContent=_modQty; document.getElementById('modsTot').textContent=money(modsTotal()*_modQty); } });
   document.getElementById('modQtyPlus').addEventListener('click',function(){ _modQty++; document.getElementById('modQtyVal').textContent=_modQty; document.getElementById('modsTot').textContent=money(modsTotal()*_modQty); });
   box.querySelectorAll('input[name="msize"]').forEach(function(r){ r.addEventListener('change',function(){ _modSize=r.dataset.sz; renderMods(); }); });
-  box.querySelectorAll('.mdist-btn').forEach(function(b){
+  box.querySelectorAll('.mdist-chip').forEach(function(b){
     b.addEventListener('click',function(){
-      var gi=parseInt(b.dataset.gi,10), oi=parseInt(b.dataset.oi,10), d=parseInt(b.dataset.d,10);
+      var gi=parseInt(b.dataset.gi,10), oi=parseInt(b.dataset.oi,10);
       var g=(p.mods||[])[gi];
-      var arr=_modSel[gi]||[]; var nuevo=(arr[oi]||0)+d;
-      if(nuevo<0) nuevo=0;
+      var arr=_modSel[gi]||[]; var nuevo=(arr[oi]||0)+1;
       var gMax=g&&((typeof g.max==='number')?g.max:g.total);
-      if(d>0 && typeof gMax==='number'){ var otros=distribuirSuma(arr)-(arr[oi]||0); if(otros+nuevo>gMax) return; }
+      if(typeof gMax==='number'){ var otros=distribuirSuma(arr)-(arr[oi]||0); if(otros+nuevo>gMax) return; }
       arr[oi]=nuevo; _modSel[gi]=arr;
+      renderMods();
+    });
+  });
+  box.querySelectorAll('.mside-x').forEach(function(b){
+    b.addEventListener('click',function(){
+      var gi=parseInt(b.dataset.gi,10), oi=parseInt(b.dataset.oi,10);
+      var arr=_modSel[gi]||[]; arr[oi]=0; _modSel[gi]=arr;
       renderMods();
     });
   });
