@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.suenodeluna.lunadisplay'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.suenodeluna.lunadisplay"
+        // targetSdk se deja en el nivel real del tablet (Android 11 = API 30)
+        // a proposito -- este apk solo corre en ese equipo, y quedarse en API 30
+        // evita restricciones nuevas (tipos de foreground service, permiso de
+        // notificaciones en tiempo de ejecucion, etc.) que no aplican ahi y que
+        // no se pueden probar sin el hardware real.
+        minSdk 26
+        targetSdk 30
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
