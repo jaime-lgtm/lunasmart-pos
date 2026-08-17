@@ -1341,8 +1341,23 @@ function renderCart(){
   }
   var cargo=(state.tipoOrden==='domicilio')?(state.cargoDomicilio||0):0; var __cr=document.getElementById('cartCargoRow'); if(__cr){ if(cargo>0){__cr.classList.remove('hidden'); document.getElementById('cartCargoVal').textContent=money(cargo);} else {__cr.classList.add('hidden');} } var __bcd=document.getElementById('btnCargoDom'); if(__bcd){ __bcd.style.display=(state.tipoOrden==='domicilio')?'':'none'; } document.getElementById('cartTotal').textContent=money(base+cargo);
   document.getElementById('btnCobrar').disabled=!state.cart.length;
+  _broadcastCajaLive();
 }
 function cartTotalFinal(){ var __cargo=(state.tipoOrden==='domicilio')?(state.cargoDomicilio||0):0; var base=cartSubtotal()-cartDescuentoMonto()-puntosMontoUsado(); return base+__cargo; }
+/* ==== Pantalla de cliente (segundo monitor): transmite el pedido en construccion
+   en vivo via cajaLive/{suc}, para que display.html lo muestre. Debounce corto
+   para no escribir a Firebase en cada click cuando el cajero mantiene +/- presionado. */
+var _cajaLiveDebounce=null;
+function _broadcastCajaLive(){
+  if(!state.logged || !state.sucursal) return;
+  if(_cajaLiveDebounce) clearTimeout(_cajaLiveDebounce);
+  _cajaLiveDebounce=setTimeout(function(){
+    _cajaLiveDebounce=null;
+    var items=state.cart.map(function(l){ return {name:l.name||'', qty:l.qty||0, price:l.price||0, mods:l.mods||'', note:l.note||''}; });
+    var payload={ activo:items.length>0, items:items, subtotal:cartSubtotal(), descuento:cartDescuentoMonto(), total:cartTotalFinal(), tipoOrden:state.tipoOrden||null, mesa:state.mesa||null, ts:Date.now() };
+    fbAuthReady.then(function(){ fbDb.ref('cajaLive/'+state.sucursal).set(payload).catch(function(){}); });
+  }, 250);
+}
 
 /* ---- Nota ---- */
 function openNota(){
@@ -1705,6 +1720,22 @@ function configSync(){
     if(typeof renderConfig==="function") renderConfig();
   });
 }
+function configDoblePantalla(){
+  var suc=state.sucursal;
+  var url=location.href.replace(/[^/]*$/,'')+'display.html?suc='+encodeURIComponent(suc);
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>Pantalla de cliente</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Abre una ventana nueva que muestra en vivo lo que se est&aacute; cobrando (art&iacute;culos, modificadores y total). Arrastra esa ventana a la segunda pantalla y p&oacute;nla en pantalla completa. Cuando no hay ning&uacute;n pedido en construcci&oacute;n, muestra la marca de la cafeter&iacute;a en vez del pedido.</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Abrir pantalla de cliente</button></div></div></div>';
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('mOk').addEventListener('click',function(){
+    window.open(url,'lunaDisplay','width=1024,height=768');
+    localStorage.setItem('ls_display_usada','1');
+    closeModal();
+    showToast('Pantalla de cliente abierta en una ventana nueva -- arrástrala a la segunda pantalla');
+  });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+}
 function configMesas(){
   var suc=state.sucursal; var actual=numMesasConfig(suc);
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Configurar mesas</h2>'+
@@ -2053,11 +2084,13 @@ function cancelarPedido(ix){
 
 /* ============ CONFIGURACION ============ */
 function renderConfig(){
+  var __itemDP=CONFIG_ITEMS.filter(function(c){return c.t==='Doble pantalla';})[0];
+  if(__itemDP){ var __usada=localStorage.getItem('ls_display_usada')==='1'; __itemDP.badge=__usada?'Activa':'Off'; __itemDP.badgeClass=__usada?'ok':'err'; }
   var html='<h2>Configuraci&oacute;n</h2><div class="sub">Impresoras, alarmas, lector de huella y m&aacute;s</div><div class="cfg-grid">';
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 
 /* ============ CAJA / CORTE ============ */

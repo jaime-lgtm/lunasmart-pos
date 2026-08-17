@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Sueño de Luna — Pantalla de cliente</title>
+<style>
+:root{
+  --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
+  --terracota-claro:#d0632f; --beige:#e8d6b9; --beige-claro:#f5ecdd;
+  --verde-ok:#3f7d4e; --gris:#8a7d6b; --linea:#e4dccb;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select:none;}
+
+/* ---- Pantalla ociosa (sin pedido activo) ---- */
+#idle{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+  background:linear-gradient(160deg,var(--cafe),var(--cafe-medio));color:var(--beige);text-align:center;padding:40px;}
+#idle .logo{width:120px;height:120px;border-radius:26px;background:var(--cafe);border:3px solid var(--terracota-claro);display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:900;color:var(--beige);box-shadow:0 10px 40px rgba(0,0,0,.35);}
+#idle h1{font-size:clamp(28px,4vw,52px);font-weight:800;letter-spacing:.5px;}
+#idle h1 b{color:var(--terracota-claro);}
+#idle p{font-size:clamp(16px,1.6vw,22px);opacity:.85;max-width:640px;}
+#idle .suc{position:absolute;bottom:22px;right:28px;font-size:14px;opacity:.6;}
+
+/* ---- Pantalla de pedido en construccion ---- */
+#live{position:fixed;inset:0;display:none;flex-direction:column;background:#fff;}
+#live.show{display:flex;}
+#idle.hide{display:none;}
+.live-head{background:var(--cafe);color:var(--beige);padding:26px 40px;display:flex;align-items:center;justify-content:space-between;}
+.live-head .t{font-size:clamp(22px,2.6vw,32px);font-weight:800;}
+.live-head .tipo{font-size:clamp(14px,1.4vw,18px);opacity:.8;margin-top:4px;}
+.live-body{flex:1;overflow-y:auto;padding:20px 40px;}
+.li{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:18px 0;border-bottom:1px solid var(--linea);}
+.li .info{flex:1;}
+.li .n{font-size:clamp(19px,2.2vw,27px);font-weight:700;color:var(--cafe);}
+.li .m{font-size:clamp(13px,1.3vw,16px);color:var(--terracota);margin-top:4px;}
+.li .note{font-size:clamp(12px,1.2vw,15px);color:var(--gris);margin-top:2px;font-style:italic;}
+.li .q{font-size:clamp(16px,1.8vw,22px);font-weight:800;color:var(--gris);min-width:44px;text-align:center;}
+.li .p{font-size:clamp(19px,2.2vw,27px);font-weight:800;color:var(--cafe);min-width:110px;text-align:right;}
+.live-foot{border-top:2px solid var(--linea);padding:22px 40px calc(22px + env(safe-area-inset-bottom));background:var(--beige-claro);}
+.row{display:flex;justify-content:space-between;font-size:clamp(15px,1.6vw,19px);color:var(--cafe-medio);padding:4px 0;}
+.row.total{font-size:clamp(30px,4vw,46px);font-weight:900;color:var(--terracota);padding-top:10px;}
+</style>
+</head>
+<body>
+
+<div id="idle">
+  <div class="logo">LS</div>
+  <h1>luna<b>smart</b> &middot; Sueño de Luna</h1>
+  <p>Café &amp; Roasters — Coffee, Bakery &amp; Roasters</p>
+  <div class="suc" id="sucLbl"></div>
+</div>
+
+<div id="live">
+  <div class="live-head">
+    <div>
+      <div class="t">Tu pedido</div>
+      <div class="tipo" id="liveTipo"></div>
+    </div>
+  </div>
+  <div class="live-body" id="liveItems"></div>
+  <div class="live-foot">
+    <div class="row"><span>Subtotal</span><span id="rowSub">$0.00</span></div>
+    <div class="row hidden" id="rowDescWrap"><span>Descuento</span><span id="rowDesc">-$0.00</span></div>
+    <div class="row total"><span>Total</span><span id="rowTotal">$0.00</span></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM",
+  authDomain: "luna-smart-pos.firebaseapp.com",
+  databaseURL: "https://luna-smart-pos-default-rtdb.firebaseio.com",
+  projectId: "luna-smart-pos",
+  storageBucket: "luna-smart-pos.firebasestorage.app",
+  messagingSenderId: "29167679041",
+  appId: "1:29167679041:web:0959c2161d86552ded38c0"
+};
+firebase.initializeApp(firebaseConfig);
+var fbDb = firebase.database();
+var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
+
+var NOMBRES = {cafeteria:'Casa de la Cultura', grano:'Venta café en grano', helfy:'Helfy Fu', barbacoa:'Barbacoa'};
+var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aquí'};
+
+function money(n){ return '$'+(Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+var params = new URLSearchParams(location.search);
+var suc = params.get('suc');
+
+function pintar(data){
+  var idle=document.getElementById('idle'), live=document.getElementById('live');
+  if(!data || !data.activo || !(data.items||[]).length){
+    idle.classList.remove('hide'); live.classList.remove('show');
+    return;
+  }
+  idle.classList.add('hide'); live.classList.add('show');
+  var tipoTxt = data.mesa ? ('Mesa '+data.mesa) : (data.tipoOrden ? (TIPO_LABEL[data.tipoOrden]||'') : '');
+  document.getElementById('liveTipo').textContent = tipoTxt;
+  document.getElementById('liveItems').innerHTML = data.items.map(function(it){
+    return '<div class="li"><div class="info"><div class="n">'+esc(it.name)+'</div>'+
+      (it.mods?'<div class="m">'+esc(it.mods)+'</div>':'')+
+      (it.note?'<div class="note">'+esc(it.note)+'</div>':'')+
+      '</div><div class="q">x'+(it.qty||1)+'</div><div class="p">'+money((it.price||0)*(it.qty||1))+'</div></div>';
+  }).join('');
+  document.getElementById('rowSub').textContent = money(data.subtotal);
+  var dw=document.getElementById('rowDescWrap');
+  if(data.descuento>0){ dw.classList.remove('hidden'); document.getElementById('rowDesc').textContent='-'+money(data.descuento); }
+  else { dw.classList.add('hidden'); }
+  document.getElementById('rowTotal').textContent = money(data.total);
+}
+
+if(!suc){
+  document.getElementById('idle').innerHTML = '<div class="logo">LS</div><h1>Falta configurar</h1><p>Abre esta pantalla desde el POS: Configuración → Doble pantalla → Abrir pantalla de cliente.</p>';
+} else {
+  document.getElementById('sucLbl').textContent = NOMBRES[suc] || suc;
+  fbAuthReady.then(function(){
+    fbDb.ref('cajaLive/'+suc).on('value', function(snap){ pintar(snap.val()); });
+  });
+}
+</script>
+</body>
+</html>
