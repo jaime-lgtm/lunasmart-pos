@@ -235,7 +235,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 @media print{ body *{visibility:hidden;} #printArea,#printArea *{visibility:visible;} #printArea{position:absolute;left:0;top:0;width:100%;padding:20px;} }
 
 .det-list{margin:10px 0;max-height:320px;overflow:auto}.det-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(0,0,0,.08)}.det-q{font-weight:700;color:var(--terracota);min-width:34px}.det-n{flex:1}.det-note{font-size:.8rem;color:#8a7a68;font-style:italic;margin-top:2px}.det-p{font-weight:600;white-space:nowrap}.det-tot{display:flex;justify-content:space-between;padding:5px 0;font-size:.95rem}.det-grand{font-weight:800;font-size:1.15rem;border-top:2px solid var(--cafe-medio);margin-top:6px;padding-top:10px}
-/* ===== KDS / Monitor de estacion ===== */.kds-filter{display:flex;gap:8px;margin:10px 0 16px;flex-wrap:wrap}.kds-f{padding:9px 18px;border-radius:20px;background:var(--beige-claro);color:var(--cafe-medio);font-weight:600;font-size:14px;border:1px solid var(--linea)}.kds-f.on{background:var(--terracota);color:#fff;border-color:var(--terracota)}.kds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.kds-card{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px;border-top:5px solid var(--gris)}.kds-card.barra{border-top-color:#2f6f9e}.kds-card.cocina{border-top-color:var(--terracota)}.kdc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}.kdc-folio{font-weight:800;font-size:1.15rem;color:var(--cafe)}.kdc-area{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:10px;background:var(--beige-claro);color:var(--cafe-medio)}.kdc-meta{font-size:.82rem;color:var(--gris);margin-bottom:10px}.kdc-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)}.kdc-q{font-weight:800;color:var(--terracota);min-width:30px}.kdc-n{flex:1;font-weight:600}.kdc-note{font-size:.78rem;color:#8a7a68;font-style:italic;font-weight:400}.kdc-btn{margin-top:12px;width:100%;padding:12px;border-radius:10px;background:var(--verde-ok);color:#fff;font-weight:700;font-size:15px}.kdc-timer{font-size:.8rem;font-weight:800;padding:3px 9px;border-radius:10px;background:#eef6ef;color:var(--verde-ok);}.kdc-timer.tw-amarillo{background:#fdf3e0;color:#a8730f;}.kdc-timer.tw-rojo{background:#fbeeea;color:var(--rojo);}
+/* ===== KDS / Monitor de estacion ===== */.kds-filter{display:flex;gap:8px;margin:10px 0 16px;flex-wrap:wrap}.kds-f{padding:9px 18px;border-radius:20px;background:var(--beige-claro);color:var(--cafe-medio);font-weight:600;font-size:14px;border:1px solid var(--linea)}.kds-f.on{background:var(--terracota);color:#fff;border-color:var(--terracota)}.kds-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.kds-card{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px;border-top:5px solid var(--gris)}.kds-card.barra{border-top-color:#2f6f9e}.kds-card.cocina{border-top-color:var(--terracota)}.kdc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}.kdc-folio{font-weight:800;font-size:1.15rem;color:var(--cafe)}.kdc-area{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:10px;background:var(--beige-claro);color:var(--cafe-medio)}.kdc-meta{font-size:.82rem;color:var(--gris);margin-bottom:10px}.kdc-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06);justify-content:space-between;align-items:center}.kdc-item-info{display:flex;gap:8px;flex:1;min-width:0}.kdc-item-listo{opacity:.5}.kdc-item-listo .kdc-n{text-decoration:line-through}.kdc-check{color:var(--verde-ok);font-weight:800;font-size:18px}.kdc-item-btn{padding:6px 14px;border-radius:8px;background:var(--verde-ok);color:#fff;font-weight:700;font-size:12.5px;white-space:nowrap}.kdc-q{font-weight:800;color:var(--terracota);min-width:30px}.kdc-n{flex:1;font-weight:600}.kdc-note{font-size:.78rem;color:#8a7a68;font-style:italic;font-weight:400}.kdc-btn{margin-top:12px;width:100%;padding:12px;border-radius:10px;background:var(--verde-ok);color:#fff;font-weight:700;font-size:15px}.kdc-timer{font-size:.8rem;font-weight:800;padding:3px 9px;border-radius:10px;background:#eef6ef;color:var(--verde-ok);}.kdc-timer.tw-amarillo{background:#fdf3e0;color:#a8730f;}.kdc-timer.tw-rojo{background:#fbeeea;color:var(--rojo);}
 /* --- descripcion en tiles --- */
 .prod-btn{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
 .prod-btn .pd{ font-size:11px; color:#7a6650; line-height:1.2; margin:2px 0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -1421,13 +1421,18 @@ function renderCheckout(){
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeCheckout(); });
 }
 function _construirPedidoDesdeCart(estado,metodo,pagos){
-  var itemsPedido=state.cart.map(function(l){return {id:l.id||null,name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra',size:l.size||null,modDeltas:l.modDeltas||[]};});
-  var hayBarra=itemsPedido.some(function(l){return (l.area||'barra')==='barra';});
-  var hayCocina=itemsPedido.some(function(l){return (l.area||'barra')==='cocina';});
+  var itemsPedido=state.cart.map(function(l){return {id:l.id||null,name:l.name,qty:l.qty,price:l.price,note:l.note,mods:l.mods||'',area:l.area||'barra',size:l.size||null,modDeltas:l.modDeltas||[],listo:l.listo||false,listoTs:l.listoTs||null};});
+  // Si se esta reeditando un pedido que ya tenia productos marcados listos en
+  // el Monitor, esos avances no deben perderse solo por agregar/quitar algo
+  // mas -- el area se considera lista si TODOS sus productos ya lo estan.
+  var itsBarra=itemsPedido.filter(function(l){return (l.area||'barra')==='barra';});
+  var itsCocina=itemsPedido.filter(function(l){return (l.area||'barra')==='cocina';});
+  var estadoBarraVal=itsBarra.length?(itsBarra.every(function(l){return l.listo;})?'listo':'pendiente'):'listo';
+  var estadoCocinaVal=itsCocina.length?(itsCocina.every(function(l){return l.listo;})?'listo':'pendiente'):'listo';
   var editKey=state._editandoPedidoKey;
   var fbRef=editKey?fbPedidosRef(state.sucursal).child(editKey):fbPedidosRef(state.sucursal).push();
   var nid=editKey?state._editandoPedidoId:('#'+fbRef.key.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase());
-  var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:metodo,total:cartTotalFinal(),estado:estado,hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:hayBarra?'pendiente':'listo',estadoCocina:hayCocina?'pendiente':'listo',_ts:firebase.database.ServerValue.TIMESTAMP};
+  var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:metodo,total:cartTotalFinal(),estado:estado,hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:estadoBarraVal,estadoCocina:estadoCocinaVal,_ts:firebase.database.ServerValue.TIMESTAMP};
   if(pagos && pagos.length) pedidoObj.pagos=pagos;
   // Se ofrece al repartidor desde que entra el pedido, aunque siga en preparacion --
   // asi puede ir en camino y no hasta que la Estacion lo marque listo.
@@ -1732,14 +1737,36 @@ function renderMesas(){
   document.querySelectorAll('#mesasContent .mesa-liberar').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); confirmarLiberarMesa(parseInt(b.dataset.n,10)); }); });
 }
 function kdsSetArea(a){ state.kdsArea=a; renderKds(); }
+// Marca UN producto especifico de la comanda como listo (no toda el area
+// de un jalon) -- si con ese ya quedan listos todos los de esa area, el
+// area completa se marca lista igual que antes (todo lo demas del sistema
+// -- avisar repartidor, bloquear cierre de turno, badge del KDS -- sigue
+// leyendo estadoBarra/estadoCocina, asi que se mantienen sincronizados).
+function kdsMarcarProductoListo(ix,area,itemIndex){
+  var p=state.pedidos[ix]; if(!p||!p._fbKey) return;
+  var items=(p.items||[]).slice();
+  if(!items[itemIndex]) return;
+  items[itemIndex]=Object.assign({},items[itemIndex],{listo:true,listoTs:Date.now()});
+  var campo=area==='cocina'?'estadoCocina':'estadoBarra';
+  var todosListos=items.filter(function(l){return (l.area||'barra')===area;}).every(function(l){return !!l.listo;});
+  var upd={items:items};
+  if(todosListos) upd[campo]='listo';
+  var otra=area==='cocina'?p.estadoBarra:p.estadoCocina;
+  var quedaListoPedido=todosListos && (!otra || otra==='listo');
+  fbPedidosRef(state.sucursal).child(p._fbKey).update(upd).then(function(){
+    if(p.tipo==='domicilio' && quedaListoPedido && p.repartidorId) _avisarRepartidorListo(Object.assign({},p,upd));
+  }).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
+}
+// Atajo para marcar de un tiron todo lo que falte de esa area (comandas
+// sencillas donde no hace falta ir producto por producto).
 function kdsMarcarListo(ix,area){
   var p=state.pedidos[ix]; if(!p||!p._fbKey) return;
+  var items=(p.items||[]).map(function(l){ if((l.area||'barra')===area && !l.listo){ return Object.assign({},l,{listo:true,listoTs:Date.now()}); } return l; });
   var campo=area==='cocina'?'estadoCocina':'estadoBarra';
-  var upd={}; upd[campo]='listo';
+  var upd={items:items}; upd[campo]='listo';
   var otra=area==='cocina'?p.estadoBarra:p.estadoCocina;
   var quedaListo=(!otra || otra==='listo');
   fbPedidosRef(state.sucursal).child(p._fbKey).update(upd).then(function(){
-    // Si ya tiene repartidor asignado, se ofrece avisarle por WhatsApp que ya puede recogerlo.
     if(p.tipo==='domicilio' && quedaListo && p.repartidorId) _avisarRepartidorListo(Object.assign({},p,upd));
   }).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
   showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista');
@@ -1756,10 +1783,16 @@ function renderKds(){
       if(area!=='todas'&&area!==ar) return;
       var estado=ar==='cocina'?p.estadoCocina:p.estadoBarra;
       if(!estado||estado==='listo') return;
-      var its=(p.items||[]).filter(function(l){return (l.area||'barra')===ar;});
-      if(!its.length) return;
-      var rows=its.map(function(l){ return '<div class="kdc-item"><span class="kdc-q">'+l.qty+'x</span><span class="kdc-n">'+esc(l.name)+(l.mods?'<div class="kdc-mods">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="kdc-note">'+esc(l.note)+'</div>':'')+'</span></div>'; }).join('');
-      cards+='<div class="kds-card '+ar+'"><div class="kdc-top"><span class="kdc-folio">'+esc(p.id)+'</span><span class="kdc-timer" data-ts="'+(p._ts||0)+'">--:--</span><span class="kdc-area">'+AREA_LABEL[ar]+'</span></div><div class="kdc-meta">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(p.hora)+(p.cliente&&p.cliente.nombre?' &middot; <b>'+esc(p.cliente.nombre)+'</b>':'')+'</div>'+rows+'<button class="kdc-btn" onclick="kdsMarcarListo('+ix+',\''+ar+'\')">Marcar listo</button></div>';
+      var itsConIdx=[]; (p.items||[]).forEach(function(l,li){ if((l.area||'barra')===ar) itsConIdx.push({l:l,li:li}); });
+      if(!itsConIdx.length) return;
+      var pendientes=itsConIdx.filter(function(x){return !x.l.listo;}).length;
+      var rows=itsConIdx.map(function(x){
+        var l=x.l, li=x.li;
+        return '<div class="kdc-item'+(l.listo?' kdc-item-listo':'')+'"><div class="kdc-item-info"><span class="kdc-q">'+l.qty+'x</span><span class="kdc-n">'+esc(l.name)+(l.mods?'<div class="kdc-mods">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="kdc-note">'+esc(l.note)+'</div>':'')+'</span></div>'+
+          (l.listo?'<span class="kdc-check">&#10003;</span>':'<button class="kdc-item-btn" onclick="kdsMarcarProductoListo('+ix+',\''+ar+'\','+li+')">Listo</button>')+
+        '</div>';
+      }).join('');
+      cards+='<div class="kds-card '+ar+'"><div class="kdc-top"><span class="kdc-folio">'+esc(p.id)+'</span><span class="kdc-timer" data-ts="'+(p._ts||0)+'">--:--</span><span class="kdc-area">'+AREA_LABEL[ar]+(pendientes<itsConIdx.length?' &middot; '+pendientes+' pend.':'')+'</span></div><div class="kdc-meta">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+esc(p.hora)+(p.cliente&&p.cliente.nombre?' &middot; <b>'+esc(p.cliente.nombre)+'</b>':'')+'</div>'+rows+(pendientes>1?'<button class="kdc-btn" onclick="kdsMarcarListo('+ix+',\''+ar+'\')">Marcar todo listo</button>':'')+'</div>';
     });
   });
   if(!cards) cards='<div class="cart-empty">Sin comandas pendientes</div>';
@@ -1894,7 +1927,7 @@ function editarPedido(ix){
   var p=state.pedidos[ix]; if(!p||!p._fbKey||p.estado!=='abierto') return;
   state.cart=(p.items||[]).map(function(l){
     var prodCat=(CATALOG[state.sucursal]||[]).filter(function(x){return x.name===l.name;})[0];
-    return {uid:Date.now()+Math.random(),id:l.id||(prodCat?prodCat.id:null),name:l.name,price:l.price,qty:l.qty,note:l.note||'',area:l.area||'barra',mods:l.mods||'',size:l.size||null,modDeltas:l.modDeltas||[]};
+    return {uid:Date.now()+Math.random(),id:l.id||(prodCat?prodCat.id:null),name:l.name,price:l.price,qty:l.qty,note:l.note||'',area:l.area||'barra',mods:l.mods||'',size:l.size||null,modDeltas:l.modDeltas||[],listo:l.listo||false,listoTs:l.listoTs||null};
   });
   state.tipoOrden=p.mesa?'aqui':p.tipo;
   state.mesa=p.mesa||null;
