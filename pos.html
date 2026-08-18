@@ -36,6 +36,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 
 /* ============ LOGIN PIN ============ */
 #scLogin{background:linear-gradient(160deg,var(--cafe),var(--cafe-medio));align-items:center;justify-content:center;color:var(--beige);}
+#btnActualizarLogin{position:fixed;top:16px;right:16px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(232,214,185,.35);background:rgba(255,255,255,.08);color:var(--beige);font-size:20px;z-index:20;}
 .login-box{width:100%;max-width:360px;text-align:center;padding:20px;}
 .login-brand{font-size:30px;font-weight:800;letter-spacing:.5px;}
 .login-brand span{color:var(--terracota-claro);}
@@ -346,6 +347,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 
 <!-- ============ LOGIN PIN ============ -->
 <div class="screen active" id="scLogin">
+  <button id="btnActualizarLogin" title="Actualizar la app a la ultima version">&#8635;</button>
   <div class="login-box">
     <div class="login-brand">luna<span>smart</span> POS</div>
     <div class="login-hi">&iexcl;Hola!</div>
@@ -869,6 +871,7 @@ function initLogin(){
   var sel=document.getElementById('loginSucursal');
   sel.innerHTML=SUCURSALES.map(function(s){return '<option value="'+s.id+'">'+esc(s.nombre)+'</option>';}).join('');
   document.getElementById('keypad').querySelectorAll('.key').forEach(function(k){ k.addEventListener('click',function(){ pinKey(k.dataset.k); }); });
+  var __btnAL=document.getElementById('btnActualizarLogin'); if(__btnAL && !__btnAL.__bound){ __btnAL.__bound=true; __btnAL.addEventListener('click',forzarActualizacion); }
   renderPinDisplay();
   if(!window.__loginKb){ window.__loginKb=true; document.addEventListener('keydown', function(e){ if(!state || state.logged) return; var sc=document.getElementById('scLogin'); if(sc && sc.classList.contains('hidden')) return; if(e.key>='0' && e.key<='9'){ pinKey(e.key); e.preventDefault(); } else if(e.key==='Backspace'){ pinKey('del'); e.preventDefault(); } else if(e.key==='Enter'){ pinKey('enter'); e.preventDefault(); } }); }
 }
