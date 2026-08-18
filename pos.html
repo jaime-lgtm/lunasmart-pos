@@ -1365,7 +1365,8 @@ function _broadcastCajaLive(){
   _cajaLiveDebounce=setTimeout(function(){
     _cajaLiveDebounce=null;
     var items=state.cart.map(function(l){ return {name:l.name||'', qty:l.qty||0, price:l.price||0, mods:l.mods||'', note:l.note||''}; });
-    var payload={ activo:items.length>0, items:items, subtotal:cartSubtotal(), descuento:cartDescuentoMonto(), total:cartTotalFinal(), tipoOrden:state.tipoOrden||null, mesa:state.mesa||null, ts:Date.now() };
+    var cliente=(state.cliente&&state.cliente.nombre)?{nombre:state.cliente.nombre, puntos:state.puntosDisponibles||0}:null;
+    var payload={ activo:(items.length>0||!!cliente), items:items, subtotal:cartSubtotal(), descuento:cartDescuentoMonto(), total:cartTotalFinal(), tipoOrden:state.tipoOrden||null, mesa:state.mesa||null, cliente:cliente, ts:Date.now() };
     fbAuthReady.then(function(){ fbDb.ref('cajaLive/'+state.sucursal).set(payload).catch(function(){}); });
   }, 250);
 }

@@ -14,15 +14,19 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
 body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select:none;}
+.hidden{display:none!important;}
 
 /* ---- Pantalla ociosa (sin pedido activo) ---- */
-#idle{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+#idle{position:fixed;inset:0;overflow:hidden;}
+#idlePromoImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+#idleBrand{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;
   background:linear-gradient(160deg,var(--cafe),var(--cafe-medio));color:var(--beige);text-align:center;padding:40px;}
-#idle .logo{width:120px;height:120px;border-radius:26px;background:var(--cafe);border:3px solid var(--terracota-claro);display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:900;color:var(--beige);box-shadow:0 10px 40px rgba(0,0,0,.35);}
-#idle h1{font-size:clamp(28px,4vw,52px);font-weight:800;letter-spacing:.5px;}
-#idle h1 b{color:var(--terracota-claro);}
-#idle p{font-size:clamp(16px,1.6vw,22px);opacity:.85;max-width:640px;}
-#idle .suc{position:absolute;bottom:22px;right:28px;font-size:14px;opacity:.6;}
+#idleBrand .logo{width:120px;height:120px;border-radius:26px;background:var(--cafe);border:3px solid var(--terracota-claro);display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:900;color:var(--beige);box-shadow:0 10px 40px rgba(0,0,0,.35);overflow:hidden;}
+#idleBrand .logo img{width:100%;height:100%;object-fit:contain;}
+#idleBrand h1{font-size:clamp(28px,4vw,52px);font-weight:800;letter-spacing:.5px;}
+#idleBrand h1 b{color:var(--terracota-claro);}
+#idleBrand p{font-size:clamp(16px,1.6vw,22px);opacity:.85;max-width:640px;}
+#idle .suc{position:absolute;bottom:22px;right:28px;font-size:14px;opacity:.6;color:var(--beige);z-index:2;}
 
 /* ---- Pantalla de pedido en construccion ---- */
 #live{position:fixed;inset:0;display:none;flex-direction:column;background:#fff;}
@@ -31,7 +35,11 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
 .live-head{background:var(--cafe);color:var(--beige);padding:26px 40px;display:flex;align-items:center;justify-content:space-between;}
 .live-head .t{font-size:clamp(22px,2.6vw,32px);font-weight:800;}
 .live-head .tipo{font-size:clamp(14px,1.4vw,18px);opacity:.8;margin-top:4px;}
+.cliente-banner{background:var(--terracota);color:#fff;padding:16px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.cliente-banner .cb-hola{font-size:clamp(18px,2vw,24px);font-weight:800;}
+.cliente-banner .cb-puntos{font-size:clamp(14px,1.6vw,18px);font-weight:700;opacity:.95;}
 .live-body{flex:1;overflow-y:auto;padding:20px 40px;}
+.live-empty{color:var(--gris);font-size:clamp(16px,1.8vw,20px);text-align:center;padding:60px 20px;}
 .li{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:18px 0;border-bottom:1px solid var(--linea);}
 .li .info{flex:1;}
 .li .n{font-size:clamp(19px,2.2vw,27px);font-weight:700;color:var(--cafe);}
@@ -47,9 +55,12 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
 <body>
 
 <div id="idle">
-  <div class="logo">LS</div>
-  <h1>luna<b>smart</b> &middot; Sueño de Luna</h1>
-  <p>Café &amp; Roasters — Coffee, Bakery &amp; Roasters</p>
+  <img id="idlePromoImg" class="hidden">
+  <div id="idleBrand">
+    <div class="logo"><img id="idleLogoImg" class="hidden"><span id="idleLogoFallback">LS</span></div>
+    <h1>luna<b>smart</b> &middot; Sueño de Luna</h1>
+    <p>Café &amp; Roasters — Coffee, Bakery &amp; Roasters</p>
+  </div>
   <div class="suc" id="sucLbl"></div>
 </div>
 
@@ -59,6 +70,10 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
       <div class="t">Tu pedido</div>
       <div class="tipo" id="liveTipo"></div>
     </div>
+  </div>
+  <div class="cliente-banner hidden" id="clienteBanner">
+    <div class="cb-hola">¡Bienvenido<span id="cbNombre"></span>!</div>
+    <div class="cb-puntos hidden" id="cbPuntosWrap">🌙 <span id="cbPuntos"></span> puntos disponibles</div>
   </div>
   <div class="live-body" id="liveItems"></div>
   <div class="live-foot">
@@ -93,22 +108,42 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ ret
 
 var params = new URLSearchParams(location.search);
 var suc = params.get('suc');
+var _activoActual = false;
 
 function pintar(data){
   var idle=document.getElementById('idle'), live=document.getElementById('live');
-  if(!data || !data.activo || !(data.items||[]).length){
+  var activo = !!(data && data.activo);
+  _activoActual = activo;
+  if(!activo){
     idle.classList.remove('hide'); live.classList.remove('show');
     return;
   }
   idle.classList.add('hide'); live.classList.add('show');
   var tipoTxt = data.mesa ? ('Mesa '+data.mesa) : (data.tipoOrden ? (TIPO_LABEL[data.tipoOrden]||'') : '');
   document.getElementById('liveTipo').textContent = tipoTxt;
-  document.getElementById('liveItems').innerHTML = data.items.map(function(it){
-    return '<div class="li"><div class="info"><div class="n">'+esc(it.name)+'</div>'+
-      (it.mods?'<div class="m">'+esc(it.mods)+'</div>':'')+
-      (it.note?'<div class="note">'+esc(it.note)+'</div>':'')+
-      '</div><div class="q">x'+(it.qty||1)+'</div><div class="p">'+money((it.price||0)*(it.qty||1))+'</div></div>';
-  }).join('');
+
+  var banner=document.getElementById('clienteBanner');
+  if(data.cliente && data.cliente.nombre){
+    banner.classList.remove('hidden');
+    document.getElementById('cbNombre').textContent = ', '+data.cliente.nombre;
+    var pw=document.getElementById('cbPuntosWrap');
+    if(data.cliente.puntos>0){ pw.classList.remove('hidden'); document.getElementById('cbPuntos').textContent = data.cliente.puntos; }
+    else { pw.classList.add('hidden'); }
+  } else {
+    banner.classList.add('hidden');
+  }
+
+  var items=data.items||[];
+  if(!items.length){
+    document.getElementById('liveItems').innerHTML = '<div class="live-empty">Armando tu pedido...</div>';
+  } else {
+    document.getElementById('liveItems').innerHTML = items.map(function(it){
+      return '<div class="li"><div class="info"><div class="n">'+esc(it.name)+'</div>'+
+        (it.mods?'<div class="m">'+esc(it.mods)+'</div>':'')+
+        (it.note?'<div class="note">'+esc(it.note)+'</div>':'')+
+        '</div><div class="q">x'+(it.qty||1)+'</div><div class="p">'+money((it.price||0)*(it.qty||1))+'</div></div>';
+    }).join('');
+  }
   document.getElementById('rowSub').textContent = money(data.subtotal);
   var dw=document.getElementById('rowDescWrap');
   if(data.descuento>0){ dw.classList.remove('hidden'); document.getElementById('rowDesc').textContent='-'+money(data.descuento); }
@@ -116,12 +151,46 @@ function pintar(data){
   document.getElementById('rowTotal').textContent = money(data.total);
 }
 
+/* ---- Configuracion de pantalla (logo + promos en espera), editable desde
+   lunasmart.suenodeluna.com.mx -- se refleja en vivo via .on('value'), sin
+   necesidad de reabrir esta app ni reinstalar nada. ---- */
+var _promoImages = [];
+var _promoIx = 0;
+var _promoTimer = null;
+
+function pintarConfig(cfg){
+  cfg = cfg || {};
+  var logoImg=document.getElementById('idleLogoImg'), logoFallback=document.getElementById('idleLogoFallback');
+  if(cfg.logoUrl){ logoImg.src=cfg.logoUrl; logoImg.classList.remove('hidden'); logoFallback.classList.add('hidden'); }
+  else { logoImg.classList.add('hidden'); logoFallback.classList.remove('hidden'); }
+
+  _promoImages = (cfg.promoImages||[]).filter(Boolean);
+  var seg = cfg.duracionSegundos>0 ? cfg.duracionSegundos : 30;
+  if(_promoTimer){ clearInterval(_promoTimer); _promoTimer=null; }
+  var promoEl=document.getElementById('idlePromoImg'), brandEl=document.getElementById('idleBrand');
+  if(!_promoImages.length){
+    promoEl.classList.add('hidden'); brandEl.classList.remove('hidden');
+    return;
+  }
+  _promoIx = 0;
+  function mostrarPromoActual(){
+    promoEl.src = _promoImages[_promoIx];
+    promoEl.classList.remove('hidden'); brandEl.classList.add('hidden');
+  }
+  mostrarPromoActual();
+  _promoTimer = setInterval(function(){
+    _promoIx = (_promoIx+1) % _promoImages.length;
+    mostrarPromoActual();
+  }, seg*1000);
+}
+
 if(!suc){
-  document.getElementById('idle').innerHTML = '<div class="logo">LS</div><h1>Falta configurar</h1><p>Abre esta pantalla desde el POS: Configuración → Doble pantalla → Abrir pantalla de cliente.</p>';
+  document.getElementById('idleBrand').innerHTML = '<div class="logo">LS</div><h1>Falta configurar</h1><p>Abre esta pantalla desde el POS: Configuración → Doble pantalla → Abrir pantalla de cliente.</p>';
 } else {
   document.getElementById('sucLbl').textContent = NOMBRES[suc] || suc;
   fbAuthReady.then(function(){
     fbDb.ref('cajaLive/'+suc).on('value', function(snap){ pintar(snap.val()); });
+    fbDb.ref('displayConfig/'+suc).on('value', function(snap){ pintarConfig(snap.val()); });
   });
 }
 </script>
