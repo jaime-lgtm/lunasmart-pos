@@ -16,6 +16,17 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+      - name: Restore stable debug keystore (para que la firma no cambie entre builds)
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+      - name: Generar keystore si no existe todavia
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
