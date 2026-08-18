@@ -2217,6 +2217,12 @@ var SYNC = {
     if(!token || !sucursalInventario) return Promise.resolve({status:'ok', actualizados:0});
     var body = { token: token, accion: "descontarInventarioVenta", datos: { sucursal: sucursalInventario, items: items } };
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  registrarTiempos: function(registros){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token || !registros || !registros.length) return Promise.resolve({status:'ok', insertados:0});
+    var body = { token: token, accion: "registrarTiempos", datos: { registros: registros } };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
   }
 };
 var _reenviarEnCurso=false;
@@ -2336,7 +2342,11 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
-  function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:false}).catch(function(){}); }); renderCaja(); renderTopbar(); if(typeof onDone==='function') onDone(payload); }
+  // Capturado AQUI, antes de que _finalizar borre pedidos/{suc} -- es la
+  // unica oportunidad de guardar estos tiempos en algo que sobreviva al
+  // corte (Sheets), ya que Firebase se vacia al cerrar turno.
+  var __registrosTiempo=_calcularTiemposCorte(payload.corteId);
+  function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:false}).catch(function(){}); }); if(__registrosTiempo.length) SYNC.registrarTiempos(__registrosTiempo).catch(function(){}); renderCaja(); renderTopbar(); if(typeof onDone==='function') onDone(payload); }
   if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local – falta configurar sincronización)"); return; }
   showToast("Enviando corte a Luna Smart...");
   SYNC.enviarCorte(payload).then(function(res){
@@ -2345,6 +2355,33 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   }).catch(function(err){ guardarCortePendiente(payload); _finalizar("Sin conexión: corte guardado local para reintentar"); });
 }
 function fechaHoyDDMMYYYY(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear(); }
+/* Un renglon por articulo marcado "listo" en este turno -- tiempo desde que
+   se creo el pedido hasta que se marco listo en Estacion. Se manda a Sheets
+   (BD_TIEMPOS) porque pedidos/{suc} se borra al cerrar turno; sin esto no
+   quedaria ningun rastro para comparar dias/semanas despues. */
+function _calcularTiemposCorte(corteId){
+  var registros=[];
+  var sucSheet=SYNC.sucursalSheet(state.sucursal);
+  var turno=state.turno||'TURNO MAÑANA';
+  var fecha=fechaHoyDDMMYYYY();
+  (state.pedidos||[]).forEach(function(p){
+    var creado=p._ts;
+    if(!creado) return;
+    (p.items||[]).forEach(function(it){
+      if(!it.listo || !it.listoTs) return;
+      var minutos=Math.round((it.listoTs-creado)/6000)/10;
+      if(!(minutos>=0)) return;
+      var d=new Date(it.listoTs);
+      var hh=d.getHours(), mm=d.getMinutes();
+      registros.push({
+        sucursal: sucSheet, turno: turno, fecha: fecha,
+        hora: (hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm,
+        producto: it.name||'', area: it.area||'', minutos: minutos, corteId: corteId
+      });
+    });
+  });
+  return registros;
+}
 function abrirResumenCierre(finalDelDia){
   var __pend=(state.pedidos||[]).filter(function(p){ return (p.estadoBarra&&p.estadoBarra!=='listo')||(p.estadoCocina&&p.estadoCocina!=='listo'); });
   if(__pend.length){ showToast('No puedes cerrar: hay '+__pend.length+' orden(es) pendientes en monitores. Márcalas como listas.'); return; }
