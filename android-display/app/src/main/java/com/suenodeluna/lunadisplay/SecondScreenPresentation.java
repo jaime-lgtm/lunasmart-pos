@@ -33,7 +33,10 @@ public class SecondScreenPresentation extends Presentation {
         // cliente que se agregaron despues) en vez de bajar la mas reciente.
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         webView.clearCache(true);
-        webView.loadUrl(URL + "?_t=" + System.currentTimeMillis());
+        // OJO: URL ya trae "?suc=cafeteria" -- el separador del siguiente
+        // parametro tiene que ser "&", no "?" (dos "?" en una URL rompe el
+        // query string entero y "suc" deja de valer "cafeteria").
+        webView.loadUrl(URL + "&_t=" + System.currentTimeMillis());
         setContentView(webView);
     }
 }
