@@ -19,6 +19,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Permite que pos.html (Configuracion -> Doble pantalla) relance
+                 esta app navegando a lunadisplay://open, sin que el cajero
+                 tenga que buscar el icono en el escritorio de Android. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="lunadisplay" android:host="open"/>
+            </intent-filter>
         </activity>
 
         <service

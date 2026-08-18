@@ -12,7 +12,11 @@ import android.view.Display;
 
 /** Foreground service (no una Activity) para que la Presentation en la
     segunda pantalla siga viva aunque no haya ninguna ventana de esta app
-    al frente en la pantalla principal. */
+    al frente en la pantalla principal. La conexion a la pantalla se rehace
+    en onStartCommand (no solo en onCreate) para que CADA relanzamiento --
+    desde el icono de Android o desde el boton "Doble pantalla" del POS --
+    tire la Presentation vieja y cargue una WebView nueva, sin caches
+    obsoletos ni contenido pegado de una version anterior. */
 public class DisplayService extends Service {
     private static final String CHANNEL_ID = "luna_display_channel";
     private SecondScreenPresentation presentation;
@@ -21,11 +25,17 @@ public class DisplayService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
         startForeground(1, buildNotification());
         attachToSecondScreen();
+        return START_STICKY;
     }
 
     private void attachToSecondScreen() {
+        if (presentation != null) { presentation.dismiss(); presentation = null; }
         DisplayManager dm = (DisplayManager) getSystemService(DISPLAY_SERVICE);
         Display[] presentationDisplays = dm.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION);
         Display target = null;

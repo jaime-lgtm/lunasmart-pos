@@ -1736,18 +1736,17 @@ function configSync(){
   });
 }
 function configDoblePantalla(){
-  var suc=state.sucursal;
-  var url=location.href.replace(/[^/]*$/,'')+'display.html?suc='+encodeURIComponent(suc);
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
     '<h2>Pantalla de cliente</h2>'+
-    '<div class="sub" style="margin-bottom:12px">Abre una ventana nueva que muestra en vivo lo que se est&aacute; cobrando (art&iacute;culos, modificadores y total). Arrastra esa ventana a la segunda pantalla y p&oacute;nla en pantalla completa. Cuando no hay ning&uacute;n pedido en construcci&oacute;n, muestra la marca de la cafeter&iacute;a en vez del pedido.</div>'+
-    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Abrir pantalla de cliente</button></div></div></div>';
+    '<div class="sub" style="margin-bottom:12px">La pantalla f&iacute;sica secundaria de este equipo la maneja una app aparte instalada en la tablet (<b>LunaSmart Display</b>) -- Android no deja que una p&aacute;gina web comun controle esa pantalla directamente, por eso no es un bot&oacute;n normal del sitio.</div>'+
+    '<div class="sub" style="margin-bottom:12px">Si esa pantalla se ve desactualizada (no refleja el logo, las promociones o el pedido en vivo), toca "Reiniciar pantalla de cliente" -- intenta relanzar la app y forzarla a cargar la versi&oacute;n mas reciente. Si no reacciona, ve manualmente al &iacute;cono <b>LunaSmart Display</b> en la pantalla de inicio de Android, ci&eacute;rralo desde apps recientes (desliz&aacute;ndolo hacia arriba) y &aacute;brelo de nuevo.</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Reiniciar pantalla de cliente</button></div></div></div>';
   document.getElementById('mCancel').addEventListener('click',closeModal);
   document.getElementById('mOk').addEventListener('click',function(){
-    window.open(url,'lunaDisplay','width=1024,height=768');
     localStorage.setItem('ls_display_usada','1');
     closeModal();
-    showToast('Pantalla de cliente abierta en una ventana nueva -- arrástrala a la segunda pantalla');
+    showToast('Intentando reiniciar la pantalla de cliente...');
+    try{ window.location.href='lunadisplay://open'; }catch(e){}
   });
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
 }

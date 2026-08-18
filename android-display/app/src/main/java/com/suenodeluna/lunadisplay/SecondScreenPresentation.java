@@ -28,7 +28,12 @@ public class SecondScreenPresentation extends Presentation {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        webView.loadUrl(URL);
+        // Sin esto, el WebView puede quedarse sirviendo una version vieja de
+        // display.html (y por lo tanto sin el logo/promos/bienvenida al
+        // cliente que se agregaron despues) en vez de bajar la mas reciente.
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webView.clearCache(true);
+        webView.loadUrl(URL + "?_t=" + System.currentTimeMillis());
         setContentView(webView);
     }
 }
