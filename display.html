@@ -154,9 +154,13 @@ function pintar(data){
 /* ---- Configuracion de pantalla (logo + promos en espera), editable desde
    lunasmart.suenodeluna.com.mx -- se refleja en vivo via .on('value'), sin
    necesidad de reabrir esta app ni reinstalar nada. ---- */
-var _promoImages = [];
-var _promoIx = 0;
-var _promoTimer = null;
+// _slides mezcla la marca (logo) y las promociones en UN solo carrusel --
+// null representa "muestra la marca", cualquier otra cosa es una URL de
+// promocion. Asi el logo tambien se turna en el ciclo en vez de quedar
+// tapado para siempre en cuanto hay alguna promocion cargada.
+var _slides = [null];
+var _slideIx = 0;
+var _slideTimer = null;
 
 function pintarConfig(cfg){
   cfg = cfg || {};
@@ -164,24 +168,28 @@ function pintarConfig(cfg){
   if(cfg.logoUrl){ logoImg.src=cfg.logoUrl; logoImg.classList.remove('hidden'); logoFallback.classList.add('hidden'); }
   else { logoImg.classList.add('hidden'); logoFallback.classList.remove('hidden'); }
 
-  _promoImages = (cfg.promoImages||[]).filter(Boolean);
+  var promos = (cfg.promoImages||[]).filter(Boolean);
   var seg = cfg.duracionSegundos>0 ? cfg.duracionSegundos : 30;
-  if(_promoTimer){ clearInterval(_promoTimer); _promoTimer=null; }
+  _slides = [null].concat(promos);
+  _slideIx = 0;
+  if(_slideTimer){ clearInterval(_slideTimer); _slideTimer=null; }
+  _mostrarSlideActual();
+  if(_slides.length>1){
+    _slideTimer = setInterval(function(){
+      _slideIx = (_slideIx+1) % _slides.length;
+      _mostrarSlideActual();
+    }, seg*1000);
+  }
+}
+function _mostrarSlideActual(){
   var promoEl=document.getElementById('idlePromoImg'), brandEl=document.getElementById('idleBrand');
-  if(!_promoImages.length){
-    promoEl.classList.add('hidden'); brandEl.classList.remove('hidden');
-    return;
-  }
-  _promoIx = 0;
-  function mostrarPromoActual(){
-    promoEl.src = _promoImages[_promoIx];
+  var slide = _slides[_slideIx];
+  if(slide){
+    promoEl.src = slide;
     promoEl.classList.remove('hidden'); brandEl.classList.add('hidden');
+  } else {
+    promoEl.classList.add('hidden'); brandEl.classList.remove('hidden');
   }
-  mostrarPromoActual();
-  _promoTimer = setInterval(function(){
-    _promoIx = (_promoIx+1) % _promoImages.length;
-    mostrarPromoActual();
-  }, seg*1000);
 }
 
 if(!suc){
