@@ -1374,6 +1374,41 @@ function _broadcastCajaLive(){
   }, 250);
 }
 
+/* ---- Cumpleanos: 3 selects (dia/mes/anio) en vez de <input type="date">,
+   porque el selector nativo de la tablet solo deja brincar mes por mes --
+   para un cliente nacido hace 20 anios eso son cientos de taps. El valor
+   se guarda/lee igual que antes (formato YYYY-MM-DD) para no tocar el resto
+   del sistema (Sheets, Firebase, reportes de cumpleanos, etc). ---- */
+function _cumpleOpcionesDia(){
+  var h='<option value="">D&iacute;a</option>';
+  for(var d=1;d<=31;d++){ var v=(d<10?'0':'')+d; h+='<option value="'+v+'">'+d+'</option>'; }
+  return h;
+}
+function _cumpleOpcionesMes(){
+  var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var h='<option value="">Mes</option>';
+  meses.forEach(function(m,i){ var v=(i+1<10?'0':'')+(i+1); h+='<option value="'+v+'">'+m+'</option>'; });
+  return h;
+}
+function _cumpleOpcionesAnio(){
+  var actual=new Date().getFullYear();
+  var h='<option value="">A&ntilde;o</option>';
+  for(var a=actual;a>=actual-100;a--){ h+='<option value="'+a+'">'+a+'</option>'; }
+  return h;
+}
+function _pintarCumpleSelects(valorISO){
+  var partes=(valorISO||'').split('-');
+  var elD=document.getElementById('clienteCumpleDia'), elM=document.getElementById('clienteCumpleMes'), elA=document.getElementById('clienteCumpleAnio');
+  if(!elD||!elM||!elA) return;
+  elA.value=partes[0]||''; elM.value=partes[1]||''; elD.value=partes[2]||'';
+}
+function _leerCumpleSelects(){
+  var elD=document.getElementById('clienteCumpleDia'), elM=document.getElementById('clienteCumpleMes'), elA=document.getElementById('clienteCumpleAnio');
+  if(!elD||!elM||!elA) return '';
+  var d=elD.value, m=elM.value, a=elA.value;
+  if(!d||!m||!a) return '';
+  return a+'-'+m+'-'+d;
+}
 /* ---- Nota ---- */
 function openNota(){
   if(!state.cart.length){ showToast('Agrega art&iacute;culos primero'); return; }
@@ -1384,9 +1419,14 @@ function openNota(){
     '<div class="sub" style="margin-bottom:12px">Nombre para llamarlo, y tel&eacute;fono para Puntos de Lealtad</div>'+
     '<div class="field"><label>Tel&eacute;fono (opcional)</label><input id="clienteTelTxt" type="tel" inputmode="tel" value="'+esc(telActual)+'" placeholder="10 d&iacute;gitos"></div>'+
     '<div class="sub" id="clienteLealtadStatus" style="margin:-6px 0 12px;min-height:16px;"></div>'+
-    '<div class="field"><label>Nombre</label><input id="clienteNombreTxt" value="'+esc(nombreActual)+'" placeholder="Ej. Ana"></div>'+
-    '<div class="field"><label>Cumplea&ntilde;os (opcional)</label><input id="clienteCumpleTxt" type="date" value="'+esc(cumpleActual)+'"></div>'+
+    '<div class="field"><label>Nombre</label><input id="clienteNombreTxt" value="'+esc(nombreActual)+'" placeholder="Nombre y apellido"></div>'+
+    '<div class="field"><label>Cumplea&ntilde;os (opcional)</label><div style="display:flex;gap:6px">'+
+      '<select id="clienteCumpleDia" style="flex:0 0 72px">'+_cumpleOpcionesDia()+'</select>'+
+      '<select id="clienteCumpleMes" style="flex:1.6">'+_cumpleOpcionesMes()+'</select>'+
+      '<select id="clienteCumpleAnio" style="flex:0 0 84px">'+_cumpleOpcionesAnio()+'</select>'+
+    '</div></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  _pintarCumpleSelects(cumpleActual);
   var telInput=document.getElementById('clienteTelTxt'), estadoEl=document.getElementById('clienteLealtadStatus');
   state._lealtadEncontrado=null; state._debeInscribir=false;
   var buscarTimer=null, ultimaBusqueda='';
@@ -1399,7 +1439,7 @@ function openNota(){
       if(cli && res.origen==='lealtad'){
         state._lealtadEncontrado=cli; state._debeInscribir=true;
         if(!document.getElementById('clienteNombreTxt').value.trim() && cli.nombre) document.getElementById('clienteNombreTxt').value=cli.nombre;
-        if(!document.getElementById('clienteCumpleTxt').value && cli.cumpleanos) document.getElementById('clienteCumpleTxt').value=cli.cumpleanos;
+        if(!_leerCumpleSelects() && cli.cumpleanos) _pintarCumpleSelects(cli.cumpleanos);
         estadoEl.innerHTML='<b style="color:var(--verde-ok);">✓ '+etiquetaCliente(cli.visitas)+'</b> &middot; '+(cli.puntos||0)+' puntos disponibles';
       } else if(cli && res.origen==='domicilio'){
         state._lealtadEncontrado=null; state._debeInscribir=true;
@@ -1423,7 +1463,7 @@ function openNota(){
   bindModal(function(){
     var nombre=document.getElementById('clienteNombreTxt').value.trim();
     var tel=document.getElementById('clienteTelTxt').value.replace(/\D/g,'');
-    var cumple=document.getElementById('clienteCumpleTxt').value||'';
+    var cumple=_leerCumpleSelects();
     state.cliente=state.cliente||{};
     state.cliente.nombre=nombre;
     state.cliente.telefono=tel||state.cliente.telefono||'';
@@ -2018,6 +2058,8 @@ function ticketTextoWhatsApp(p){
   lineas.push('*TOTAL: '+money(p.total)+'*');
   lineas.push('');
   lineas.push('\u00a1Gracias por tu compra! \ud83c\udf19');
+  lineas.push('');
+  lineas.push('\u00bfSe te antoj\u00f3 algo m\u00e1s? Pide en l\u00ednea en pedidos.suenodeluna.com.mx');
   return lineas.join('\n');
 }
 function enviarTicketWhatsApp(p){
