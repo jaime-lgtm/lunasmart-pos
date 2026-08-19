@@ -465,6 +465,8 @@ firebase.initializeApp(firebaseConfig);
 var fbDb = firebase.database();
 var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 var fbPedidosListener = null, fbListenerSuc = null;
+var _terminalesMP = {};
+fbAuthReady.then(function(){ fbDb.ref('terminalesMP').on('value', function(snap){ _terminalesMP = snap.val() || {}; }); });
 
 function fbPedidosRef(suc){ return fbDb.ref('pedidos/'+suc); }
 
@@ -1525,11 +1527,90 @@ function closeCheckout(){ state.checkoutOpen=false; closeModal(); }
 function _pagoRerender(){ if(state.checkoutOpen) renderCheckout(); else if(_cobroPedidoIx!=null) renderCobroPedido(); }
 function seleccionarMetodoDividido(m){ state.dividirMetodoSel=m; _pagoRerender(); }
 function totalPagosDivididos(){ return state.pagosDivididos.reduce(function(s,p){return s+p.monto;},0); }
+
+/* ---- Cobro automático con la terminal física Mercado Pago Point ----
+   Al agregar un pago "tarjeta" con la terminal configurada para esta
+   sucursal (terminalesMP/{sucursal} en Firebase), el monto se envía solo
+   a la terminal -- el cajero no vuelve a teclear nada, solo espera a que
+   el cliente pague ahí. Si no hay terminal configurada, cae de regreso al
+   registro manual de siempre. */
+var _mpPolling=null, _mpCobroActivo=false;
+function _mpDetenerPolling(){ if(_mpPolling){ clearInterval(_mpPolling); _mpPolling=null; } _mpCobroActivo=false; }
+function _mpOverlayHTML(msg,conCancelar){
+  return '<div class="modal-bg" id="mpOverlayBg"><div class="modal" style="text-align:center">'+
+    '<div style="font-size:40px;margin-bottom:10px">💳</div>'+
+    '<h2 style="margin-bottom:8px">Cobro con terminal</h2>'+
+    '<div id="mpOverlayMsg" style="color:var(--cafe-medio);font-weight:600;min-height:40px">'+esc(msg)+'</div>'+
+    (conCancelar?'<div class="modal-actions" style="margin-top:16px"><button class="btn-cancel" id="mpOverlayCancel">Cancelar cobro</button></div>':'')+
+    '</div></div>';
+}
+function _mpCerrarOverlay(){ var el=document.getElementById('mpOverlayBg'); if(el) el.remove(); }
+function _mpMostrarCancelar(orderId){
+  var modal=document.querySelector('#mpOverlayBg .modal');
+  if(modal && !document.getElementById('mpOverlayCancel')){
+    modal.insertAdjacentHTML('beforeend','<div class="modal-actions" style="margin-top:16px"><button class="btn-cancel" id="mpOverlayCancel">Cancelar cobro</button></div>');
+    document.getElementById('mpOverlayCancel').addEventListener('click',function(){
+      _mpDetenerPolling();
+      SYNC.mpCancelarCobroTerminal(orderId).catch(function(){});
+      _mpCerrarOverlay();
+      showToast('Cobro cancelado');
+    });
+  }
+}
+function cobrarConTerminalMP(monto){
+  var terminalId=_terminalesMP[state.sucursal];
+  if(!terminalId){
+    showToast('Terminal no configurada para esta sucursal -- se registra como pago manual');
+    state.pagosDivididos.push({metodo:'tarjeta',monto:monto});
+    _pagoRerender();
+    return;
+  }
+  if(_mpCobroActivo){ showToast('Ya hay un cobro en curso en la terminal'); return; }
+  _mpCobroActivo=true;
+  document.getElementById('modalHost').insertAdjacentHTML('beforeend', _mpOverlayHTML('Enviando '+money(monto)+' a la terminal...',false));
+  var referencia='pos_'+(state._editandoPedidoId||Date.now())+'_'+Date.now();
+  SYNC.mpCrearCobroTerminal({terminalId:terminalId,monto:monto,referencia:referencia}).then(function(res){
+    if(!res||res.status!=='ok'){
+      _mpCobroActivo=false; _mpCerrarOverlay();
+      showToast('No se pudo enviar el cobro a la terminal'+(res&&res.msg?(': '+res.msg):''));
+      return;
+    }
+    var orderId=res.orderId;
+    var msgEl=document.getElementById('mpOverlayMsg');
+    if(msgEl) msgEl.textContent='Esperando a que el cliente pague en la terminal...';
+    _mpMostrarCancelar(orderId);
+    var intentos=0;
+    _mpPolling=setInterval(function(){
+      intentos++;
+      if(intentos>60){ _mpDetenerPolling(); _mpCerrarOverlay(); showToast('La terminal no respondió a tiempo -- intenta de nuevo'); return; }
+      SYNC.mpConsultarCobroTerminal(orderId).then(function(r){
+        if(!r||r.status!=='ok') return;
+        if(r.estado==='processed'){
+          _mpDetenerPolling(); _mpCerrarOverlay();
+          state.pagosDivididos.push({metodo:'tarjeta',monto:monto});
+          _pagoRerender();
+          showToast('✓ Pago con tarjeta aprobado');
+        } else if(r.estado==='failed'){
+          _mpDetenerPolling(); _mpCerrarOverlay();
+          showToast('El pago fue rechazado -- intenta de nuevo');
+        } else if(r.estado==='canceled'){
+          _mpDetenerPolling(); _mpCerrarOverlay();
+          showToast('Cobro cancelado en la terminal');
+        }
+      }).catch(function(){});
+    },3000);
+  }).catch(function(){
+    _mpCobroActivo=false; _mpCerrarOverlay();
+    showToast('Sin conexión al crear el cobro');
+  });
+}
+
 function agregarPagoDividido(total,monto){
   monto=parseFloat(monto)||0;
   if(monto<=0){ showToast('Escribe un monto válido'); return; }
   var restanteAntes=total-totalPagosDivididos();
   if(state.dividirMetodoSel!=='efectivo' && monto>restanteAntes+0.004){ showToast('Ese monto excede lo que falta por cobrar'); return; }
+  if(state.dividirMetodoSel==='tarjeta'){ cobrarConTerminalMP(monto); return; }
   state.pagosDivididos.push({metodo:state.dividirMetodoSel,monto:monto});
   _pagoRerender();
 }
@@ -2264,6 +2345,24 @@ var SYNC = {
     var url = this.getUrl(), token = this.getToken();
     if(!token || !registros || !registros.length) return Promise.resolve({status:'ok', insertados:0});
     var body = { token: token, accion: "registrarTiempos", datos: { registros: registros } };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  mpCrearCobroTerminal: function(datos){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token) return Promise.resolve({status:'error', msg:'Sin token configurado'});
+    var body = { token: token, accion: "mpCrearCobroTerminal", datos: datos };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  mpConsultarCobroTerminal: function(orderId){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token) return Promise.resolve({status:'error'});
+    var body = { token: token, accion: "mpConsultarCobroTerminal", datos: { orderId: orderId } };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  mpCancelarCobroTerminal: function(orderId){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token) return Promise.resolve({status:'error'});
+    var body = { token: token, accion: "mpCancelarCobroTerminal", datos: { orderId: orderId } };
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
   }
 };
