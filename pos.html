@@ -785,8 +785,6 @@ var PERMISOS = {
   supervisor: {menu:true, mesas:true, kds:true, pedidos:true, config:true,  caja:true },
   admin:      {menu:true, mesas:true, kds:true, pedidos:true, config:true,  caja:true }
 };
-var USERS_MOCK = { '1234':{nombre:'Administrador',rol:'admin'}, '5678':{nombre:'Cajero',rol:'cajero'}, '1324':{nombre:'Monitor',rol:'monitor'} };
-
 var state = {
   logged:false, sucursal:null, role:'cajero', user:'', pin:'',
   view:'menu', tipoOrden:null, mesa:null,
@@ -856,7 +854,19 @@ function closeModal(){ document.getElementById('modalHost').innerHTML=''; }
    con estado 'nuevo' y sonara la alarma configurada. */
 var PEDIDOS_ONLINE = { enabled:false, endpoint:'', poll:function(cb){ /* TODO backend */ } };
 var API = {
-  login: function(pin,suc){ return Promise.resolve(USERS_MOCK[pin]||null); },
+  login: function(pin,suc){
+    return fbAuthReady.then(function(){ return fbDb.ref('usuariosPOS').once('value'); }).then(function(snap){
+      var val=snap.val()||{}, match=null;
+      Object.keys(val).forEach(function(id){
+        if(match) return;
+        var u=val[id];
+        if(u.pin!==pin || u.activo===false) return;
+        if(u.sucursales!=='todas' && (!u.sucursales || u.sucursales.indexOf(suc)===-1)) return;
+        match={nombre:u.nombre, rol:u.rol};
+      });
+      return match;
+    }).catch(function(e){ console.error('Error de login', e); return null; });
+  },
   getProductosPorSucursal: function(suc){ return Promise.resolve(CATALOG[suc]||[]); },
   registrarVenta: function(p){ console.log('[MOCK registrarVenta]',p); return Promise.resolve({ok:true,id_ingreso:'MOCK-'+Date.now()}); },
   cerrarTurno: function(p){ console.log('[MOCK cerrarTurno]',p); return Promise.resolve({ok:true}); }
