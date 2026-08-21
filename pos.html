@@ -1587,7 +1587,7 @@ function cobrarConTerminalMP(monto){
         if(!r||r.status!=='ok') return;
         if(r.estado==='processed'){
           _mpDetenerPolling(); _mpCerrarOverlay();
-          state.pagosDivididos.push({metodo:'tarjeta',monto:monto});
+          state.pagosDivididos.push({metodo:'tarjeta',monto:monto,mpOrderId:orderId});
           _pagoRerender();
           showToast('✓ Pago con tarjeta aprobado');
         } else if(r.estado==='failed'){
