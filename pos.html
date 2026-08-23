@@ -444,7 +444,6 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script>
 /* ============================================================
    LUNA SMART POS -- Logica (CASCARA, flujo estilo Parrot)
@@ -464,7 +463,6 @@ var firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var fbDb = firebase.database();
-var fbStorage = firebase.storage();
 var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 var fbPedidosListener = null, fbListenerSuc = null;
 var _terminalesMP = {};
@@ -2495,8 +2493,6 @@ function cajaOp(op){
    comprado a INVENTARIO via el mismo Apps Script que ya usa el admin. ============ */
 var _retiroCache={proveedores:null,catalogo:null};
 var _retiroLineas=[];
-var _retiroFotoFile=null;
-var _retiroFotoDataUrl=null;
 var _retiroProveedorVal='';
 var _retiroFolioVal='';
 
@@ -2507,7 +2503,6 @@ function _retiroTotal(){ return _retiroLineas.reduce(function(s,l){ return s+(pa
 function abrirRetiroCompra(){
   if(!SYNC.configurado()){ showToast('Configura primero la sincronización (URL y token) para registrar retiros'); return; }
   _retiroLineas=[{articulo:'',cantidad:'',precio:''}];
-  _retiroFotoFile=null; _retiroFotoDataUrl=null;
   _retiroProveedorVal=''; _retiroFolioVal='';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Retirar de caja</h2><div class="sub">Cargando proveedores y cat&aacute;logo...</div></div></div>';
   Promise.all([
@@ -2545,11 +2540,6 @@ function _renderRetiroModal(){
         '<datalist id="retArticulosDL">'+artOptions+'</datalist>'+
       '</div>'+
       '<div class="field"><label>Folio / número de ticket</label><input id="retFolio" placeholder="Ej. A-4521" autocomplete="off" value="'+esc(_retiroFolioVal)+'"></div>'+
-      '<div class="field"><label>Foto del ticket</label>'+
-        '<input type="file" id="retFoto" accept="image/*" capture="environment" style="display:none">'+
-        '<button type="button" id="retFotoBtn" style="width:100%;padding:13px;border-radius:12px;border:1px dashed var(--linea);background:var(--beige-claro);font-weight:700">📷 Tomar foto del ticket</button>'+
-        '<div id="retFotoPreview" style="margin-top:8px"></div>'+
-      '</div>'+
       '<div class="modal-total" id="retTotal">'+money(_retiroTotal())+'</div>'+
       '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Registrar retiro</button></div>'+
     '</div></div>';
@@ -2558,8 +2548,6 @@ function _renderRetiroModal(){
   document.getElementById('retProveedor').addEventListener('input',function(e){ _retiroProveedorVal=e.target.value; });
   document.getElementById('retFolio').addEventListener('input',function(e){ _retiroFolioVal=e.target.value; });
   document.getElementById('retAgregarLinea').addEventListener('click',function(){ _retiroLineas.push({articulo:'',cantidad:'',precio:''}); _renderRetiroModal(); });
-  document.getElementById('retFotoBtn').addEventListener('click',function(){ document.getElementById('retFoto').click(); });
-  document.getElementById('retFoto').addEventListener('change',function(e){ _retiroFotoSeleccionada(e.target.files[0]); });
   document.querySelectorAll('#retLineas .rl-art,#retLineas .rl-qty,#retLineas .rl-precio').forEach(function(inp){
     inp.addEventListener('input',function(){
       var i=parseInt(inp.dataset.i,10);
@@ -2577,25 +2565,12 @@ function _renderRetiroModal(){
       _renderRetiroModal();
     });
   });
-  if(_retiroFotoDataUrl) _retiroMostrarPreview();
   document.getElementById('mOk').addEventListener('click',_retiroGuardar);
 }
 
 function _retiroActualizarTotal(){
   var el=document.getElementById('retTotal');
   if(el) el.textContent=money(_retiroTotal());
-}
-
-function _retiroFotoSeleccionada(file){
-  if(!file) return;
-  _retiroFotoFile=file;
-  var reader=new FileReader();
-  reader.onload=function(e){ _retiroFotoDataUrl=e.target.result; _retiroMostrarPreview(); };
-  reader.readAsDataURL(file);
-}
-function _retiroMostrarPreview(){
-  var box=document.getElementById('retFotoPreview');
-  if(box && _retiroFotoDataUrl) box.innerHTML='<img src="'+_retiroFotoDataUrl+'" style="width:100%;max-height:160px;object-fit:contain;border-radius:10px;border:1px solid var(--linea)">';
 }
 
 function _retiroGuardar(){
@@ -2605,24 +2580,16 @@ function _retiroGuardar(){
   if(!proveedor){ showToast('Selecciona o escribe el proveedor'); return; }
   if(!lineasValidas.length){ showToast('Agrega al menos un artículo con cantidad y costo'); return; }
   if(!folio){ showToast('El folio del ticket es obligatorio'); return; }
-  if(!_retiroFotoFile){ showToast('Toma una foto del ticket'); return; }
 
   var btn=document.getElementById('mOk');
   btn.disabled=true; btn.textContent='Guardando...';
 
   var total=_retiroTotal();
   var unidad=SYNC.sucursalSheet(state.sucursal);
-  var rutaFoto='facturasPOS/'+(unidad||state.sucursal)+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
 
-  fbAuthReady.then(function(){
-    return fbStorage.ref(rutaFoto).put(_retiroFotoFile);
-  }).then(function(snap){
-    return snap.ref.getDownloadURL();
-  }).then(function(fotoUrl){
-    return SYNC.registrarFacturaCompleta({
-      fecha:fechaHoyDDMMYYYY(), unidad:unidad, proveedor:proveedor, folio:folio, foto:fotoUrl, total:total,
-      lineas:lineasValidas.map(function(l){ return {articulo:l.articulo, cantidad:parseFloat(l.cantidad), precioUnit:parseFloat(l.precio)}; }),
-    });
+  SYNC.registrarFacturaCompleta({
+    fecha:fechaHoyDDMMYYYY(), unidad:unidad, proveedor:proveedor, folio:folio, total:total,
+    lineas:lineasValidas.map(function(l){ return {articulo:l.articulo, cantidad:parseFloat(l.cantidad), precioUnit:parseFloat(l.precio)}; }),
   }).then(function(res){
     if(!res || res.status!=='ok'){ throw new Error((res&&res.msg)||'No se pudo registrar la factura'); }
     return SYNC.sumarStockPorCompra(lineasValidas.map(function(l){ return {articulo:l.articulo, cantidad:parseFloat(l.cantidad)}; })).catch(function(){});
