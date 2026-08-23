@@ -444,6 +444,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script>
 /* ============================================================
    LUNA SMART POS -- Logica (CASCARA, flujo estilo Parrot)
@@ -463,6 +464,7 @@ var firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var fbDb = firebase.database();
+var fbStorage = firebase.storage();
 var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 var fbPedidosListener = null, fbListenerSuc = null;
 var _terminalesMP = {};
@@ -2374,6 +2376,26 @@ var SYNC = {
     if(!token) return Promise.resolve({status:'error'});
     var body = { token: token, accion: "mpCancelarCobroTerminal", datos: { orderId: orderId } };
     return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  listarProveedores: function(){
+    var url = this.getUrl();
+    return fetch(url + "?accion=getDATOSPROVEEDORES&_=" + Date.now()).then(function(r){ return r.json(); }).then(function(res){ return (res && res.data) || []; });
+  },
+  listarCatalogoMaestro: function(){
+    var url = this.getUrl();
+    return fetch(url + "?accion=getCatalogoMaestro&_=" + Date.now()).then(function(r){ return r.json(); }).then(function(res){ return (res && res.data) || []; });
+  },
+  registrarFacturaCompleta: function(datos){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token){ return Promise.reject(new Error("SIN_TOKEN")); }
+    var body = { token: token, accion: "registrarFacturaCompleta", datos: datos };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  },
+  sumarStockPorCompra: function(items){
+    var url = this.getUrl(), token = this.getToken();
+    if(!token) return Promise.resolve({status:'ok', actualizados:0});
+    var body = { token: token, accion: "sumarStockPorCompra", datos: { items: items } };
+    return fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) }).then(function(r){ return r.json(); });
   }
 };
 var _reenviarEnCurso=false;
@@ -2447,10 +2469,15 @@ function cajaMovTotales(){
 function cajaOp(op){
   if(op==='cajon'){ showToast('Abriendo caj&oacute;n...'); return; }
   if(op==='corte'){ abrirResumenCierre(false); return; }
-  var titulo=op==='deposito'?'Depositar a caja':'Retirar de caja';
+  if(op==='retiro'){
+    if(!esRolSupervisorAdmin()){ showToast('Solo un gerente o admin puede registrar retiros'); return; }
+    abrirRetiroCompra();
+    return;
+  }
+  var titulo='Depositar a caja';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>'+titulo+'</h2>'+
     '<div class="field"><label>Monto</label><input id="opMonto" type="number" inputmode="decimal" placeholder="0.00"></div>'+
-    '<div class="field"><label>Motivo</label><input id="opMotivo" placeholder="Ej. pago proveedor, fondo..."></div>'+
+    '<div class="field"><label>Motivo</label><input id="opMotivo" placeholder="Ej. fondo, ajuste..."></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Confirmar</button></div></div></div>';
   bindModal(function(){
     var m=parseFloat(document.getElementById('opMonto').value)||0;
@@ -2460,6 +2487,155 @@ function cajaOp(op){
     state.cajaMovimientos.push({tipo:op, monto:m, motivo:motivo, ts:Date.now()});
     fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).update({movimientos:state.cajaMovimientos}).catch(function(){}); });
     closeModal(); renderCaja(); showToast(titulo+': '+money(m));
+  });
+}
+
+/* ============ RETIRO DE CAJA = COMPRA (proveedor + articulo del catalogo
+   maestro), solo gerente/admin -- suma el gasto a FACTURAS y el stock
+   comprado a INVENTARIO via el mismo Apps Script que ya usa el admin. ============ */
+var _retiroCache={proveedores:null,catalogo:null};
+var _retiroLineas=[];
+var _retiroFotoFile=null;
+var _retiroFotoDataUrl=null;
+var _retiroProveedorVal='';
+var _retiroFolioVal='';
+
+function _retiroProveedorNombres(){ return (_retiroCache.proveedores||[]).slice(1).map(function(r){return r[1];}).filter(Boolean); }
+function _retiroArticuloNombres(){ return (_retiroCache.catalogo||[]).slice(1).map(function(r){return r[0];}).filter(Boolean); }
+function _retiroTotal(){ return _retiroLineas.reduce(function(s,l){ return s+(parseFloat(l.cantidad)||0)*(parseFloat(l.precio)||0); },0); }
+
+function abrirRetiroCompra(){
+  if(!SYNC.configurado()){ showToast('Configura primero la sincronización (URL y token) para registrar retiros'); return; }
+  _retiroLineas=[{articulo:'',cantidad:'',precio:''}];
+  _retiroFotoFile=null; _retiroFotoDataUrl=null;
+  _retiroProveedorVal=''; _retiroFolioVal='';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Retirar de caja</h2><div class="sub">Cargando proveedores y cat&aacute;logo...</div></div></div>';
+  Promise.all([
+    _retiroCache.proveedores?Promise.resolve(_retiroCache.proveedores):SYNC.listarProveedores(),
+    _retiroCache.catalogo?Promise.resolve(_retiroCache.catalogo):SYNC.listarCatalogoMaestro(),
+  ]).then(function(res){
+    _retiroCache.proveedores=res[0]||[]; _retiroCache.catalogo=res[1]||[];
+    _renderRetiroModal();
+  }).catch(function(){
+    showToast('No se pudo cargar proveedores/catálogo. Revisa tu conexión.');
+    closeModal();
+  });
+}
+
+function _retiroLineaHtml(l,i){
+  return '<div class="retiro-linea" style="display:flex;gap:6px;margin-bottom:8px;align-items:center">'+
+    '<input class="rl-art" data-i="'+i+'" list="retArticulosDL" placeholder="Artículo" value="'+esc(l.articulo||'')+'" autocomplete="off" style="flex:2;padding:10px;border:1px solid var(--linea);border-radius:10px;background:var(--beige-claro)">'+
+    '<input class="rl-qty" data-i="'+i+'" type="number" inputmode="decimal" placeholder="Cant." value="'+esc(l.cantidad||'')+'" style="flex:1;min-width:0;padding:10px;border:1px solid var(--linea);border-radius:10px;background:var(--beige-claro)">'+
+    '<input class="rl-precio" data-i="'+i+'" type="number" inputmode="decimal" placeholder="Costo" value="'+esc(l.precio||'')+'" style="flex:1;min-width:0;padding:10px;border:1px solid var(--linea);border-radius:10px;background:var(--beige-claro)">'+
+    '<button type="button" class="rl-quitar" data-i="'+i+'" style="padding:8px 12px;border-radius:8px;background:var(--beige-claro);color:#b23b3b;font-weight:800">&times;</button>'+
+  '</div>';
+}
+
+function _renderRetiroModal(){
+  var provOptions=_retiroProveedorNombres().map(function(p){return '<option value="'+esc(p)+'">';}).join('');
+  var artOptions=_retiroArticuloNombres().map(function(a){return '<option value="'+esc(a)+'">';}).join('');
+  var lineasHtml=_retiroLineas.map(function(l,i){ return _retiroLineaHtml(l,i); }).join('');
+  document.getElementById('modalHost').innerHTML=
+    '<div class="modal-bg" id="mbg"><div class="modal" style="max-width:520px">'+
+      '<h2>Retirar de caja (compra)</h2>'+
+      '<div class="sub" style="margin-bottom:14px">Selecciona el proveedor y los artículos comprados -- se suma directo al inventario.</div>'+
+      '<div class="field"><label>Proveedor</label><input id="retProveedor" list="retProveedoresDL" placeholder="Escribe o elige un proveedor" autocomplete="off" value="'+esc(_retiroProveedorVal)+'"><datalist id="retProveedoresDL">'+provOptions+'</datalist></div>'+
+      '<div class="field"><label>Artículos comprados</label><div id="retLineas">'+lineasHtml+'</div>'+
+        '<button type="button" id="retAgregarLinea" style="margin-top:2px;padding:10px;border-radius:10px;background:var(--beige-claro);font-weight:700;width:100%">+ Agregar artículo</button>'+
+        '<datalist id="retArticulosDL">'+artOptions+'</datalist>'+
+      '</div>'+
+      '<div class="field"><label>Folio / número de ticket</label><input id="retFolio" placeholder="Ej. A-4521" autocomplete="off" value="'+esc(_retiroFolioVal)+'"></div>'+
+      '<div class="field"><label>Foto del ticket</label>'+
+        '<input type="file" id="retFoto" accept="image/*" capture="environment" style="display:none">'+
+        '<button type="button" id="retFotoBtn" style="width:100%;padding:13px;border-radius:12px;border:1px dashed var(--linea);background:var(--beige-claro);font-weight:700">📷 Tomar foto del ticket</button>'+
+        '<div id="retFotoPreview" style="margin-top:8px"></div>'+
+      '</div>'+
+      '<div class="modal-total" id="retTotal">'+money(_retiroTotal())+'</div>'+
+      '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Registrar retiro</button></div>'+
+    '</div></div>';
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('retProveedor').addEventListener('input',function(e){ _retiroProveedorVal=e.target.value; });
+  document.getElementById('retFolio').addEventListener('input',function(e){ _retiroFolioVal=e.target.value; });
+  document.getElementById('retAgregarLinea').addEventListener('click',function(){ _retiroLineas.push({articulo:'',cantidad:'',precio:''}); _renderRetiroModal(); });
+  document.getElementById('retFotoBtn').addEventListener('click',function(){ document.getElementById('retFoto').click(); });
+  document.getElementById('retFoto').addEventListener('change',function(e){ _retiroFotoSeleccionada(e.target.files[0]); });
+  document.querySelectorAll('#retLineas .rl-art,#retLineas .rl-qty,#retLineas .rl-precio').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      var i=parseInt(inp.dataset.i,10);
+      if(inp.classList.contains('rl-art')) _retiroLineas[i].articulo=inp.value;
+      if(inp.classList.contains('rl-qty')) _retiroLineas[i].cantidad=inp.value;
+      if(inp.classList.contains('rl-precio')) _retiroLineas[i].precio=inp.value;
+      _retiroActualizarTotal();
+    });
+  });
+  document.querySelectorAll('#retLineas .rl-quitar').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var i=parseInt(btn.dataset.i,10);
+      _retiroLineas.splice(i,1);
+      if(!_retiroLineas.length) _retiroLineas=[{articulo:'',cantidad:'',precio:''}];
+      _renderRetiroModal();
+    });
+  });
+  if(_retiroFotoDataUrl) _retiroMostrarPreview();
+  document.getElementById('mOk').addEventListener('click',_retiroGuardar);
+}
+
+function _retiroActualizarTotal(){
+  var el=document.getElementById('retTotal');
+  if(el) el.textContent=money(_retiroTotal());
+}
+
+function _retiroFotoSeleccionada(file){
+  if(!file) return;
+  _retiroFotoFile=file;
+  var reader=new FileReader();
+  reader.onload=function(e){ _retiroFotoDataUrl=e.target.result; _retiroMostrarPreview(); };
+  reader.readAsDataURL(file);
+}
+function _retiroMostrarPreview(){
+  var box=document.getElementById('retFotoPreview');
+  if(box && _retiroFotoDataUrl) box.innerHTML='<img src="'+_retiroFotoDataUrl+'" style="width:100%;max-height:160px;object-fit:contain;border-radius:10px;border:1px solid var(--linea)">';
+}
+
+function _retiroGuardar(){
+  var proveedor=(_retiroProveedorVal||'').trim();
+  var folio=(_retiroFolioVal||'').trim();
+  var lineasValidas=_retiroLineas.filter(function(l){ return l.articulo && parseFloat(l.cantidad)>0 && parseFloat(l.precio)>0; });
+  if(!proveedor){ showToast('Selecciona o escribe el proveedor'); return; }
+  if(!lineasValidas.length){ showToast('Agrega al menos un artículo con cantidad y costo'); return; }
+  if(!folio){ showToast('El folio del ticket es obligatorio'); return; }
+  if(!_retiroFotoFile){ showToast('Toma una foto del ticket'); return; }
+
+  var btn=document.getElementById('mOk');
+  btn.disabled=true; btn.textContent='Guardando...';
+
+  var total=_retiroTotal();
+  var unidad=SYNC.sucursalSheet(state.sucursal);
+  var rutaFoto='facturasPOS/'+(unidad||state.sucursal)+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+
+  fbAuthReady.then(function(){
+    return fbStorage.ref(rutaFoto).put(_retiroFotoFile);
+  }).then(function(snap){
+    return snap.ref.getDownloadURL();
+  }).then(function(fotoUrl){
+    return SYNC.registrarFacturaCompleta({
+      fecha:fechaHoyDDMMYYYY(), unidad:unidad, proveedor:proveedor, folio:folio, foto:fotoUrl, total:total,
+      lineas:lineasValidas.map(function(l){ return {articulo:l.articulo, cantidad:parseFloat(l.cantidad), precioUnit:parseFloat(l.precio)}; }),
+    });
+  }).then(function(res){
+    if(!res || res.status!=='ok'){ throw new Error((res&&res.msg)||'No se pudo registrar la factura'); }
+    return SYNC.sumarStockPorCompra(lineasValidas.map(function(l){ return {articulo:l.articulo, cantidad:parseFloat(l.cantidad)}; })).catch(function(){});
+  }).then(function(){
+    state.cajaMovimientos=state.cajaMovimientos||[];
+    state.cajaMovimientos.push({tipo:'retiro', monto:total, motivo:proveedor+' · '+lineasValidas.map(function(l){return l.articulo;}).join(', '), ts:Date.now()});
+    fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).update({movimientos:state.cajaMovimientos}).catch(function(){}); });
+    closeModal(); renderCaja();
+    showToast('Retiro registrado: '+money(total)+' · '+proveedor);
+  }).catch(function(e){
+    console.error(e);
+    showToast('Error al registrar: '+((e&&e.message)||'revisa tu conexión e intenta de nuevo'));
+    btn.disabled=false; btn.textContent='Registrar retiro';
   });
 }
 function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declaradoTransferencia,esperadoTransferencia,onDone){
