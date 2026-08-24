@@ -661,7 +661,11 @@ function fbEscucharCatalogo(suc){
     // ya haya en CATALOG (el fallback de localStorage, o lo que sea) en vez
     // de vaciarlo -- solo se reemplaza cuando de verdad llega un catalogo.
     if(!val || !Object.keys(val).length){ if(state.view==='pos') renderPos(); return; }
-    CATALOG[suc]=Object.keys(val).map(function(k){ return val[k]; });
+    CATALOG[suc]=Object.keys(val).map(function(k){ return val[k]; }).filter(function(p){
+      // "canales.pos.activo===false" = ocultado a propósito del POS (delivery-only).
+      // Sin ese flag, se muestra -- asi ya estaban todos los productos antes.
+      return !(p.canales && p.canales.pos && p.canales.pos.activo===false);
+    });
     try{ localStorage.setItem('ls_catalogo_'+suc, JSON.stringify(CATALOG[suc])); }catch(e){}
     if(state.view==='pos') renderPos();
   };
