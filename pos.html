@@ -793,7 +793,7 @@ var state = {
   logged:false, sucursal:null, role:'cajero', user:'', pin:'',
   view:'menu', tipoOrden:null, mesa:null,
   menu:null, sub:null, search:'',
-  cart:[], descuento:{tipo:null,valor:0}, cargoDomicilio:0, turnoSales:[], pedidos:[], kdsArea:'todas',
+  cart:[], descuento:{tipo:null,valor:0}, cargoDomicilio:0, cargoDomicilioPreguntado:false, turnoSales:[], pedidos:[], kdsArea:'todas',
   checkoutOpen:false,
   pagosDivididos:[], dividirMetodoSel:'efectivo',
   cajaInicial:892, cajaAbierta:true, turno:null,
@@ -910,7 +910,7 @@ function doLogin(){
     if(!u){ showToast('PIN incorrecto'); state.pin=''; renderPinDisplay(); return; }
     var s=SUCURSALES.filter(function(x){return x.id===suc;})[0];
     state.logged=true; state.sucursal=suc; state.role=u.rol; state.user=u.nombre;
-    state.view='menu'; state.tipoOrden=null; state.mesa=null; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.turnoSales=[]; state.pin='';
+    state.view='menu'; state.tipoOrden=null; state.mesa=null; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; state.turnoSales=[]; state.pin='';
     state.pedidos=[]; state.cajaAbierta=false;
     fbEscucharPedidos(suc);
     fbEscucharMesas(suc);
@@ -1296,7 +1296,7 @@ function changeQty(uid,d){
   if(l.qty<=0){ state.cart=state.cart.filter(function(x){return x.uid!=uid;}); }
   renderCart();
 }
-function clearCart(){ state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; renderTopbar(); renderCart(); }
+function clearCart(){ state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; renderTopbar(); renderCart(); }
 function cartSubtotal(){ return state.cart.reduce(function(s,l){return s+l.price*l.qty;},0); }
 function puntosMontoUsado(){
   if(!state.usarPuntos || !(state.puntosDisponibles>0)) return 0;
@@ -1501,17 +1501,26 @@ function openDescuento(){
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Quitar / Cancelar</button><button class="btn-confirm" id="mOk">Aplicar</button></div></div></div>';
   var tipo='porcentaje';
   document.querySelectorAll('#descSeg button').forEach(function(b){ b.addEventListener('click',function(){ document.querySelectorAll('#descSeg button').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); tipo=b.dataset.t; }); });
-  document.getElementById('mCancel').addEventListener('click',function(){ state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; closeModal(); renderCart(); });
+  document.getElementById('mCancel').addEventListener('click',function(){ state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; closeModal(); renderCart(); });
   document.getElementById('mOk').addEventListener('click',function(){ var v=parseFloat(document.getElementById('descVal').value)||0; state.descuento={tipo:tipo,valor:v}; closeModal(); renderCart(); showToast('Descuento aplicado'); });
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
 }
-function openCargoDom(){
+function openCargoDom(continuarCon){
   if(!state.cart.length){ showToast('Agrega art\u00edculos primero'); return; }
-  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cargo servicio a domicilio</h2>'+
-    '<div class="field"><label>Monto del cargo</label><input id="cargoVal" type="number" inputmode="decimal" placeholder="0" value="'+(state.cargoDomicilio||'')+'"></div>'+
-    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Quitar / Cancelar</button><button class="btn-confirm" id="mOk">Aplicar</button></div></div></div>';
-  document.getElementById('mCancel').addEventListener('click',function(){ state.cargoDomicilio=0; renderCart(); closeModal(); });
-  document.getElementById('mOk').addEventListener('click',function(){ var v=parseFloat(document.getElementById('cargoVal').value)||0; state.cargoDomicilio=Math.max(0,v); renderCart(); closeModal(); });
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cargo por servicio a domicilio</h2>'+
+    '<div class="sub" style="margin-bottom:14px">\u00bfCu\u00e1nto se cobra de domicilio en este pedido?</div>'+
+    '<div style="display:flex;gap:10px;margin-bottom:14px">'+
+      '<button type="button" id="cargo60" style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:800;font-size:17px;cursor:pointer">$60</button>'+
+      '<button type="button" id="cargo70" style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:800;font-size:17px;cursor:pointer">$70</button>'+
+    '</div>'+
+    '<div class="field"><label>Otro monto</label><input id="cargoVal" type="number" inputmode="decimal" placeholder="0" value="'+(state.cargoDomicilio||'')+'"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mSinCargo">Sin cargo</button><button class="btn-confirm" id="mOk">Aplicar</button></div></div></div>';
+  var aplicar=function(v){ state.cargoDomicilio=Math.max(0,v); state.cargoDomicilioPreguntado=true; renderCart(); closeModal(); if(typeof continuarCon==='function') continuarCon(); };
+  document.getElementById('cargo60').addEventListener('click',function(){ aplicar(60); });
+  document.getElementById('cargo70').addEventListener('click',function(){ aplicar(70); });
+  document.getElementById('mSinCargo').addEventListener('click',function(){ aplicar(0); });
+  document.getElementById('mOk').addEventListener('click',function(){ var v=parseFloat(document.getElementById('cargoVal').value)||0; aplicar(v); });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg' && typeof continuarCon!=='function'){ closeModal(); } });
 }
 /* ---- Separador (dividir cuenta - mock) ---- */
 function openSeparador(){
@@ -1534,7 +1543,11 @@ function bindModal(onOk){
 }
 
 /* ============ COBRO ============ */
-function openCheckout(){ if(!state.cart.length){ showToast('La orden esta vacia'); return; } state.checkoutOpen=true; state.pagosDivididos=[]; state.dividirMetodoSel='efectivo'; renderCheckout(); }
+function openCheckout(){
+  if(!state.cart.length){ showToast('La orden esta vacia'); return; }
+  if(state.tipoOrden==='domicilio' && !state.cargoDomicilioPreguntado){ openCargoDom(openCheckout); return; }
+  state.checkoutOpen=true; state.pagosDivididos=[]; state.dividirMetodoSel='efectivo'; renderCheckout();
+}
 function closeCheckout(){ state.checkoutOpen=false; closeModal(); }
 
 /* ---- Cobro: se agregan uno o varios pagos hasta cubrir el total ---- */
@@ -1720,7 +1733,7 @@ function confirmSale(){
   fbAgregarVenta(state.sucursal,ventaRec);
   var change=Math.max(0,totalPagosDivididos()-total);
   state._editandoPedidoKey=null; state._editandoPedidoId=null;
-  if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
+  if(state.mesa){ liberarMesa(state.sucursal,state.mesa); } state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   state.pagosDivididos=[];
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
@@ -1731,6 +1744,7 @@ function confirmSale(){
 }
 function guardarPedidoAbierto(){
   if(!state.cart.length){ showToast('La orden esta vacia'); return; }
+  if(state.tipoOrden==='domicilio' && !state.cargoDomicilioPreguntado){ openCargoDom(guardarPedidoAbierto); return; }
   var esEdicion=!!state._editandoPedidoKey;
   var built=_construirPedidoDesdeCart('abierto',null);
   built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
@@ -1738,7 +1752,7 @@ function guardarPedidoAbierto(){
   // guardada detras -- y con el total real, no con $0.
   if(built.obj.tipo==='aqui' && built.obj.mesa) marcarMesaOcupada(state.sucursal, built.obj.mesa, built.obj.total);
   state._editandoPedidoKey=null; state._editandoPedidoId=null;
-  state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.mesa=null; state.tipoOrden=null; state.cliente=null;
+  state.checkoutOpen=false; state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; state.mesa=null; state.tipoOrden=null; state.cliente=null;
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
   showToast(esEdicion?('Pedido '+built.obj.id+' actualizado'):('Cuenta guardada '+built.obj.id+' -- pendiente de cobro'));
@@ -2880,7 +2894,7 @@ function initApp(){
   document.getElementById('btnCobrar').addEventListener('click',openCheckout);
   document.getElementById('btnNota').addEventListener('click',openNota);
   document.getElementById('btnDescuento').addEventListener('click',openDescuento);
-  document.getElementById('btnSeparador').addEventListener('click',openSeparador); var __bcd=document.getElementById('btnCargoDom'); if(__bcd) __bcd.addEventListener('click',openCargoDom);
+  document.getElementById('btnSeparador').addEventListener('click',openSeparador); var __bcd=document.getElementById('btnCargoDom'); if(__bcd) __bcd.addEventListener('click',function(){ openCargoDom(); });
   var __bpr=document.getElementById('cartPuntosRow'); if(__bpr) __bpr.addEventListener('click',toggleUsarPuntos);
   document.getElementById('searchInput').addEventListener('input',function(e){ state.search=e.target.value; renderProducts(); });
   document.querySelectorAll('#scApp .nav-tab').forEach(function(t){ t.addEventListener('click',function(){ switchView(t.dataset.view); }); });
