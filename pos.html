@@ -1770,7 +1770,13 @@ function renderCobroPedido(){
   var p=state.pedidos[_cobroPedidoIx]; if(!p){ closeModal(); return; }
   var total=p.total;
   var confDis=puedeConfirmarPago(total)?'':'disabled';
+  var faltaCargo=p.tipo==='domicilio' && !p.cargoDomicilio;
+  var avisoCargo=faltaCargo?('<div style="display:flex;align-items:center;gap:10px;background:#fff3cd;border:1px solid #ffe08a;border-radius:12px;padding:10px 14px;margin-bottom:14px">'+
+    '<span style="font-size:20px">⚠️</span><div style="flex:1;font-size:13px;font-weight:700;color:#8a6100">Falta agregar el cargo de domicilio</div>'+
+    '<button type="button" id="btnAgregarCargoGuardado" style="padding:8px 12px;border-radius:8px;border:none;background:#8a6100;color:#fff;font-weight:700;font-size:12px;cursor:pointer">+ Agregar cargo</button>'+
+    '</div>'):'';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cobrar '+esc(p.id)+'</h2><div class="modal-total">'+money(total)+'</div>'+
+    avisoCargo+
     (p.puntosUsados>0?'<div class="sub" style="margin:-8px 0 10px;color:#1a7f37;font-weight:700;">🌙 Ya incluye -'+money(p.puntosUsados)+' de puntos aplicados desde el sitio web</div>':'')+
     _htmlPagos(total)+
     '<div class="modal-actions" style="margin-top:10px"><button class="btn-cancel" id="btnCancelPay">Cancelar</button><button class="btn-confirm" id="btnConfirmPay" '+confDis+'>Confirmar cobro</button></div></div></div>';
@@ -1778,6 +1784,32 @@ function renderCobroPedido(){
   document.getElementById('btnCancelPay').addEventListener('click',closeCobroPedido);
   document.getElementById('btnConfirmPay').addEventListener('click',confirmCobroPedido);
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeCobroPedido(); });
+  var __bacg=document.getElementById('btnAgregarCargoGuardado'); if(__bacg) __bacg.addEventListener('click',function(){ agregarCargoAPedidoGuardado(); });
+}
+/* Cargo de domicilio faltante en un pedido YA guardado (ej. llegó del
+   sitio web, o se guardó como cuenta abierta antes de tener cargo) --
+   se agrega aquí mismo, sin salir del cobro, y se actualiza en Firebase. */
+function agregarCargoAPedidoGuardado(){
+  var p=state.pedidos[_cobroPedidoIx]; if(!p||!p._fbKey) return;
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg2"><div class="modal"><h2>Cargo por servicio a domicilio</h2>'+
+    '<div class="sub" style="margin-bottom:14px">¿Cuánto se cobra de domicilio en '+esc(p.id)+'?</div>'+
+    '<div style="display:flex;gap:10px;margin-bottom:14px">'+
+      '<button type="button" id="cargoG60" style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:800;font-size:17px;cursor:pointer">$60</button>'+
+      '<button type="button" id="cargoG70" style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:800;font-size:17px;cursor:pointer">$70</button>'+
+    '</div>'+
+    '<div class="field"><label>Otro monto</label><input id="cargoGVal" type="number" inputmode="decimal" placeholder="0"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancelG">Cancelar</button><button class="btn-confirm" id="mOkG">Aplicar</button></div></div></div>';
+  var aplicar=function(v){
+    var nuevoTotal=(p.total-(p.cargoDomicilio||0))+Math.max(0,v);
+    fbPedidosRef(state.sucursal).child(p._fbKey).update({cargoDomicilio:Math.max(0,v),total:nuevoTotal}).catch(function(){});
+    p.cargoDomicilio=Math.max(0,v); p.total=nuevoTotal;
+    renderCobroPedido();
+  };
+  document.getElementById('cargoG60').addEventListener('click',function(){ aplicar(60); });
+  document.getElementById('cargoG70').addEventListener('click',function(){ aplicar(70); });
+  document.getElementById('mOkG').addEventListener('click',function(){ var v=parseFloat(document.getElementById('cargoGVal').value)||0; aplicar(v); });
+  document.getElementById('mCancelG').addEventListener('click',renderCobroPedido);
+  document.getElementById('mbg2').addEventListener('click',function(e){ if(e.target.id==='mbg2') renderCobroPedido(); });
 }
 function confirmCobroPedido(){
   var p=state.pedidos[_cobroPedidoIx]; if(!p||!p._fbKey) return;
