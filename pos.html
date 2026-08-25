@@ -1016,7 +1016,7 @@ function renderRevisionPedidoWeb(fbKey){
       ((p.cliente&&p.cliente.referencia)?'<div class="dc-l dc-ref">Notas: '+esc(p.cliente.referencia)+'</div>':'')+
     '</div>'+
     '<div class="det-list">'+itemsHtml+'</div>'+
-    '<div style="margin-top:10px;font-size:13px;color:var(--gris)">Subtotal '+money(subtotal)+(p.cargoDomicilio?' + Envío '+money(p.cargoDomicilio):'')+'</div>'+
+    '<div style="margin-top:10px;font-size:13px;color:var(--gris)">Subtotal '+money(subtotal)+(p.cargoDomicilio?' + Envío '+money(p.cargoDomicilio):'')+(p.puntosUsados?' &middot; 🌙 -'+money(p.puntosUsados)+' con puntos':'')+'</div>'+
     '<div class="modal-total">'+money(p.total)+'</div>'+
     '<div class="sub" style="margin:-6px 0 14px;font-weight:700;color:var(--cafe-medio)">Método de pago: '+esc(PAGO_LABEL[p.metodo]||p.metodo)+'</div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="btnDescartarWeb">Descartar</button><button class="btn-confirm" id="btnConfirmarWeb">✓ Confirmar pedido</button></div>'+
@@ -1039,7 +1039,14 @@ function confirmarPedidoWeb(fbKey){
   if(p.tipo==='domicilio') upd.estadoReparto='disponible';
   fbPedidosRef(state.sucursal).child(fbKey).update(upd).catch(function(e){ showToast('Sin conexión -- no se pudo confirmar'); console.error(e); });
 
-  var ventaRec={ts:Date.now(),metodo:p.metodo,total:p.total,puntosUsados:0,pedidoId:fbKey,items:items};
+  var puntosUsados=p.puntosUsados||0;
+  var telCliente=(p.cliente&&p.cliente.telefono)||'';
+  if(telCliente){
+    var puntosGanados=Math.round(p.total*PUNTOS_TASA);
+    fbRegistrarVentaLealtad(telCliente,puntosUsados,puntosGanados);
+  }
+
+  var ventaRec={ts:Date.now(),metodo:p.metodo,total:p.total,puntosUsados:puntosUsados,pedidoId:fbKey,items:items};
   fbAgregarVenta(state.sucursal,ventaRec);
 
   closeModal();
