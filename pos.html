@@ -1692,6 +1692,7 @@ function _construirPedidoDesdeCart(estado,metodo,pagos){
   var nid=editKey?state._editandoPedidoId:('#'+fbRef.key.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase());
   var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:metodo,total:cartTotalFinal(),estado:estado,hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:estadoBarraVal,estadoCocina:estadoCocinaVal,_ts:firebase.database.ServerValue.TIMESTAMP};
   if(pagos && pagos.length) pedidoObj.pagos=pagos;
+  if(pedidoObj.tipo==='domicilio' && state.cargoDomicilio>0) pedidoObj.cargoDomicilio=state.cargoDomicilio;
   // Se ofrece al repartidor desde que entra el pedido, aunque siga en preparacion --
   // asi puede ir en camino y no hasta que la Estacion lo marque listo.
   if(pedidoObj.tipo==='domicilio') pedidoObj.estadoReparto='disponible';
@@ -1706,7 +1707,7 @@ function confirmSale(){
   var items=state.cart.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
   API.registrarVenta({items:items,metodoPago:metodo,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
   var built=_construirPedidoDesdeCart('pagado',metodo,pagos);
-  built.ref.set(built.obj).then(function(){ if(built.obj.tipo==='domicilio') _avisarGrupoRepartidores(built.obj); }).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
+  built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión con el monitor -- el pedido no se sincronizó'); console.error(e); });
   var telCliente=(state.cliente&&state.cliente.telefono)||'';
   var puntosUsadosMonto=puntosMontoUsado();
   var puntosGanados=0;
@@ -1732,7 +1733,7 @@ function guardarPedidoAbierto(){
   if(!state.cart.length){ showToast('La orden esta vacia'); return; }
   var esEdicion=!!state._editandoPedidoKey;
   var built=_construirPedidoDesdeCart('abierto',null);
-  built.ref.set(built.obj).then(function(){ if(built.obj.tipo==='domicilio' && !esEdicion) _avisarGrupoRepartidores(built.obj); }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
+  built.ref.set(built.obj).catch(function(e){ showToast('Sin conexión -- no se pudo guardar la cuenta'); console.error(e); });
   // La mesa solo se marca ocupada hasta que de verdad hay una cuenta
   // guardada detras -- y con el total real, no con $0.
   if(built.obj.tipo==='aqui' && built.obj.mesa) marcarMesaOcupada(state.sucursal, built.obj.mesa, built.obj.total);
@@ -1741,6 +1742,7 @@ function guardarPedidoAbierto(){
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
   showToast(esEdicion?('Pedido '+built.obj.id+' actualizado'):('Cuenta guardada '+built.obj.id+' -- pendiente de cobro'));
+  if(built.obj.tipo==='domicilio' && !esEdicion) ofrecerSolicitarRepartidor(built.obj);
 }
 /* ---- Cobrar una cuenta abierta desde Pedidos ---- */
 var _cobroPedidoIx=null;
@@ -1973,14 +1975,37 @@ function _repRenderLista(suc){
     });
   });
 }
-function _avisarGrupoRepartidores(p){
+function textoSolicitarRepartidor(p){
+  var lineas=[];
+  lineas.push('🛵 Pedido nuevo a domicilio '+p.id+'.');
+  lineas.push('');
+  if(p.cliente){
+    if(p.cliente.nombre) lineas.push(p.cliente.nombre);
+    if(p.cliente.telefono) lineas.push('Tel: '+p.cliente.telefono);
+    if(p.cliente.direccion) lineas.push(p.cliente.direccion);
+    if(p.cliente.referencia) lineas.push('Ref: '+p.cliente.referencia);
+  }
+  lineas.push((PAGO_LABEL[p.metodo]||p.metodo||''));
+  lineas.push('Total: '+money(p.total));
+  lineas.push('');
+  lineas.push('Entra a repartidor.html para tomarlo.');
+  return lineas.join('\n');
+}
+function solicitarRepartidorAhora(p){
   fbRepartidoresConfigRef(state.sucursal).once('value').then(function(snap){
-    var link=snap.val(); if(!link) return;
-    var msg='🛵 Pedido nuevo a domicilio '+p.id+' -- '+((p.cliente&&p.cliente.nombre)||'Cliente')+'. Entra a repartidor.html para tomarlo.';
+    var link=snap.val();
+    if(!link){ showToast('No hay grupo de WhatsApp configurado para repartidores en esta sucursal (Configuración > Repartidores)'); return; }
+    var msg=textoSolicitarRepartidor(p);
     if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(msg).catch(function(){}); }
     window.open(link,'_blank');
     showToast('Mensaje copiado -- pégalo en el grupo de WhatsApp');
   });
+}
+function ofrecerSolicitarRepartidor(p){
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>¿Solicitar repartidor?</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Pedido '+esc(p.id)+' a domicilio</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Ahora no</button><button class="btn-confirm" id="mOk">🛵 Solicitar repartidor</button></div></div></div>';
+  bindModal(function(){ closeModal(); solicitarRepartidorAhora(p); });
 }
 function _avisarRepartidorListo(p){
   if(!p.repartidorId) return;
@@ -2134,6 +2159,8 @@ function ticketTextoWhatsApp(p){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
+  var cargo=p.cargoDomicilio||0;
+  var esDomicilio=p.tipo==='domicilio';
   var lineas=[];
   lineas.push('*'+NEGOCIO.nombre+'* \u2014 '+NEGOCIO.sucursal);
   lineas.push(NEGOCIO.dir1+', '+NEGOCIO.dir2);
@@ -2141,6 +2168,14 @@ function ticketTextoWhatsApp(p){
   lineas.push('Ticket '+p.id+' \u00b7 '+(p.hora||''));
   lineas.push((TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' \u00b7 Mesa '+p.mesa:'')+' \u00b7 '+(PAGO_LABEL[p.metodo]||p.metodo||''));
   if(p.pagos&&p.pagos.length>1){ p.pagos.forEach(function(pg){ lineas.push('   '+(PAGO_LABEL[pg.metodo]||pg.metodo)+': '+money(pg.monto)); }); }
+  if(esDomicilio && p.cliente){
+    lineas.push('');
+    lineas.push('*Datos de entrega*');
+    if(p.cliente.nombre) lineas.push(p.cliente.nombre);
+    if(p.cliente.telefono) lineas.push('Tel: '+p.cliente.telefono);
+    if(p.cliente.direccion) lineas.push(p.cliente.direccion);
+    if(p.cliente.referencia) lineas.push('Ref: '+p.cliente.referencia);
+  }
   lineas.push('');
   items.forEach(function(l){
     lineas.push(l.qty+'x '+l.name+' \u2014 '+money(l.price*l.qty));
@@ -2150,6 +2185,7 @@ function ticketTextoWhatsApp(p){
   lineas.push('');
   lineas.push('Subtotal: '+money(subtotal));
   if(desc>0) lineas.push('Descuento: -'+money(desc));
+  if(cargo>0) lineas.push('Cargo domicilio: '+money(cargo));
   lineas.push('*TOTAL: '+money(p.total)+'*');
   lineas.push('');
   lineas.push('\u00a1Gracias por tu compra! \ud83c\udf19');
@@ -2165,12 +2201,15 @@ function enviarTicketWhatsApp(p){
 }
 function ofrecerWhatsAppTicket(p){
   var tel=_normTelLealtad(p.cliente&&p.cliente.telefono);
-  if(tel.length!==10) return;
+  if(tel.length!==10){ if(p.tipo==='domicilio') ofrecerSolicitarRepartidor(p); return; }
   var nombre=(p.cliente&&p.cliente.nombre)||'el cliente';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>\u00bfEnviar ticket por WhatsApp?</h2>'+
     '<div class="sub" style="margin-bottom:12px">A '+esc(nombre)+' \u00b7 '+esc(p.cliente.telefono)+'</div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Ahora no</button><button class="btn-confirm" id="mOk">\ud83d\udcf2 Enviar</button></div></div></div>';
-  bindModal(function(){ closeModal(); enviarTicketWhatsApp(p); });
+  var siguiente=function(){ if(p.tipo==='domicilio') ofrecerSolicitarRepartidor(p); };
+  document.getElementById('mCancel').addEventListener('click',function(){ closeModal(); siguiente(); });
+  document.getElementById('mOk').addEventListener('click',function(){ closeModal(); enviarTicketWhatsApp(p); siguiente(); });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg'){ closeModal(); siguiente(); } });
 }
 function verPedido(ix){
   var p=state.pedidos[ix]; if(!p) return;
