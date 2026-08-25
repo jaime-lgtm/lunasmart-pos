@@ -15,6 +15,8 @@
 /* ============================================================
    LUNA SMART POS -- estilos (flujo inspirado en Parrot)
    ============================================================ */
+@keyframes alertaPulso{0%,100%{background:#fff3cd;}50%{background:#ffe69c;}}
+#alertaPedidosWeb{animation:alertaPulso 1.6s ease-in-out infinite;}
 :root{
   --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
   --terracota-claro:#d0632f; --beige:#e8d6b9; --beige-claro:#f5ecdd;
@@ -379,6 +381,12 @@ input,select,textarea{font-family:inherit;font-size:16px;}
     <button class="logout" id="btnActualizar" title="Actualizar la app a la ultima version">&#8635;</button>
     <button class="logout" id="btnFullscreen" title="Pantalla completa (oculta la barra del navegador)">&#9974;</button>
     <button class="logout" id="btnLogout">&#8617; Cerrar</button>
+  </div>
+
+  <div id="alertaPedidosWeb" onclick="abrirRevisionPedidosWeb()" style="display:none;position:sticky;top:0;z-index:400;border-bottom:2px solid #ffc107;padding:10px 16px;align-items:center;gap:10px;cursor:pointer;">
+    <span style="font-size:20px">🔔</span>
+    <span style="flex:1;font-weight:800;color:#8a6100;font-size:14px" id="alertaPedidosWebTexto">Pedido nuevo del sitio web -- toca para revisar</span>
+    <span style="font-weight:800;color:#8a6100">›</span>
   </div>
 
   <!-- TIPO DE ORDEN -->
@@ -972,6 +980,77 @@ function renderTopbar(){
     if(v==='mesas'){ allowed = allowed && suc && suc.mesas; }
     t.style.display = allowed ? '' : 'none';
   });
+  _actualizarAlertaPedidosWeb();
+}
+
+/* ============ PEDIDOS DEL SITIO WEB (llegan como estado:'pendienteWeb',
+   sin pasar por caja -- el cajero los revisa y confirma antes de que
+   entren de verdad a Estación) ============ */
+function _pedidosWebPendientes(){ return (state.pedidos||[]).filter(function(p){ return p.estado==='pendienteWeb'; }); }
+function _actualizarAlertaPedidosWeb(){
+  var el=document.getElementById('alertaPedidosWeb'); if(!el) return;
+  var pend=_pedidosWebPendientes();
+  if(pend.length){
+    el.style.display='flex';
+    document.getElementById('alertaPedidosWebTexto').textContent=(pend.length===1?'1 pedido nuevo del sitio web':(pend.length+' pedidos nuevos del sitio web'))+' -- toca para revisar';
+  } else {
+    el.style.display='none';
+  }
+}
+function abrirRevisionPedidosWeb(){
+  var pend=_pedidosWebPendientes();
+  if(!pend.length) return;
+  renderRevisionPedidoWeb(pend[0]._fbKey);
+}
+function renderRevisionPedidoWeb(fbKey){
+  var p=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
+  if(!p){ closeModal(); return; }
+  var itemsHtml=(p.items||[]).map(function(l){ return '<div class="det-row"><div class="det-q">'+(l.qty||1)+'x</div><div class="det-n">'+esc(l.name)+(l.size?' ('+esc(l.size)+')':'')+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+'</div><div class="det-p">'+money(l.price*(l.qty||1))+'</div></div>'; }).join('');
+  var subtotal=(p.items||[]).reduce(function(a,l){return a+l.price*(l.qty||1);},0);
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>🔔 Pedido nuevo del sitio web</h2>'+
+    '<div class="sub" style="margin-bottom:12px">'+esc(p.id)+' · '+esc(TIPO_LABEL[p.tipo]||p.tipo)+' · '+esc(p.hora||'')+'</div>'+
+    '<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+
+      '<div class="dc-l"><b>'+esc((p.cliente&&p.cliente.nombre)||'')+'</b>'+((p.cliente&&p.cliente.telefono)?' · '+esc(p.cliente.telefono):'')+'</div>'+
+      ((p.cliente&&p.cliente.direccion)?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+
+      ((p.cliente&&p.cliente.referencia)?'<div class="dc-l dc-ref">Notas: '+esc(p.cliente.referencia)+'</div>':'')+
+    '</div>'+
+    '<div class="det-list">'+itemsHtml+'</div>'+
+    '<div style="margin-top:10px;font-size:13px;color:var(--gris)">Subtotal '+money(subtotal)+(p.cargoDomicilio?' + Envío '+money(p.cargoDomicilio):'')+'</div>'+
+    '<div class="modal-total">'+money(p.total)+'</div>'+
+    '<div class="sub" style="margin:-6px 0 14px;font-weight:700;color:var(--cafe-medio)">Método de pago: '+esc(PAGO_LABEL[p.metodo]||p.metodo)+'</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="btnDescartarWeb">Descartar</button><button class="btn-confirm" id="btnConfirmarWeb">✓ Confirmar pedido</button></div>'+
+    '</div></div>';
+  document.getElementById('btnConfirmarWeb').addEventListener('click',function(){ confirmarPedidoWeb(fbKey); });
+  document.getElementById('btnDescartarWeb').addEventListener('click',function(){ descartarPedidoWeb(fbKey); });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+}
+function confirmarPedidoWeb(fbKey){
+  var p=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
+  if(!p) return;
+  var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
+  var items=(p.items||[]).map(function(l){ return {id:l.id||null,name:l.name,qty:l.qty||1,price:l.price,note:l.note||'',mods:l.mods||'',area:l.area||'barra',size:l.size||null,modDeltas:l.modDeltas||[],listo:false,listoTs:null}; });
+  var itemsVenta=items.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
+  API.registrarVenta({items:itemsVenta,metodoPago:p.metodo,tipoOrden:p.tipo,mesa:null,descuento:{tipo:null,valor:0},sucursal:state.sucursal}).then(function(){ procesarInventario(items,suc); });
+
+  var estadoBarraVal=items.some(function(l){return (l.area||'barra')==='barra';})?'pendiente':'listo';
+  var estadoCocinaVal=items.some(function(l){return (l.area||'barra')==='cocina';})?'pendiente':'listo';
+  var upd={ estado:'pagado', items:items, estadoBarra:estadoBarraVal, estadoCocina:estadoCocinaVal };
+  if(p.tipo==='domicilio') upd.estadoReparto='disponible';
+  fbPedidosRef(state.sucursal).child(fbKey).update(upd).catch(function(e){ showToast('Sin conexión -- no se pudo confirmar'); console.error(e); });
+
+  var ventaRec={ts:Date.now(),metodo:p.metodo,total:p.total,puntosUsados:0,pedidoId:fbKey,items:items};
+  fbAgregarVenta(state.sucursal,ventaRec);
+
+  closeModal();
+  showToast('Pedido confirmado: '+p.id);
+  var pedidoActualizado=Object.assign({},p,upd);
+  if(p.tipo==='domicilio') ofrecerSolicitarRepartidor(pedidoActualizado);
+}
+function descartarPedidoWeb(fbKey){
+  fbPedidosRef(state.sucursal).child(fbKey).update({estado:'cancelado'}).catch(function(){});
+  closeModal();
+  showToast('Pedido descartado');
 }
 function switchView(v){
   if(!PERMISOS[state.role][v]){ showToast('Tu rol no puede acceder a esta seccion'); return; }
