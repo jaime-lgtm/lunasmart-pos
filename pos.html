@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">
 <style>
 /* ============================================================
    LUNA SMART POS -- estilos (flujo inspirado en Parrot)
@@ -303,8 +304,10 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 
 /* ===== Ojito disponibilidad ===== */
 .prod-btn{position:relative;}
-.prod-eye{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(255,255,255,.85);border:1px solid var(--linea);z-index:3;line-height:1;}
-.prod-eye:hover{background:#fff;border-color:var(--terracota-claro);}
+.prod-eye{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(255,255,255,.85);border:1px solid var(--linea);z-index:3;line-height:1;color:var(--gris);}
+.prod-eye:hover{background:#fff;border-color:var(--terracota-claro);color:var(--terracota-claro);}
+.prod-btn.agotado .prod-eye{color:var(--rojo);}
+.prod-btn.agotado .prod-eye:hover{border-color:var(--rojo);color:var(--rojo);}
 .prod-btn.agotado{opacity:.5;filter:grayscale(.4);}
 .prod-btn.agotado .pp,.prod-btn.agotado .pmods{visibility:hidden;}
 .prod-badge-ago{position:absolute;left:10px;bottom:10px;background:var(--rojo);color:#fff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;letter-spacing:.4px;z-index:2;}
@@ -1126,7 +1129,7 @@ function pedirDatosDomicilio(){
     state.puntosDisponibles=cl?(cl.puntos||0):0; state.usarPuntos=false; state.puntosUsados=0;
     fbGuardarCliente(tel,{nombre:nombre,direccion:dir,referencia:ref}).catch(function(){});
     var prods=CATALOG[state.sucursal]||[];
-    state.menu=prods.length?menusOf(prods)[0]:null; state.sub=null; state.search='';
+    state.menu=prods.length?menuInicial(prods):null; state.sub=null; state.search='';
     closeModal(); showAppView('pos'); renderPos();
   });
 }
@@ -1144,7 +1147,7 @@ function selectTipoOrden(tipo){
   }
   state.tipoOrden=tipo;
   var prods=CATALOG[state.sucursal]||[];
-  state.menu = prods.length? menusOf(prods)[0] : null; state.sub=null; state.search='';
+  state.menu = prods.length? menuInicial(prods) : null; state.sub=null; state.search='';
   showAppView('pos'); renderPos();
 }
 
@@ -1154,8 +1157,14 @@ function menusOf(prods){
   prods.forEach(function(p){ if(p.fav===true)hasFav=true; if(s.indexOf(p.menu)<0) s.push(p.menu); });
   var orden=(CATEGORIAS_ORDEN_CACHE[state.sucursal]||{}).categorias;
   s=_ordenarConGuardado(s,orden);
-  if(hasFav) s.unshift('Favoritos');
+  if(hasFav) s.push('Favoritos');
   return s;
+}
+// Al entrar, se sigue mostrando Favoritos primero (acceso rapido a lo mas
+// vendido) aunque el chip ya no se dibuje al inicio de la fila.
+function menuInicial(prods){
+  var menus=menusOf(prods);
+  return menus.indexOf('Favoritos')>=0 ? 'Favoritos' : (menus[0]||null);
 }
 function subsOf(prods,menu){
   var s=[];
@@ -1401,7 +1410,7 @@ function cartDescuentoMonto(){
 }
 function renderPos(){
   var prods=CATALOG[state.sucursal]||[]; var menus=menusOf(prods);
-  if(!state.menu&&menus.length) state.menu=menus[0];
+  if(!state.menu&&menus.length) state.menu=menuInicial(prods);
   var mc=document.getElementById('menuChips');
   mc.innerHTML=menus.map(function(m){return '<button class="chip'+(m===state.menu?' active':'')+'" data-m="'+esc(m)+'">'+esc(m)+'</button>';}).join('');
   mc.querySelectorAll('.chip').forEach(function(b){ b.addEventListener('click',function(){ selectMenu(b.dataset.m); }); });
@@ -2239,7 +2248,7 @@ function selectMesa(n){
   liberarMesa(state.sucursal,n);
   state.mesa=n; state.tipoOrden='aqui'; state.view='menu'; state.cart=[];
   state._editandoPedidoKey=null; state._editandoPedidoId=null;
-  var prods=CATALOG[state.sucursal]||[]; state.menu=menusOf(prods)[0]; state.sub=null;
+  var prods=CATALOG[state.sucursal]||[]; state.menu=menuInicial(prods); state.sub=null;
   renderTopbar(); showAppView('pos'); renderPos(); showToast('Mesa '+n+' seleccionada');
 }
 function confirmarLiberarMesa(n){
@@ -2384,7 +2393,7 @@ function editarPedido(ix){
   state._editandoPedidoKey=p._fbKey;
   state._editandoPedidoId=p.id;
   var prods=CATALOG[state.sucursal]||[];
-  state.menu=prods.length?menusOf(prods)[0]:null; state.sub=null; state.search='';
+  state.menu=prods.length?menuInicial(prods):null; state.sub=null; state.search='';
   showAppView('pos'); renderPos(); renderCart(); renderTopbar();
   showToast('Editando pedido '+p.id+' -- agrega o quita artículos y guarda');
 }
@@ -3069,7 +3078,7 @@ document.addEventListener('DOMContentLoaded',initApp);
     }
     var ago=isAgo(id);
     btn.classList.toggle('agotado', ago);
-    btn.__eye.textContent = ago ? '\u{1F6AB}' : '\u{1F441}';
+    btn.__eye.innerHTML = ago ? '<i class="ti ti-ban"></i>' : '<i class="ti ti-eye"></i>';
     btn.__eye.title = ago ? 'Marcar disponible' : 'Agotar art\u00edculo';
     btn.__badge.style.display = ago ? 'block' : 'none';
   }
@@ -3104,7 +3113,7 @@ document.addEventListener('DOMContentLoaded',initApp);
       var logout=tb && (tb.querySelector('.logout')||tb.querySelector('[class*=logout]'));
       if(tb && !document.getElementById('availBtn')){
         var b=document.createElement('button'); b.id='availBtn'; b.className='logout'; b.style.cursor='pointer';
-        b.textContent='\u{1F441} Disponibilidad'; b.addEventListener('click', openPanel);
+        b.innerHTML='<i class="ti ti-eye" style="margin-right:5px"></i>Disponibilidad'; b.addEventListener('click', openPanel);
         if(logout) tb.insertBefore(b, logout); else tb.appendChild(b);
       }
     }catch(e){}
