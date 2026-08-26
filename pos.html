@@ -1162,7 +1162,6 @@ function subsOf(prods,menu){
   prods.forEach(function(p){ if(p.menu===menu && s.indexOf(p.sub)<0) s.push(p.sub); });
   var ordenSub=((CATEGORIAS_ORDEN_CACHE[state.sucursal]||{}).subcategorias||{})[menu];
   s=_ordenarConGuardado(s,ordenSub);
-  s.unshift('Todos');
   return s;
 }
 function currentProducts(){
@@ -1176,7 +1175,7 @@ function currentProducts(){
   }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name),'es'); });
 }
 function selectMenu(m){ state.menu=m; state.sub=null; renderPos(); }
-function selectSub(s){ state.sub=s; renderPos(); }
+function selectSub(s){ state.sub=(state.sub===s)?null:s; renderPos(); }
 function addToCart(p){
   var l=state.cart.filter(function(x){return x.id===p.id&&!x.note;})[0];
   if(l){ l.qty++; } else { state.cart.push({uid:Date.now()+Math.random(),id:p.id,name:p.name,price:p.price,qty:1,note:'',area:areaDe(p)}); }
@@ -1408,7 +1407,7 @@ function renderPos(){
   mc.querySelectorAll('.chip').forEach(function(b){ b.addEventListener('click',function(){ selectMenu(b.dataset.m); }); });
   var subs=subsOf(prods,state.menu);
   var sc=document.getElementById('subChips');
-  sc.innerHTML=subs.map(function(s){return '<button class="chip sub'+((state.sub===s||(!state.sub&&s==='Todos'))?' active':'')+'" data-s="'+esc(s)+'">'+esc(s)+'</button>';}).join('');
+  sc.innerHTML=subs.map(function(s){return '<button class="chip sub'+(state.sub===s?' active':'')+'" data-s="'+esc(s)+'">'+esc(s)+'</button>';}).join('');
   sc.querySelectorAll('.chip').forEach(function(b){ b.addEventListener('click',function(){ selectSub(b.dataset.s); }); });
   renderProducts(); renderCart();
   var tipoTxt = state.mesa? ('Mesa '+state.mesa) : (state.tipoOrden?TIPO_LABEL[state.tipoOrden]:'');
