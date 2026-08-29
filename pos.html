@@ -1101,7 +1101,8 @@ function _actualizarAlertaPedidosWeb(){
   var pend=_pedidosWebPendientes();
   if(pend.length){
     el.style.display='flex';
-    document.getElementById('alertaPedidosWebTexto').textContent=(pend.length===1?'1 pedido nuevo del sitio web':(pend.length+' pedidos nuevos del sitio web'))+' -- toca para revisar';
+    var extra=(pend.length===1 && pend[0].tipo==='aqui' && pend[0].mesa) ? ' (MESA '+pend[0].mesa+')' : '';
+    document.getElementById('alertaPedidosWebTexto').textContent=(pend.length===1?'1 pedido nuevo del sitio web':(pend.length+' pedidos nuevos del sitio web'))+extra+' -- toca para revisar';
   } else {
     el.style.display='none';
   }
@@ -1116,9 +1117,10 @@ function renderRevisionPedidoWeb(fbKey){
   if(!p){ closeModal(); return; }
   var itemsHtml=(p.items||[]).map(function(l){ return '<div class="det-row"><div class="det-q">'+(l.qty||1)+'x</div><div class="det-n">'+esc(l.name)+(l.size?' ('+esc(l.size)+')':'')+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+'</div><div class="det-p">'+money(l.price*(l.qty||1))+'</div></div>'; }).join('');
   var subtotal=(p.items||[]).reduce(function(a,l){return a+l.price*(l.qty||1);},0);
+  var mesaBadge=(p.tipo==='aqui'&&p.mesa)?'<span style="display:inline-block;background:var(--terracota);color:#fff;font-weight:800;font-size:13px;letter-spacing:.03em;padding:4px 12px;border-radius:999px;margin-left:8px;vertical-align:middle">MESA '+esc(p.mesa)+'</span>':'';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
-    '<h2>🔔 Pedido nuevo del sitio web</h2>'+
-    '<div class="sub" style="margin-bottom:12px">'+esc(p.id)+' · '+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' · Mesa '+esc(p.mesa):'')+' · '+esc(p.hora||'')+'</div>'+
+    '<h2>🔔 Pedido nuevo del sitio web'+mesaBadge+'</h2>'+
+    '<div class="sub" style="margin-bottom:12px">'+esc(p.id)+' · '+esc(TIPO_LABEL[p.tipo]||p.tipo)+' · '+esc(p.hora||'')+'</div>'+
     '<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+
       '<div class="dc-l"><b>'+esc((p.cliente&&p.cliente.nombre)||'')+'</b>'+((p.cliente&&p.cliente.telefono)?' · '+esc(p.cliente.telefono):'')+'</div>'+
       ((p.cliente&&p.cliente.direccion)?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+
@@ -1543,6 +1545,16 @@ function cartDescuentoMonto(){
   if(state.descuento.tipo==='monto'){ return Math.min(state.descuento.valor,sub); }
   return 0;
 }
+// Mismo cálculo que cartDescuentoMonto() pero para un pedido YA guardado
+// (no el carrito en vivo) -- se usa al cobrar una cuenta abierta, para que
+// el corte de caja pueda mostrar cuánto se dio de descuento en total.
+function _descuentoMontoDePedido(p){
+  if(!p || !p.descuento || !p.descuento.tipo) return 0;
+  var sub=(p.items||[]).reduce(function(a,l){ return a+(l.price||0)*(l.qty||1); },0);
+  if(p.descuento.tipo==='porcentaje') return sub*(p.descuento.valor/100);
+  if(p.descuento.tipo==='monto') return Math.min(p.descuento.valor,sub);
+  return 0;
+}
 function renderPos(){
   var prods=CATALOG[state.sucursal]||[]; var menus=menusOf(prods);
   if(!state.menu&&menus.length) state.menu=menuInicial(prods);
@@ -1957,7 +1969,7 @@ function confirmSale(){
     puntosGanados=Math.round(total*PUNTOS_TASA);
     fbRegistrarVentaLealtad(telCliente,puntosUsadosMonto,puntosGanados);
   }
-  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosMonto,pedidoId:built.ref.key,items:state.cart.slice()};
+  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosMonto,pedidoId:built.ref.key,items:state.cart.slice(),descuento:cartDescuentoMonto()};
   if(pagos.length>1) ventaRec.pagos=pagos;
   fbAgregarVenta(state.sucursal,ventaRec);
   var change=Math.max(0,totalPagosDivididos()-total);
@@ -2052,7 +2064,7 @@ function confirmCobroPedido(){
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   procesarInventario((p.items||[]).map(function(l){return {id:l.id,name:l.name,qty:l.qty,size:l.size,modDeltas:l.modDeltas||[]};}), suc);
   var puntosUsadosPedido=p.puntosUsados||0;
-  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};})};
+  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};}),descuento:_descuentoMontoDePedido(p)};
   if(pagos.length>1) ventaRec.pagos=pagos;
   fbAgregarVenta(state.sucursal,ventaRec);
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
@@ -2717,6 +2729,7 @@ function setUltimoCierre(suc,data){ try{ localStorage.setItem(ultimoCierreKey(su
 function esRolSupervisorAdmin(){ return state.role==='admin'||state.role==='supervisor'; }
 function renderCaja(){
   var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
+  var totalDescuentos=state.turnoSales.reduce(function(a,v){ return a+(v.descuento||0); },0);
   var est=productosEstrella(); var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var verDesglose=esRolSupervisorAdmin();
   var mov=cajaMovTotales();
@@ -2734,7 +2747,9 @@ function renderCaja(){
       '<div class="pill"><div class="l">Tarjeta</div><div class="v">'+money(t.tarjeta)+'</div></div>'+
       '<div class="pill"><div class="l">Transferencia</div><div class="v">'+money(t.transferencia)+'</div></div>'+
       '<div class="pill"><div class="l">Rappi/Uber</div><div class="v">'+money(t.rappi)+'</div></div>'+
-    '</div><div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'):'')+
+    '</div>'+
+    (totalDescuentos>0?'<div class="row" style="display:flex;justify-content:space-between;padding:8px 0;color:var(--rojo);font-weight:700"><span>Descuentos aplicados en el turno</span><span>-'+money(totalDescuentos)+'</span></div>':'')+
+    '<div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'):'')+
     '<div class="card"><h3>Art&iacute;culos estrella del turno</h3>'+(est.length?est.map(function(e){return '<div class="star-row"><span>'+esc(e.name)+'</span><b>'+e.qty+'</b></div>';}).join(''):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div></div>'+
     '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>'+
     '<div style="text-align:center;margin-top:8px"><button id="btnCerrarSinCorte" style="background:none;border:none;color:var(--rojo);font-size:13px;text-decoration:underline;cursor:pointer;padding:8px">&iquest;Caja de pruebas atorada o turno equivocado? Cerrar caja sin corte</button></div>';
