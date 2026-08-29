@@ -867,7 +867,7 @@ var CONFIG_ITEMS = [{t:"Sincronizaci\u00f3n Luna Smart", ic:"\uD83D\uDD04", badg
   {ic:'&#128421;', t:'Monitores de estacion', badge:'Barra y Cocina', badgeClass:'ok'},
   {ic:'&#127860;', t:'Areas de preparacion', badge:'2 areas', badgeClass:'ok'},
   {ic:'&#128276;', t:'Alarmas', badge:'Activas', badgeClass:'ok'},
-  {ic:'&#128273;', t:'Lector de huella', badge:'Conectado', badgeClass:'ok'},
+  {ic:'&#128273;', t:'Lector de huella', badge:'No disponible', badgeClass:'err'},
   {ic:'&#128241;', t:'Doble pantalla', badge:'Off', badgeClass:'err'},
   {ic:'&#11088;', t:'Favoritos', badge:'', badgeClass:''},
   {ic:'&#128424;', t:'Impresoras (opcional)', badge:'', badgeClass:''},
@@ -2779,7 +2779,7 @@ function renderConfig(){
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 
 /* ============ CAJA / CORTE ============ */
