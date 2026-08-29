@@ -43,7 +43,11 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 /* ============ LOGIN PIN ============ */
 #scLogin{background:linear-gradient(160deg,var(--beige-claro),var(--beige));align-items:center;justify-content:center;color:var(--cafe);}
 #btnActualizarLogin{position:fixed;top:16px;right:16px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(28,18,10,.15);background:rgba(28,18,10,.05);color:var(--cafe-medio);font-size:20px;z-index:20;}
-#btnPantallaCompleta{position:fixed;top:16px;right:66px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(28,18,10,.15);background:rgba(28,18,10,.05);color:var(--cafe-medio);font-size:19px;z-index:20;}
+/* Lejos de la esquina superior a propósito -- ahí Android espera su propio
+   gesto de deslizar para salir de pantalla completa, y se pelea con el
+   toque sobre el botón si lo dejamos cerca. */
+#btnPantallaCompleta{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);min-width:220px;height:52px;padding:0 20px;border-radius:26px;border:1px solid rgba(28,18,10,.18);background:rgba(28,18,10,.06);color:var(--cafe-medio);font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;z-index:20;}
+#btnPantallaCompleta.activo{background:var(--terracota);color:#fff;border-color:var(--terracota);}
 .login-box{width:100%;max-width:360px;text-align:center;padding:20px;}
 .login-badge{width:88px;height:88px;border-radius:22px;margin:0 auto 14px;box-shadow:0 10px 24px rgba(177,70,24,.28);display:block;}
 .login-brand{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:700;letter-spacing:.3px;color:var(--cafe);}
@@ -369,7 +373,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <!-- ============ LOGIN PIN ============ -->
 <div class="screen active" id="scLogin">
   <button id="btnActualizarLogin" title="Actualizar la app a la ultima version">&#8635;</button>
-  <button id="btnPantallaCompleta" title="Pantalla completa">&#9974;</button>
+  <button id="btnPantallaCompleta" title="Pantalla completa">&#9974; Pantalla completa</button>
   <div class="login-box">
     <img class="login-badge" src="logo-badge.png" alt="Sue&ntilde;o de Luna">
     <div class="login-brand">Sue&ntilde;o de <span>Luna</span></div>
@@ -1090,8 +1094,9 @@ function toggleFullscreen(){
 function _actualizarIconoFullscreen(){
   var btn=document.getElementById('btnPantallaCompleta'); if(!btn) return;
   var activo=!!_elemEnFullscreen();
-  btn.innerHTML=activo?'&#10005;':'&#9974;';
+  btn.innerHTML=activo?'&#10005; Salir de pantalla completa':'&#9974; Pantalla completa';
   btn.title=activo?'Salir de pantalla completa':'Pantalla completa';
+  btn.classList.toggle('activo',activo);
 }
 function seedPedidos(){ /* MOCK historial */ return [
   {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:'',area:'barra'},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez',area:'cocina'},{name:'Espresso',qty:1,price:38,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'pendiente'},
