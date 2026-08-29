@@ -507,8 +507,8 @@ function fbEscucharPedidos(suc){
     var arr = Object.keys(val).map(function(k){ var p=val[k]; p._fbKey=k; return p; });
     arr.sort(function(a,b){ return (b._ts||0)-(a._ts||0); });
     if(_conocidos){
-      var hayNuevo=arr.some(function(p){ return !_conocidos[p._fbKey]; });
-      if(hayNuevo) playAlertSound();
+      var nuevos=arr.filter(function(p){ return !_conocidos[p._fbKey]; });
+      nuevos.forEach(function(p){ playAlarmaParaPedido(p); });
     }
     _conocidos={}; arr.forEach(function(p){ _conocidos[p._fbKey]=true; });
     state.pedidos = arr;
@@ -690,6 +690,21 @@ function fbDejarDeEscucharAgotados(){
   state.agotadosVal={};
 }
 
+/* ==== FIREBASE: que sonido de alarma usa cada tipo de pedido (compartido
+   entre todas las terminales de la sucursal) ==== */
+var fbAlarmasListener=null, fbAlarmasListenerSuc=null;
+function fbEscucharAlarmas(suc){
+  fbDejarDeEscucharAlarmas();
+  fbAlarmasListenerSuc=suc;
+  fbAlarmasListener=function(snap){ state.alarmasConfigVal = snap.val()||{}; };
+  fbAuthReady.then(function(){ fbDb.ref('alarmasConfig/'+suc).on('value', fbAlarmasListener); });
+}
+function fbDejarDeEscucharAlarmas(){
+  if(fbAlarmasListenerSuc && fbAlarmasListener) fbDb.ref('alarmasConfig/'+fbAlarmasListenerSuc).off('value', fbAlarmasListener);
+  fbAlarmasListener=null; fbAlarmasListenerSuc=null;
+  state.alarmasConfigVal={};
+}
+
 /* ==== FIREBASE: catalogo de productos en vivo (antes hardcodeado en el codigo) ==== */
 var fbCatalogoListener=null, fbCatalogoListenerSuc=null;
 function fbEscucharCatalogo(suc){
@@ -844,7 +859,7 @@ var state = {
   checkoutOpen:false,
   pagosDivididos:[], dividirMetodoSel:'efectivo',
   cajaInicial:892, cajaAbierta:true, turno:null,
-  mesasConfigVal:null, mesasEstadoVal:{}, agotadosVal:{},
+  mesasConfigVal:null, mesasEstadoVal:{}, agotadosVal:{}, alarmasConfigVal:{},
   puntosDisponibles:0, puntosUsados:0, usarPuntos:false
 };
 
@@ -879,6 +894,34 @@ function _campana(freq,delay,dur,vol){
   },delay);
 }
 function playAlertSound(){ unlockAudio(); if(!_audioCtx) return; _campana(659.25,0,0.55,0.28); _campana(523.25,260,0.75,0.28); }
+
+/* ---- Biblioteca de sonidos de alarma -- un patron distinto por tipo de
+   pedido, para que se distinga de oido sin tener que ver la pantalla.
+   Todos reusan el mismo sintetizador (_campana), solo cambia el patron. ---- */
+var SONIDOS_ALARMA = {
+  campana: { label: 'Campana clásica', play: function(){ _campana(659.25,0,0.55,0.28); _campana(523.25,260,0.75,0.28); } },
+  timbre: { label: 'Timbre doble', play: function(){ _campana(880,0,0.18,0.3); _campana(880,180,0.18,0.3); } },
+  urgente: { label: 'Urgente (triple beep)', play: function(){ _campana(740,0,0.14,0.32); _campana(740,150,0.14,0.32); _campana(740,300,0.22,0.32); } },
+  suave: { label: 'Suave', play: function(){ _campana(440,0,0.9,0.22); } },
+  xilofono: { label: 'Xilófono ascendente', play: function(){ _campana(523.25,0,0.22,0.28); _campana(659.25,120,0.22,0.28); _campana(783.99,240,0.4,0.28); } },
+};
+function playSonidoAlarma(id){ unlockAudio(); if(!_audioCtx) return; var s=SONIDOS_ALARMA[id]||SONIDOS_ALARMA.campana; s.play(); }
+// Determina que sonido corresponde a un pedido recien llegado segun su
+// origen -- QR de mesa, pedidos.suenodeluna.com.mx, o Rappi (cuando se
+// conecte esa integracion). Los pedidos que arma el propio cajero desde el
+// POS no necesitan alarma -- el ya sabe que los creo.
+function _tipoAlarmaPedido(p){
+  if(p.canal==='rappi' || p.origen==='rappi') return 'rappi';
+  if(p.estado==='pendienteWeb' && p.tipo==='aqui') return 'qrMesas';
+  if(p.estado==='pendienteWeb') return 'web';
+  return null;
+}
+function playAlarmaParaPedido(p){
+  var tipo=_tipoAlarmaPedido(p);
+  if(!tipo) { playAlertSound(); return; }
+  var cfg=(state.alarmasConfigVal||{});
+  playSonidoAlarma(cfg[tipo] || (tipo==='rappi'?'urgente':tipo==='qrMesas'?'timbre':'campana'));
+}
 
 /* ---- Cronometro / semaforo de tiempo de preparacion en el Monitor ---- */
 function _tiempoClase(ms){ var min=ms/60000; if(min<5) return 'tw-verde'; if(min<=10) return 'tw-amarillo'; return 'tw-rojo'; }
@@ -962,6 +1005,7 @@ function doLogin(){
     fbEscucharPedidos(suc);
     fbEscucharMesas(suc);
     fbEscucharAgotados(suc);
+    fbEscucharAlarmas(suc);
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
     cargarRecetasCache();
@@ -988,7 +1032,7 @@ function doLogin(){
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
 /* Instalada como app (pantalla completa, sin barra de navegador) no hay boton
    de recargar del navegador -- este es el unico modo de forzar que la tablet
    baje la version mas nueva en vez de seguir usando la que ya tenia en cache. */
@@ -2093,6 +2137,52 @@ function configDoblePantalla(){
   });
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
 }
+/* ============ ALARMAS -- sonido distinto segun de donde llega el pedido:
+   Rappi (cuando se conecte), QR de mesas, o pedidos.suenodeluna.com.mx.
+   Config en alarmasConfig/{suc}, compartida entre todas las terminales. ============ */
+var ALARMA_CATEGORIAS=[
+  {id:'qrMesas', label:'QR en mesas', hint:'Cliente ordena escaneando el QR de su mesa', def:'timbre'},
+  {id:'web', label:'pedidos.suenodeluna.com.mx', hint:'Pedido para llevar o a domicilio desde el sitio web', def:'campana'},
+  {id:'rappi', label:'Rappi', hint:'Se usará en cuanto se conecte la integración', def:'urgente'},
+];
+function configAlarmas(){
+  var suc=state.sucursal;
+  var cfg=state.alarmasConfigVal||{};
+  var filas=ALARMA_CATEGORIAS.map(function(c){
+    var val=cfg[c.id]||c.def;
+    var opts=Object.keys(SONIDOS_ALARMA).map(function(sid){ return '<option value="'+sid+'"'+(sid===val?' selected':'')+'>'+esc(SONIDOS_ALARMA[sid].label)+'</option>'; }).join('');
+    return '<div class="field" style="margin-bottom:16px">'+
+      '<label>'+esc(c.label)+'</label>'+
+      '<div class="sub" style="margin:2px 0 8px">'+esc(c.hint)+'</div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<select id="alm-'+c.id+'" style="flex:1">'+opts+'</select>'+
+        '<button type="button" class="btn-ghost" data-probar="'+c.id+'" style="border:1px solid var(--linea);border-radius:12px;padding:0 16px">&#9654; Probar</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:440px">'+
+    '<h2>Alarmas</h2>'+
+    '<div class="sub" style="margin-bottom:16px">Asigna un sonido distinto a cada tipo de pedido, para reconocerlo sin ver la pantalla.</div>'+
+    filas+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.querySelectorAll('[data-probar]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var cid=b.getAttribute('data-probar');
+      var sel=document.getElementById('alm-'+cid);
+      playSonidoAlarma(sel.value);
+    });
+  });
+  document.getElementById('mOk').addEventListener('click',function(){
+    var nuevo={};
+    ALARMA_CATEGORIAS.forEach(function(c){ nuevo[c.id]=document.getElementById('alm-'+c.id).value; });
+    fbDb.ref('alarmasConfig/'+suc).set(nuevo).then(function(){
+      showToast('Alarmas guardadas');
+      closeModal();
+    }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar'); console.error(e); });
+  });
+}
 /* QR por mesa -- apuntan al sitio de pedidos en modo "en mesa"
    (pedidos.suenodeluna.com.mx/?mesa=N). Se generan solos: al guardar un
    nuevo numero de mesas, el QR que falte aparece automaticamente. */
@@ -2551,7 +2641,7 @@ function renderConfig(){
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 
 /* ============ CAJA / CORTE ============ */
