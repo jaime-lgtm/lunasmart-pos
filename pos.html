@@ -2612,6 +2612,7 @@ function verPedido(ix){
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button>'+
     ((p.estado==='abierto'||p.estado==='pagado')?'<button class="btn-cancel" id="mCancelarPedido" style="color:var(--rojo);">Cancelar pedido</button>':'')+
+    (p.estado==='pagado'?'<button class="btn-ghost" id="mCambiarPago" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:var(--cafe-medio);">💳 Cambiar método de pago</button>':'')+
     (p.estado==='abierto'?'<button class="btn-ghost" id="mEditar" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:var(--cafe-medio);">✏️ Editar pedido</button>':'')+
     (p.estado!=='abierto'&&_normTelLealtad(p.cliente&&p.cliente.telefono).length===10?'<button class="btn-ghost" id="mWhatsapp" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:#1a7f37;">📲 WhatsApp</button>':'')+
     '<button class="btn-confirm" id="mOk">'+(p.estado==='abierto'?'Cobrar':'Reimprimir ticket')+'</button></div></div></div>';
@@ -2622,6 +2623,35 @@ function verPedido(ix){
   if(__btnWa){ __btnWa.addEventListener('click',function(){ enviarTicketWhatsApp(p); }); }
   var __btnEditar=document.getElementById('mEditar');
   if(__btnEditar){ __btnEditar.addEventListener('click',function(){ closeModal(); editarPedido(ix); }); }
+  var __btnCambiarPago=document.getElementById('mCambiarPago');
+  if(__btnCambiarPago){ __btnCambiarPago.addEventListener('click',function(){ cambiarMetodoPago(ix); }); }
+}
+// Corrige el método de pago de una venta ya cerrada (ej. se cobró
+// "efectivo" por error y en realidad fue tarjeta) sin tener que cancelar
+// y volver a capturar todo el pedido. Actualiza el pedido Y su registro
+// en turnoSales -- si solo se corrigiera uno, el corte de caja (que lee
+// de turnoSales) seguiría mostrando el método viejo.
+function cambiarMetodoPago(ix){
+  var p=state.pedidos[ix]; if(!p||!p._fbKey||p.estado!=='pagado') return;
+  var opciones=['efectivo','tarjeta','mercadopago','transferencia','rappi'];
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:380px">'+
+    '<h2>Cambiar método de pago</h2>'+
+    '<div class="sub" style="margin-bottom:14px">Pedido '+esc(p.id)+' &middot; '+money(p.total)+'<br>Actual: <b>'+esc(PAGO_LABEL[p.metodo]||p.metodo||'--')+'</b>'+(p.pagos&&p.pagos.length?' (pago mixto)':'')+'</div>'+
+    '<div class="field"><label>Nuevo método de pago</label><select id="nuevoMetodoPago">'+
+      opciones.map(function(m){ return '<option value="'+m+'"'+(m===p.metodo?' selected':'')+'>'+esc(PAGO_LABEL[m])+'</option>'; }).join('')+
+    '</select></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  bindModal(function(){
+    var nuevo=document.getElementById('nuevoMetodoPago').value;
+    if(nuevo===p.metodo && !(p.pagos&&p.pagos.length)){ closeModal(); return; }
+    var venta=(state.turnoSales||[]).filter(function(v){ return v.pedidoId===p._fbKey; })[0];
+    var tareas=[ fbPedidosRef(state.sucursal).child(p._fbKey).update({metodo:nuevo, pagos:null}) ];
+    if(venta && venta._fbKey){ tareas.push(fbDb.ref('turnoSales/'+state.sucursal+'/'+venta._fbKey).update({metodo:nuevo, pagos:null})); }
+    Promise.all(tareas).then(function(){
+      closeModal();
+      showToast('Método de pago actualizado a '+(PAGO_LABEL[nuevo]||nuevo));
+    }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar'); console.error(e); });
+  });
 }
 function editarPedido(ix){
   var p=state.pedidos[ix]; if(!p||!p._fbKey||p.estado!=='abierto') return;
