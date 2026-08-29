@@ -515,12 +515,14 @@ function fbEscucharPedidos(suc){
     renderTopbar();
     if(state.view==='kds') renderKds();
     if(state.view==='pedidos') renderPedidos();
+    _actualizarRepeticionAlarma();
   };
   fbAuthReady.then(function(){ fbPedidosRef(suc).on('value', fbPedidosListener); });
 }
 function fbDejarDeEscucharPedidos(){
   if(fbPedidosListener && fbListenerSuc){ fbPedidosRef(fbListenerSuc).off('value', fbPedidosListener); }
   fbPedidosListener = null; fbListenerSuc = null;
+  if(_alarmaRepeatTimer){ clearInterval(_alarmaRepeatTimer); _alarmaRepeatTimer=null; }
 }
 function fbActualizarEstadoPedido(suc, fbKey, campo, valor){
   var upd={}; upd[campo]=valor;
@@ -879,31 +881,36 @@ function _campana(freq,delay,dur,vol){
   setTimeout(function(){
     try{
       var t0=_audioCtx.currentTime;
-      var o=_audioCtx.createOscillator(), o2=_audioCtx.createOscillator();
-      var g=_audioCtx.createGain(), g2=_audioCtx.createGain();
-      o.type='sine'; o.frequency.value=freq;
-      o2.type='sine'; o2.frequency.value=freq*2; g2.gain.value=0.12;
+      var o=_audioCtx.createOscillator(), o2=_audioCtx.createOscillator(), o3=_audioCtx.createOscillator();
+      var g=_audioCtx.createGain(), g2=_audioCtx.createGain(), g3=_audioCtx.createGain();
+      o.type='triangle'; o.frequency.value=freq;
+      o2.type='sine'; o2.frequency.value=freq*2; g2.gain.value=0.16;
+      o3.type='sine'; o3.frequency.value=freq*0.5; g3.gain.value=0.55; // refuerzo grave -- se percibe mas fuerte en bocinas externas/ambiente ruidoso
       g.gain.setValueAtTime(0.0001,t0);
-      g.gain.exponentialRampToValueAtTime(vol,t0+0.015);
+      g.gain.exponentialRampToValueAtTime(vol,t0+0.012);
       g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
       o2.connect(g2); g2.connect(g);
+      o3.connect(g3); g3.connect(g);
       o.connect(g); g.connect(_audioCtx.destination);
       o.start(t0); o.stop(t0+dur+0.05);
       o2.start(t0); o2.stop(t0+dur+0.05);
+      o3.start(t0); o3.stop(t0+dur+0.05);
     }catch(e){}
   },delay);
 }
-function playAlertSound(){ unlockAudio(); if(!_audioCtx) return; _campana(659.25,0,0.55,0.28); _campana(523.25,260,0.75,0.28); }
+function playAlertSound(){ unlockAudio(); if(!_audioCtx) return; _campana(587.33,0,0.6,0.6); _campana(440,300,0.9,0.65); }
 
 /* ---- Biblioteca de sonidos de alarma -- un patron distinto por tipo de
    pedido, para que se distinga de oido sin tener que ver la pantalla.
-   Todos reusan el mismo sintetizador (_campana), solo cambia el patron. ---- */
+   Todos reusan el mismo sintetizador (_campana), solo cambia el patron.
+   Volumen alto y tonos mas graves a proposito -- con bocinas afuera y
+   musica ambiental, un tono agudo y bajito se pierde por completo. ---- */
 var SONIDOS_ALARMA = {
-  campana: { label: 'Campana clásica', play: function(){ _campana(659.25,0,0.55,0.28); _campana(523.25,260,0.75,0.28); } },
-  timbre: { label: 'Timbre doble', play: function(){ _campana(880,0,0.18,0.3); _campana(880,180,0.18,0.3); } },
-  urgente: { label: 'Urgente (triple beep)', play: function(){ _campana(740,0,0.14,0.32); _campana(740,150,0.14,0.32); _campana(740,300,0.22,0.32); } },
-  suave: { label: 'Suave', play: function(){ _campana(440,0,0.9,0.22); } },
-  xilofono: { label: 'Xilófono ascendente', play: function(){ _campana(523.25,0,0.22,0.28); _campana(659.25,120,0.22,0.28); _campana(783.99,240,0.4,0.28); } },
+  campana: { label: 'Campana clásica', play: function(){ _campana(587.33,0,0.6,0.6); _campana(440,300,0.9,0.65); } },
+  timbre: { label: 'Timbre doble', play: function(){ _campana(660,0,0.22,0.65); _campana(660,220,0.22,0.65); } },
+  urgente: { label: 'Urgente (triple beep)', play: function(){ _campana(523.25,0,0.16,0.7); _campana(523.25,170,0.16,0.7); _campana(523.25,340,0.3,0.7); } },
+  suave: { label: 'Suave', play: function(){ _campana(392,0,1.1,0.5); } },
+  xilofono: { label: 'Xilófono ascendente', play: function(){ _campana(392,0,0.26,0.6); _campana(493.88,140,0.26,0.6); _campana(587.33,280,0.5,0.65); } },
 };
 function playSonidoAlarma(id){ unlockAudio(); if(!_audioCtx) return; var s=SONIDOS_ALARMA[id]||SONIDOS_ALARMA.campana; s.play(); }
 // Determina que sonido corresponde a un pedido recien llegado segun su
@@ -921,6 +928,24 @@ function playAlarmaParaPedido(p){
   if(!tipo) { playAlertSound(); return; }
   var cfg=(state.alarmasConfigVal||{});
   playSonidoAlarma(cfg[tipo] || (tipo==='rappi'?'urgente':tipo==='qrMesas'?'timbre':'campana'));
+}
+// Repite la alarma cada 5s mientras siga habiendo pedidos sin confirmar
+// (pendienteWeb) -- una sola vez no basta si la tablet esta lejos o hay
+// musica ambiental de por medio. Se detiene sola en cuanto se confirman o
+// descartan todos.
+var _alarmaRepeatTimer=null;
+function _actualizarRepeticionAlarma(){
+  var pendientes=(state.pedidos||[]).filter(function(p){ return p.estado==='pendienteWeb'; });
+  if(!pendientes.length){
+    if(_alarmaRepeatTimer){ clearInterval(_alarmaRepeatTimer); _alarmaRepeatTimer=null; }
+    return;
+  }
+  if(_alarmaRepeatTimer) return;
+  _alarmaRepeatTimer=setInterval(function(){
+    var pend=(state.pedidos||[]).filter(function(p){ return p.estado==='pendienteWeb'; });
+    if(!pend.length){ clearInterval(_alarmaRepeatTimer); _alarmaRepeatTimer=null; return; }
+    playAlarmaParaPedido(pend[pend.length-1]);
+  },5000);
 }
 
 /* ---- Cronometro / semaforo de tiempo de preparacion en el Monitor ---- */
