@@ -1042,7 +1042,7 @@ function renderRevisionPedidoWeb(fbKey){
     '<div style="margin-top:10px;font-size:13px;color:var(--gris)">Subtotal '+money(subtotal)+(p.cargoDomicilio?' + Envío '+money(p.cargoDomicilio):'')+(p.puntosUsados?' &middot; 🌙 -'+money(p.puntosUsados)+' con puntos':'')+'</div>'+
     '<div class="modal-total">'+money(p.total)+'</div>'+
     (p.metodo ? '<div class="sub" style="margin:-6px 0 14px;font-weight:700;color:var(--cafe-medio)">Método de pago: '+esc(PAGO_LABEL[p.metodo]||p.metodo)+'</div>' : '<div class="sub" style="margin:-6px 0 14px;font-weight:700;color:var(--cafe-medio)">Se cobra al cerrar la mesa</div>')+
-    '<div class="modal-actions"><button class="btn-cancel" id="btnDescartarWeb">Descartar</button><button class="btn-confirm" id="btnConfirmarWeb">✓ Confirmar pedido</button></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="btnDescartarWeb">Descartar</button><button class="btn-confirm" id="btnConfirmarWeb">✓ '+(p.tipo==='aqui'?'Agregar a la mesa':'Confirmar pedido')+'</button></div>'+
     '</div></div>';
   document.getElementById('btnConfirmarWeb').addEventListener('click',function(){ confirmarPedidoWeb(fbKey); });
   document.getElementById('btnDescartarWeb').addEventListener('click',function(){ descartarPedidoWeb(fbKey); });
@@ -1053,8 +1053,37 @@ function confirmarPedidoWeb(fbKey){
   if(!p) return;
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var items=(p.items||[]).map(function(l){ return {id:l.id||null,name:l.name,qty:l.qty||1,price:l.price,note:l.note||'',mods:l.mods||'',area:l.area||'barra',size:l.size||null,modDeltas:l.modDeltas||[],listo:false,listoTs:null}; });
+
+  if(p.tipo==='aqui' && p.mesa){
+    // Mesa: no es una venta cerrada -- se suma a la cuenta ABIERTA de esa
+    // mesa (o abre una si es la primera ronda), para que el cajero cobre
+    // todo junto al final, tal como si el mismo hubiera ido agregando
+    // productos desde el POS. La venta/puntos se registran hasta cobrar,
+    // no aqui -- si no, se contarian dos veces.
+    var abierto=(state.pedidos||[]).filter(function(x){ return x._fbKey!==fbKey && x.tipo==='aqui' && x.mesa===p.mesa && x.estado==='abierto'; })[0];
+    if(abierto){
+      var itemsMerge=(abierto.items||[]).concat(items);
+      var nuevoTotal=itemsMerge.reduce(function(a,l){return a+l.price*(l.qty||1);},0);
+      var ib=itemsMerge.filter(function(l){return (l.area||'barra')==='barra';});
+      var ic=itemsMerge.filter(function(l){return (l.area||'barra')==='cocina';});
+      var ebv=ib.length?(ib.every(function(l){return l.listo;})?'listo':'pendiente'):'listo';
+      var ecv=ic.length?(ic.every(function(l){return l.listo;})?'listo':'pendiente'):'listo';
+      fbPedidosRef(state.sucursal).child(abierto._fbKey).update({items:itemsMerge,total:nuevoTotal,estadoBarra:ebv,estadoCocina:ecv}).catch(function(e){ console.error(e); });
+      fbPedidosRef(state.sucursal).child(fbKey).remove().catch(function(e){ console.error(e); });
+      marcarMesaOcupada(state.sucursal, p.mesa, nuevoTotal);
+    } else {
+      var estadoBarraValM=items.some(function(l){return (l.area||'barra')==='barra';})?'pendiente':'listo';
+      var estadoCocinaValM=items.some(function(l){return (l.area||'barra')==='cocina';})?'pendiente':'listo';
+      fbPedidosRef(state.sucursal).child(fbKey).update({ estado:'abierto', items:items, estadoBarra:estadoBarraValM, estadoCocina:estadoCocinaValM }).catch(function(e){ showToast('Sin conexión -- no se pudo confirmar'); console.error(e); });
+      marcarMesaOcupada(state.sucursal, p.mesa, p.total);
+    }
+    closeModal();
+    showToast('Agregado a la cuenta de la Mesa '+p.mesa);
+    return;
+  }
+
   var itemsVenta=items.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
-  API.registrarVenta({items:itemsVenta,metodoPago:p.metodo,tipoOrden:p.tipo,mesa:p.mesa||null,descuento:{tipo:null,valor:0},sucursal:state.sucursal}).then(function(){ procesarInventario(items,suc); });
+  API.registrarVenta({items:itemsVenta,metodoPago:p.metodo,tipoOrden:p.tipo,mesa:null,descuento:{tipo:null,valor:0},sucursal:state.sucursal}).then(function(){ procesarInventario(items,suc); });
 
   var estadoBarraVal=items.some(function(l){return (l.area||'barra')==='barra';})?'pendiente':'listo';
   var estadoCocinaVal=items.some(function(l){return (l.area||'barra')==='cocina';})?'pendiente':'listo';
@@ -1076,7 +1105,6 @@ function confirmarPedidoWeb(fbKey){
   showToast('Pedido confirmado: '+p.id);
   var pedidoActualizado=Object.assign({},p,upd);
   if(p.tipo==='domicilio') ofrecerSolicitarRepartidor(pedidoActualizado);
-  if(p.tipo==='aqui' && p.mesa) marcarMesaOcupada(state.sucursal, p.mesa, p.total);
 }
 function descartarPedidoWeb(fbKey){
   fbPedidosRef(state.sucursal).child(fbKey).update({estado:'cancelado'}).catch(function(){});
