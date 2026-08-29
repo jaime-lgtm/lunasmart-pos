@@ -654,6 +654,25 @@ function fbDejarDeEscucharMesas(){
   state.mesasConfigVal=null; state.mesasEstadoVal={};
 }
 
+/* ==== FIREBASE: articulos agotados (compartido POS + sitio de pedidos) ==== */
+var fbAgotadosListener=null, fbAgotadosListenerSuc=null;
+function fbEscucharAgotados(suc){
+  fbDejarDeEscucharAgotados();
+  fbAgotadosListenerSuc=suc;
+  fbAgotadosListener=function(snap){
+    state.agotadosVal = snap.val()||{};
+    applyGridAgotados();
+  };
+  fbAuthReady.then(function(){
+    fbDb.ref('agotados/'+suc).on('value', fbAgotadosListener);
+  });
+}
+function fbDejarDeEscucharAgotados(){
+  if(fbAgotadosListenerSuc && fbAgotadosListener) fbDb.ref('agotados/'+fbAgotadosListenerSuc).off('value', fbAgotadosListener);
+  fbAgotadosListener=null; fbAgotadosListenerSuc=null;
+  state.agotadosVal={};
+}
+
 /* ==== FIREBASE: catalogo de productos en vivo (antes hardcodeado en el codigo) ==== */
 var fbCatalogoListener=null, fbCatalogoListenerSuc=null;
 function fbEscucharCatalogo(suc){
@@ -808,7 +827,7 @@ var state = {
   checkoutOpen:false,
   pagosDivididos:[], dividirMetodoSel:'efectivo',
   cajaInicial:892, cajaAbierta:true, turno:null,
-  mesasConfigVal:null, mesasEstadoVal:{},
+  mesasConfigVal:null, mesasEstadoVal:{}, agotadosVal:{},
   puntosDisponibles:0, puntosUsados:0, usarPuntos:false
 };
 
@@ -925,6 +944,7 @@ function doLogin(){
     state.pedidos=[]; state.cajaAbierta=false;
     fbEscucharPedidos(suc);
     fbEscucharMesas(suc);
+    fbEscucharAgotados(suc);
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
     cargarRecetasCache();
@@ -951,7 +971,7 @@ function doLogin(){
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
 /* Instalada como app (pantalla completa, sin barra de navegador) no hay boton
    de recargar del navegador -- este es el unico modo de forzar que la tablet
    baje la version mas nueva en vez de seguir usando la que ya tenia en cache. */
@@ -3060,13 +3080,17 @@ document.addEventListener('DOMContentLoaded',initApp);
   document.addEventListener('DOMContentLoaded', function(){ mo.observe(document.body,{childList:true,subtree:true}); scan(); });
 })();
 
-/* ===== Ojito disponibilidad ===== */
+/* ===== Ojito disponibilidad -- ahora vive en Firebase (agotados/{sucursal})
+   para que el sitio de pedidos vea lo mismo que el POS, en vez de quedarse
+   solo en el localStorage de la tablet del cajero. ===== */
 (function(){
-  var LSKEY='luna_agotados';
-  function getAgo(){ try{ return JSON.parse(localStorage.getItem(LSKEY)||'{}'); }catch(e){ return {}; } }
-  function setAgo(m){ try{ localStorage.setItem(LSKEY, JSON.stringify(m)); }catch(e){} }
+  function getAgo(){ return state.agotadosVal||{}; }
   function isAgo(id){ return !!getAgo()[id]; }
-  function toggle(id){ var m=getAgo(); if(m[id]) delete m[id]; else m[id]=1; setAgo(m); applyGrid(); }
+  function toggle(id){
+    var ref=fbDb.ref('agotados/'+state.sucursal+'/'+id);
+    if(isAgo(id)) ref.remove().catch(function(e){ console.error(e); });
+    else ref.set(true).catch(function(e){ console.error(e); });
+  }
   function decorate(btn){
     var id=btn.getAttribute('data-id'); if(!id) return;
     if(!btn.__eye){
@@ -3082,7 +3106,8 @@ document.addEventListener('DOMContentLoaded',initApp);
     btn.__eye.title = ago ? 'Marcar disponible' : 'Agotar art\u00edculo';
     btn.__badge.style.display = ago ? 'block' : 'none';
   }
-  function applyGrid(){ var grid=document.getElementById('prodGrid'); if(!grid) return; grid.querySelectorAll('.prod-btn').forEach(decorate); }
+  function applyGridAgotados(){ var grid=document.getElementById('prodGrid'); if(!grid) return; grid.querySelectorAll('.prod-btn').forEach(decorate); }
+  window.applyGridAgotados=applyGridAgotados;
   document.addEventListener('click', function(ev){
     var btn=ev.target.closest && ev.target.closest('.prod-btn');
     if(btn && btn.classList.contains('agotado') && !(ev.target.closest && ev.target.closest('.prod-eye'))){
@@ -3102,12 +3127,15 @@ document.addEventListener('DOMContentLoaded',initApp);
       if(ev.target===ov || ev.target.id==='availClose'){ ov.remove(); return; }
       var tg=ev.target.closest('.avail-toggle');
       if(tg){ toggle(tg.getAttribute('data-pid')); tg.classList.toggle('off'); }
-      if(ev.target.id==='availAllOn'){ setAgo({}); applyGrid(); ov.querySelectorAll('.avail-toggle').forEach(function(t){ t.classList.remove('off'); }); }
+      if(ev.target.id==='availAllOn'){
+        fbDb.ref('agotados/'+state.sucursal).remove().catch(function(e){ console.error(e); });
+        ov.querySelectorAll('.avail-toggle').forEach(function(t){ t.classList.remove('off'); });
+      }
     });
   }
-  var mo=new MutationObserver(function(){ applyGrid(); });
+  var mo=new MutationObserver(function(){ applyGridAgotados(); });
   document.addEventListener('DOMContentLoaded', function(){
-    var g=document.getElementById('prodGrid'); if(g) mo.observe(g,{childList:true}); applyGrid();
+    var g=document.getElementById('prodGrid'); if(g) mo.observe(g,{childList:true}); applyGridAgotados();
     try{
       var tb=document.querySelector('.topbar');
       var logout=tb && (tb.querySelector('.logout')||tb.querySelector('[class*=logout]'));
