@@ -12,6 +12,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    LUNA SMART POS -- estilos (flujo inspirado en Parrot)
@@ -38,21 +41,23 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .screen.active{display:flex;}
 
 /* ============ LOGIN PIN ============ */
-#scLogin{background:linear-gradient(160deg,var(--cafe),var(--cafe-medio));align-items:center;justify-content:center;color:var(--beige);}
-#btnActualizarLogin{position:fixed;top:16px;right:16px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(232,214,185,.35);background:rgba(255,255,255,.08);color:var(--beige);font-size:20px;z-index:20;}
+#scLogin{background:linear-gradient(160deg,var(--beige-claro),var(--beige));align-items:center;justify-content:center;color:var(--cafe);}
+#btnActualizarLogin{position:fixed;top:16px;right:16px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(28,18,10,.15);background:rgba(28,18,10,.05);color:var(--cafe-medio);font-size:20px;z-index:20;}
 .login-box{width:100%;max-width:360px;text-align:center;padding:20px;}
-.login-brand{font-size:30px;font-weight:800;letter-spacing:.5px;}
-.login-brand span{color:var(--terracota-claro);}
+.login-badge{width:88px;height:88px;border-radius:22px;margin:0 auto 14px;box-shadow:0 10px 24px rgba(177,70,24,.28);display:block;}
+.login-brand{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:700;letter-spacing:.3px;color:var(--cafe);}
+.login-brand span{color:var(--terracota);}
+.login-tag{font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--terracota);margin-top:6px;text-transform:uppercase;}
 .login-hi{font-size:20px;margin-top:22px;font-weight:600;}
-.login-hint{font-size:14px;opacity:.8;margin-top:6px;line-height:1.4;}
-.pin-display{margin:22px auto 10px;height:54px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(232,214,185,.25);display:flex;align-items:center;justify-content:center;gap:14px;}
-.pin-dot{width:14px;height:14px;border-radius:50%;background:rgba(232,214,185,.3);}
-.pin-dot.on{background:var(--terracota-claro);}
-.login-suc select{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(232,214,185,.3);background:rgba(255,255,255,.07);color:var(--beige);}
+.login-hint{font-size:14px;opacity:.75;margin-top:6px;line-height:1.4;}
+.pin-display{margin:22px auto 10px;height:54px;border-radius:12px;background:rgba(28,18,10,.05);border:1px solid rgba(28,18,10,.14);display:flex;align-items:center;justify-content:center;gap:14px;}
+.pin-dot{width:14px;height:14px;border-radius:50%;background:rgba(28,18,10,.18);}
+.pin-dot.on{background:var(--terracota);}
+.login-suc select{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(28,18,10,.16);background:rgba(28,18,10,.04);color:var(--cafe);}
 .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px;}
-.key{height:64px;border-radius:14px;background:rgba(255,255,255,.08);font-size:24px;font-weight:700;color:var(--beige);display:flex;align-items:center;justify-content:center;transition:.12s;}
-.key:active{background:var(--terracota);}
-.key.enter{background:var(--terracota);}
+.key{height:64px;border-radius:14px;background:rgba(28,18,10,.05);font-size:24px;font-weight:700;color:var(--cafe);display:flex;align-items:center;justify-content:center;transition:.12s;}
+.key:active{background:var(--terracota);color:#fff;}
+.key.enter{background:var(--terracota);color:#fff;}
 
 /* ============ TOPBAR ============ */
 .topbar{background:#fff;border-bottom:1px solid var(--linea);padding:0 14px;display:flex;align-items:center;gap:2px;flex-shrink:0;height:56px;}
@@ -364,7 +369,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <div class="screen active" id="scLogin">
   <button id="btnActualizarLogin" title="Actualizar la app a la ultima version">&#8635;</button>
   <div class="login-box">
-    <div class="login-brand">luna<span>smart</span> POS</div>
+    <img class="login-badge" src="logo-badge.png" alt="Sue&ntilde;o de Luna">
+    <div class="login-brand">Sue&ntilde;o de <span>Luna</span></div>
+    <div class="login-tag">Coffee, Bakery &amp; Roasters</div>
     <div class="login-hi">&iexcl;Hola!</div>
     <div class="login-hint">Usa tu PIN para acceder al POS</div>
     <div class="login-suc" style="margin-top:18px;"><select id="loginSucursal"></select></div>
