@@ -870,7 +870,7 @@ var CONFIG_ITEMS = [{t:"Sincronizaci\u00f3n Luna Smart", ic:"\uD83D\uDD04", badg
   {ic:'&#128273;', t:'Lector de huella', badge:'No disponible', badgeClass:'err'},
   {ic:'&#128241;', t:'Doble pantalla', badge:'Off', badgeClass:'err'},
   {ic:'&#11088;', t:'Favoritos', badge:'', badgeClass:''},
-  {ic:'&#128424;', t:'Impresoras (opcional)', badge:'', badgeClass:''},
+  {ic:'&#128424;', t:'Impresora de tickets', badge:'No conectada', badgeClass:'err'},
   {ic:'&#128225;', t:'Integraciones', badge:'', badgeClass:''},
   {ic:'&#128666;', t:'Pedidos en linea', badge:'Proximamente', badgeClass:'err'},
   {ic:'&#9881;', t:'Ajustes', badge:'', badgeClass:''},
@@ -2036,6 +2036,7 @@ function confirmSale(){
   var msg=change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total));
   if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
   showToast(msg);
+  if(localStorage.getItem('ls_auto_imprimir')!=='0' && USBPrinter.soportado() && (USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1')) imprimirTicketFisico(built.obj);
   ofrecerWhatsAppTicket(built.obj);
 }
 function guardarPedidoAbierto(){
@@ -2133,6 +2134,7 @@ function confirmCobroPedido(){
   var msg=change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total));
   if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
   showToast(msg);
+  if(localStorage.getItem('ls_auto_imprimir')!=='0' && USBPrinter.soportado() && (USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1')) imprimirTicketFisico(ticketData);
   ofrecerWhatsAppTicket(ticketData);
 }
 function procesarInventario(lines,suc){
@@ -2597,7 +2599,141 @@ function renderPedidos(){
 }
 var NEGOCIO={nombre:'Sue\u00f1o de Luna',sucursal:'Suc. Casa de la Cultura',dir1:'Adolfo Lopez Mateo 1334 Col. Roma',dir2:'Piedras Negras, Coahuila',wa:'WhatsApp (878) 133 3237'};
 function logoSVG(){ return '<svg viewBox="0 0 300 200" width="150" height="100" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">'+'<text x="150" y="90" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="72" letter-spacing="-2" fill="#000">SUE\u00d1O</text>'+'<text x="150" y="170" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="72" letter-spacing="-2" fill="#000">DE LUNA</text>'+'</svg>'; }
-function imprimirTicket(p){
+
+/* ============ IMPRESORA TERMICA USB (ESC/POS) ============
+   La impresora fisica (80mm, ESC/POS) no la puede usar el dialogo de
+   impresion de Android -- ese dialogo espera una impresora con soporte
+   AirPrint/Mopria, y las termicas de recibo genericas no lo tienen, solo
+   hablan ESC/POS crudo. Por eso se manda directo por WebUSB, sin pasar
+   por window.print(). El emparejamiento USB lo recuerda el navegador
+   (Chrome) mientras no se revoque desde su configuracion del sitio, asi
+   que solo hay que conectar una vez por tablet. */
+var USBPrinter=(function(){
+  var device=null, epOut=null;
+  function soportado(){ return !!(navigator.usb); }
+  function conectada(){ return !!(device && device.opened); }
+  function abrirDispositivo(d){
+    return d.open().then(function(){
+      return d.configuration ? Promise.resolve() : d.selectConfiguration(1);
+    }).then(function(){
+      var ifaceNum=null, epNum=null;
+      d.configuration.interfaces.forEach(function(iface){
+        iface.alternates.forEach(function(alt){
+          alt.endpoints.forEach(function(ep){
+            if(ep.direction==='out' && ifaceNum===null){ ifaceNum=iface.interfaceNumber; epNum=ep.endpointNumber; }
+          });
+        });
+      });
+      if(ifaceNum===null) throw new Error('Sin endpoint de salida');
+      return d.claimInterface(ifaceNum).then(function(){ device=d; epOut=epNum; });
+    });
+  }
+  function conectar(){
+    if(!soportado()){ showToast('Este navegador no soporta impresion USB directa'); return Promise.resolve(false); }
+    return navigator.usb.requestDevice({filters:[]}).then(function(d){
+      return abrirDispositivo(d).then(function(){ try{ localStorage.setItem('ls_usb_printer_ok','1'); }catch(e){} showToast('Impresora conectada'); return true; });
+    }).catch(function(e){
+      if(e && e.name==='NotFoundError'){ showToast('No se seleccion\u00f3 ninguna impresora'); }
+      else { showToast('No se pudo conectar la impresora'); console.error(e); }
+      return false;
+    });
+  }
+  function reconectar(){
+    if(!soportado() || conectada()) return Promise.resolve(conectada());
+    return navigator.usb.getDevices().then(function(lista){
+      if(!lista.length) return false;
+      return abrirDispositivo(lista[0]).then(function(){ return true; }).catch(function(e){ console.error('reconectar impresora',e); return false; });
+    });
+  }
+  function enviar(bytes){
+    return reconectar().then(function(){
+      if(!conectada()) return false;
+      return device.transferOut(epOut, bytes).then(function(){ return true; }).catch(function(e){ console.error('enviar a impresora',e); return false; });
+    });
+  }
+  return {soportado:soportado, conectada:conectada, conectar:conectar, reconectar:reconectar, enviar:enviar};
+})();
+var ESCPOS_ESC=0x1B, ESCPOS_GS=0x1D;
+function _sinAcentos(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function _escposBytes(s){
+  var t=_sinAcentos(s); var out=[];
+  for(var i=0;i<t.length;i++){ var c=t.charCodeAt(i); out.push(c<256?c:0x3F); }
+  return out;
+}
+function _escposLinea(s){ return _escposBytes(s).concat([0x0A]); }
+function _padDer(s,n){ s=String(s); return s.length>=n? s.slice(0,n) : s+Array(n-s.length+1).join(' '); }
+function _padIzq(s,n){ s=String(s); return s.length>=n? s.slice(0,n) : Array(n-s.length+1).join(' ')+s; }
+function construirTicketESCPOS(p){
+  var items=(p.items||[]);
+  var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
+  var cargo=p.cargoDomicilio||0;
+  var W=32, b=[];
+  var push=function(arr){ b=b.concat(arr); };
+  push([ESCPOS_ESC,0x40]);
+  push([ESCPOS_ESC,0x61,1]);
+  push([ESCPOS_ESC,0x21,0x30]);
+  push(_escposLinea(_sinAcentos(NEGOCIO.nombre)));
+  push([ESCPOS_ESC,0x21,0x00]);
+  push(_escposLinea(NEGOCIO.sucursal));
+  push(_escposLinea(NEGOCIO.dir1));
+  push(_escposLinea(NEGOCIO.dir2));
+  push(_escposLinea(''));
+  push([ESCPOS_ESC,0x61,0]);
+  push(_escposLinea('Ticket '+(p.id||'')+' - '+(p.hora||'')));
+  push(_escposLinea((TIPO_LABEL[p.tipo]||p.tipo||'')+(p.mesa?' - Mesa '+p.mesa:'')));
+  push(_escposLinea('Pago: '+(PAGO_LABEL[p.metodo]||p.metodo||'Pendiente')));
+  if(p.pagos&&p.pagos.length>1){ p.pagos.forEach(function(pg){ push(_escposLinea('  '+(PAGO_LABEL[pg.metodo]||pg.metodo)+': '+money(pg.monto))); }); }
+  if(p.cliente&&(p.cliente.telefono||p.cliente.direccion)){
+    push(_escposLinea(''));
+    push(_escposLinea('DATOS DE ENTREGA'));
+    if(p.cliente.nombre) push(_escposLinea(p.cliente.nombre));
+    if(p.cliente.telefono) push(_escposLinea('Tel: '+p.cliente.telefono));
+    if(p.cliente.direccion) push(_escposLinea(p.cliente.direccion));
+    if(p.cliente.referencia) push(_escposLinea('Ref: '+p.cliente.referencia));
+  }
+  push(_escposLinea(''));
+  push(_escposLinea(Array(W+1).join('-')));
+  items.forEach(function(l){
+    var izq=l.qty+'x '+_sinAcentos(l.name);
+    var precio=money(l.price*l.qty);
+    if((izq+precio).length>W-1){ push(_escposLinea(izq)); push(_escposLinea(_padIzq(precio,W))); }
+    else { push(_escposLinea(_padDer(izq,W-precio.length)+precio)); }
+    if(l.mods) push(_escposLinea('  '+_sinAcentos(l.mods)));
+    if(l.note) push(_escposLinea('  '+_sinAcentos(l.note)));
+  });
+  push(_escposLinea(Array(W+1).join('-')));
+  push(_escposLinea(_padDer('Subtotal',W-money(subtotal).length)+money(subtotal)));
+  if(desc>0) push(_escposLinea(_padDer('Descuento',W-('-'+money(desc)).length)+'-'+money(desc)));
+  if(cargo>0) push(_escposLinea(_padDer('Cargo domicilio',W-money(cargo).length)+money(cargo)));
+  push([ESCPOS_ESC,0x21,0x08]);
+  push(_escposLinea(_padDer('TOTAL',W-money(p.total).length)+money(p.total)));
+  push([ESCPOS_ESC,0x21,0x00]);
+  push(_escposLinea(''));
+  push([ESCPOS_ESC,0x61,1]);
+  push(_escposLinea('Gracias por tu compra!'));
+  push(_escposLinea(''));
+  push(_escposLinea(''));
+  push(_escposLinea(''));
+  push([ESCPOS_GS,0x56,0x42,0x00]);
+  return new Uint8Array(b);
+}
+function abrirCajonFisico(){
+  if(!USBPrinter.soportado()){ showToast('Este navegador no soporta abrir el caj\u00f3n por USB'); return; }
+  USBPrinter.enviar(new Uint8Array([ESCPOS_ESC,0x70,0x00,0x19,0xFA])).then(function(ok){
+    showToast(ok?'Abriendo caj\u00f3n...':'Conecta la impresora primero (Configuraci\u00f3n \u2192 Impresora)');
+  });
+}
+function imprimirTicketFisico(p, silencioso){
+  if(!USBPrinter.soportado()) return Promise.resolve(false);
+  return USBPrinter.enviar(construirTicketESCPOS(p)).then(function(ok){
+    if(!silencioso) showToast(ok?'Ticket '+(p.id||'')+' impreso':'No se pudo imprimir -- revisa la conexi\u00f3n USB de la impresora');
+    return ok;
+  });
+}
+function _imprimirTicketNavegador(p){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
   var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
@@ -2620,6 +2756,13 @@ function imprimirTicket(p){
   '</div></div>';
   window.print();
   showToast('Ticket '+p.id+' enviado a impresi\u00f3n');
+}
+function imprimirTicket(p){
+  if(USBPrinter.soportado() && (USBPrinter.conectada() || localStorage.getItem('ls_usb_printer_ok')==='1')){
+    imprimirTicketFisico(p).then(function(ok){ if(!ok) _imprimirTicketNavegador(p); });
+  } else {
+    _imprimirTicketNavegador(p);
+  }
 }
 function ticketTextoWhatsApp(p){
   var items=(p.items||[]);
@@ -2775,11 +2918,33 @@ function cancelarPedido(ix){
 function renderConfig(){
   var __itemDP=CONFIG_ITEMS.filter(function(c){return c.t==='Doble pantalla';})[0];
   if(__itemDP){ var __usada=localStorage.getItem('ls_display_usada')==='1'; __itemDP.badge=__usada?'Activa':'Off'; __itemDP.badgeClass=__usada?'ok':'err'; }
+  var __itemImp=CONFIG_ITEMS.filter(function(c){return c.t==='Impresora de tickets';})[0];
+  if(__itemImp){ var __conectada=USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1'; __itemImp.badge=__conectada?'Conectada':'No conectada'; __itemImp.badgeClass=__conectada?'ok':'err'; }
   var html='<h2>Configuraci&oacute;n</h2><div class="sub">Impresoras, alarmas, lector de huella y m&aacute;s</div><div class="cfg-grid">';
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Impresora de tickets'){ configImpresora(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+}
+function configImpresora(){
+  var conectada=USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1';
+  var auto=localStorage.getItem('ls_auto_imprimir')!=='0';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>Impresora de tickets</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Impresora térmica de 80mm conectada por USB al terminal. Se conecta una sola vez por tablet -- Chrome recuerda el permiso.</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><span class="cfg-badge '+(conectada?'ok':'err')+'">'+(conectada?'Conectada':'No conectada')+'</span></div>'+
+    '<label style="display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="chkAutoImprimir" '+(auto?'checked':'')+' style="width:20px;height:20px">Imprimir automáticamente al cobrar</label>'+
+    '<div class="modal-actions" style="flex-wrap:wrap"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-ghost" id="mProbar" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:var(--cafe-medio);">🖨️ Imprimir ticket de prueba</button><button class="btn-confirm" id="mOk">'+(conectada?'Reconectar':'Conectar impresora')+'</button></div>'+
+    '</div></div>';
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('chkAutoImprimir').addEventListener('change',function(e){ localStorage.setItem('ls_auto_imprimir', e.target.checked?'1':'0'); });
+  document.getElementById('mOk').addEventListener('click',function(){ USBPrinter.conectar().then(function(){ configImpresora(); }); });
+  document.getElementById('mProbar').addEventListener('click',function(){
+    var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
+    var prueba={id:'PRUEBA',hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),tipo:'llevar',metodo:'efectivo',total:65,items:[{name:'Café Americano',qty:1,price:35},{name:'Concha',qty:1,price:30}]};
+    imprimirTicketFisico(prueba);
+  });
 }
 
 /* ============ CAJA / CORTE ============ */
@@ -3010,7 +3175,7 @@ function cajaMovTotales(){
   return {retiros:retiros, depositos:depositos};
 }
 function cajaOp(op){
-  if(op==='cajon'){ showToast('Abriendo caj&oacute;n...'); return; }
+  if(op==='cajon'){ abrirCajonFisico(); return; }
   if(op==='corte'){ abrirResumenCierre(false); return; }
   if(op==='retiro'){
     if(!esRolSupervisorAdmin()){ showToast('Solo un gerente o admin puede registrar retiros'); return; }
