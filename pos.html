@@ -717,6 +717,26 @@ function fbDejarDeEscucharAlarmas(){
   state.alarmasConfigVal={};
 }
 
+/* ==== FIREBASE: link del grupo de WhatsApp de repartidores, cacheado en
+   vivo -- si se leyera con .once() justo al querer abrir la ventana, para
+   cuando responde Firebase el navegador ya no lo considera un clic
+   directo del usuario y bloquea el popup (eso reportó Jaime como "falla
+   al solicitar repartidor"). Con esto ya está listo de antemano y
+   window.open ocurre en el mismo tick del clic. ==== */
+var _repartidorConfigLink=null;
+var fbRepConfigListener=null, fbRepConfigListenerSuc=null;
+function fbEscucharRepartidorConfig(suc){
+  fbDejarDeEscucharRepartidorConfig();
+  fbRepConfigListenerSuc=suc;
+  fbRepConfigListener=function(snap){ _repartidorConfigLink=snap.val()||null; };
+  fbAuthReady.then(function(){ fbRepartidoresConfigRef(suc).on('value', fbRepConfigListener); });
+}
+function fbDejarDeEscucharRepartidorConfig(){
+  if(fbRepConfigListenerSuc && fbRepConfigListener) fbRepartidoresConfigRef(fbRepConfigListenerSuc).off('value', fbRepConfigListener);
+  fbRepConfigListener=null; fbRepConfigListenerSuc=null;
+  _repartidorConfigLink=null;
+}
+
 /* ==== FIREBASE: catalogo de productos en vivo (antes hardcodeado en el codigo) ==== */
 var fbCatalogoListener=null, fbCatalogoListenerSuc=null;
 function fbEscucharCatalogo(suc){
@@ -1042,6 +1062,7 @@ function doLogin(){
     fbEscucharMesas(suc);
     fbEscucharAgotados(suc);
     fbEscucharAlarmas(suc);
+    fbEscucharRepartidorConfig(suc);
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
     cargarRecetasCache();
@@ -1068,7 +1089,7 @@ function doLogin(){
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharRepartidorConfig(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
 /* Instalada como app (pantalla completa, sin barra de navegador) no hay boton
    de recargar del navegador -- este es el unico modo de forzar que la tablet
    baje la version mas nueva en vez de seguir usando la que ya tenia en cache. */
@@ -2424,14 +2445,27 @@ function textoSolicitarRepartidor(p){
   return lineas.join('\n');
 }
 function solicitarRepartidorAhora(p){
-  fbRepartidoresConfigRef(state.sucursal).once('value').then(function(snap){
-    var link=snap.val();
-    if(!link){ showToast('No hay grupo de WhatsApp configurado para repartidores en esta sucursal (Configuración > Repartidores)'); return; }
-    var msg=textoSolicitarRepartidor(p);
-    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(msg).catch(function(){}); }
-    window.open(link,'_blank');
-    showToast('Mensaje copiado -- pégalo en el grupo de WhatsApp');
-  });
+  var link=_repartidorConfigLink;
+  if(!link){
+    // Red de seguridad: si por lo que sea el cache aun no cargaba (recien
+    // se inicio sesion), se intenta una lectura directa -- aunque en ese
+    // caso el navegador puede bloquear la ventana por no ser ya un clic
+    // directo, se avisa explicitamente en vez de fallar en silencio.
+    fbRepartidoresConfigRef(state.sucursal).once('value').then(function(snap){
+      var linkFresco=snap.val();
+      if(!linkFresco){ showToast('No hay grupo de WhatsApp configurado para repartidores en esta sucursal (Configuración > Repartidores)'); return; }
+      _repartidorConfigLink=linkFresco;
+      var abierto=window.open(linkFresco,'_blank');
+      if(!abierto) showToast('El navegador bloqueó la ventana -- vuelve a tocar "Solicitar repartidor"');
+      else showToast('Copia el mensaje y pégalo en el grupo');
+    });
+    return;
+  }
+  var abierto=window.open(link,'_blank');
+  var msg=textoSolicitarRepartidor(p);
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(msg).catch(function(){}); }
+  if(!abierto) showToast('El navegador bloqueó la ventana -- permite ventanas emergentes para este sitio');
+  else showToast('Mensaje copiado -- pégalo en el grupo de WhatsApp');
 }
 function ofrecerSolicitarRepartidor(p){
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>¿Solicitar repartidor?</h2>'+
@@ -2659,6 +2693,7 @@ function verPedido(ix){
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button>'+
     ((p.estado==='abierto'||p.estado==='pagado')?'<button class="btn-cancel" id="mCancelarPedido" style="color:var(--rojo);">Cancelar pedido</button>':'')+
     (p.estado==='pagado'?'<button class="btn-ghost" id="mCambiarPago" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:var(--cafe-medio);">💳 Cambiar método de pago</button>':'')+
+    (p.estado==='pagado'&&p.tipo==='domicilio'?'<button class="btn-ghost" id="mSolicitarRepartidor" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:var(--cafe-medio);">🛵 Solicitar repartidor</button>':'')+
     (p.estado==='abierto'?'<button class="btn-ghost" id="mEditar" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:var(--cafe-medio);">✏️ Editar pedido</button>':'')+
     (p.estado!=='abierto'&&_normTelLealtad(p.cliente&&p.cliente.telefono).length===10?'<button class="btn-ghost" id="mWhatsapp" style="border:1px solid var(--linea);border-radius:12px;padding:12px 16px;background:#fff;font-weight:700;color:#1a7f37;">📲 WhatsApp</button>':'')+
     '<button class="btn-confirm" id="mOk">'+(p.estado==='abierto'?'Cobrar':'Reimprimir ticket')+'</button></div></div></div>';
@@ -2671,6 +2706,8 @@ function verPedido(ix){
   if(__btnEditar){ __btnEditar.addEventListener('click',function(){ closeModal(); editarPedido(ix); }); }
   var __btnCambiarPago=document.getElementById('mCambiarPago');
   if(__btnCambiarPago){ __btnCambiarPago.addEventListener('click',function(){ cambiarMetodoPago(ix); }); }
+  var __btnRepartidor=document.getElementById('mSolicitarRepartidor');
+  if(__btnRepartidor){ __btnRepartidor.addEventListener('click',function(){ solicitarRepartidorAhora(p); }); }
 }
 // Corrige el método de pago de una venta ya cerrada (ej. se cobró
 // "efectivo" por error y en realidad fue tarjeta) sin tener que cancelar
