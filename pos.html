@@ -43,6 +43,7 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 /* ============ LOGIN PIN ============ */
 #scLogin{background:linear-gradient(160deg,var(--beige-claro),var(--beige));align-items:center;justify-content:center;color:var(--cafe);}
 #btnActualizarLogin{position:fixed;top:16px;right:16px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(28,18,10,.15);background:rgba(28,18,10,.05);color:var(--cafe-medio);font-size:20px;z-index:20;}
+#btnPantallaCompleta{position:fixed;top:16px;right:66px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(28,18,10,.15);background:rgba(28,18,10,.05);color:var(--cafe-medio);font-size:19px;z-index:20;}
 .login-box{width:100%;max-width:360px;text-align:center;padding:20px;}
 .login-badge{width:88px;height:88px;border-radius:22px;margin:0 auto 14px;box-shadow:0 10px 24px rgba(177,70,24,.28);display:block;}
 .login-brand{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:700;letter-spacing:.3px;color:var(--cafe);}
@@ -368,6 +369,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <!-- ============ LOGIN PIN ============ -->
 <div class="screen active" id="scLogin">
   <button id="btnActualizarLogin" title="Actualizar la app a la ultima version">&#8635;</button>
+  <button id="btnPantallaCompleta" title="Pantalla completa">&#9974;</button>
   <div class="login-box">
     <img class="login-badge" src="logo-badge.png" alt="Sue&ntilde;o de Luna">
     <div class="login-brand">Sue&ntilde;o de <span>Luna</span></div>
@@ -1003,6 +1005,7 @@ function initLogin(){
   sel.innerHTML=SUCURSALES.map(function(s){return '<option value="'+s.id+'">'+esc(s.nombre)+'</option>';}).join('');
   document.getElementById('keypad').querySelectorAll('.key').forEach(function(k){ k.addEventListener('click',function(){ pinKey(k.dataset.k); }); });
   var __btnAL=document.getElementById('btnActualizarLogin'); if(__btnAL && !__btnAL.__bound){ __btnAL.__bound=true; __btnAL.addEventListener('click',forzarActualizacion); }
+  var __btnFS=document.getElementById('btnPantallaCompleta'); if(__btnFS && !__btnFS.__bound){ __btnFS.__bound=true; __btnFS.addEventListener('click',toggleFullscreen); document.addEventListener('fullscreenchange',_actualizarIconoFullscreen); _actualizarIconoFullscreen(); }
   renderPinDisplay();
   if(!window.__loginKb){ window.__loginKb=true; document.addEventListener('keydown', function(e){ if(!state || state.logged) return; var sc=document.getElementById('scLogin'); if(sc && sc.classList.contains('hidden')) return; if(e.key>='0' && e.key<='9'){ pinKey(e.key); e.preventDefault(); } else if(e.key==='Backspace'){ pinKey('del'); e.preventDefault(); } else if(e.key==='Enter'){ pinKey('enter'); e.preventDefault(); } }); }
 }
@@ -1067,6 +1070,28 @@ function forzarActualizacion(){
   }
   showToast('Actualizando LunaSmart POS...');
   setTimeout(function(){ location.href = location.pathname + '?_v=' + Date.now(); }, 250);
+}
+/* Si la tablet abre el POS desde el navegador (no instalado como app), no
+   hay forma de ocultar la barra de direcciones salvo con la API de pantalla
+   completa del navegador. */
+function _elemEnFullscreen(){ return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null; }
+function toggleFullscreen(){
+  var el=document.documentElement;
+  if(_elemEnFullscreen()){
+    if(document.exitFullscreen) document.exitFullscreen();
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else if(document.msExitFullscreen) document.msExitFullscreen();
+  } else {
+    var req=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen;
+    if(req) req.call(el).catch(function(){ showToast('No se pudo activar pantalla completa'); });
+    else showToast('Este navegador no soporta pantalla completa');
+  }
+}
+function _actualizarIconoFullscreen(){
+  var btn=document.getElementById('btnPantallaCompleta'); if(!btn) return;
+  var activo=!!_elemEnFullscreen();
+  btn.innerHTML=activo?'&#10005;':'&#9974;';
+  btn.title=activo?'Salir de pantalla completa':'Pantalla completa';
 }
 function seedPedidos(){ /* MOCK historial */ return [
   {id:'#1042',tipo:'llevar',metodo:'efectivo',total:174,estado:'pagado',hora:'10:12',mesa:null,descuento:{tipo:null,valor:0},items:[{name:'Capuccino',qty:2,price:55,note:'',area:'barra'},{name:'Galleta artesanal',qty:1,price:35,note:'sin nuez',area:'cocina'},{name:'Espresso',qty:1,price:38,note:'',area:'barra'}],estadoBarra:'pendiente',estadoCocina:'pendiente'},
