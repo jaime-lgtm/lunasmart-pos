@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Sueño de Luna — Pantalla de cliente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
 :root{
   --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
@@ -19,14 +22,17 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
 /* ---- Pantalla ociosa (sin pedido activo) ---- */
 #idle{position:fixed;inset:0;overflow:hidden;}
 #idlePromoImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-#idleBrand{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+#idleBrand{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
   background:linear-gradient(160deg,var(--cafe),var(--cafe-medio));color:var(--beige);text-align:center;padding:40px;}
-#idleBrand .logo{width:120px;height:120px;border-radius:26px;background:var(--cafe);border:3px solid var(--terracota-claro);display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:900;color:var(--beige);box-shadow:0 10px 40px rgba(0,0,0,.35);overflow:hidden;}
-#idleBrand .logo img{width:100%;height:100%;object-fit:contain;}
-#idleBrand h1{font-size:clamp(28px,4vw,52px);font-weight:800;letter-spacing:.5px;}
-#idleBrand h1 b{color:var(--terracota-claro);}
-#idleBrand p{font-size:clamp(16px,1.6vw,22px);opacity:.85;max-width:640px;}
-#idle .suc{position:absolute;bottom:22px;right:28px;font-size:14px;opacity:.6;color:var(--beige);z-index:2;}
+#idleBrand .logo{width:clamp(84px,9vw,120px);height:clamp(84px,9vw,120px);border-radius:24%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:var(--beige);background:var(--terracota);box-shadow:0 14px 40px rgba(177,70,24,.4);overflow:hidden;}
+#idleBrand .logo img{width:100%;height:100%;object-fit:cover;}
+#idleBrand h1{font-family:'Playfair Display',Georgia,serif;font-size:clamp(30px,4.4vw,58px);font-weight:700;letter-spacing:.3px;color:var(--beige);}
+#idleBrand .tag{font-size:clamp(11px,1vw,14px);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--terracota-claro);}
+#idleBrand .rule{width:64px;height:1px;background:rgba(232,214,185,.35);margin:2px 0;}
+#idleBrand p{font-size:clamp(14px,1.3vw,18px);opacity:.8;max-width:640px;line-height:1.6;}
+#idle .suc{position:absolute;bottom:26px;right:30px;font-size:clamp(11px,1vw,13px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--beige);opacity:.9;z-index:2;border:1px solid rgba(232,214,185,.4);border-radius:999px;padding:8px 18px;}
+#idle .brandmark{position:absolute;bottom:26px;left:30px;font-size:clamp(12px,1vw,14px);font-weight:800;color:var(--beige);opacity:.55;z-index:2;}
+#idle .brandmark span{color:var(--terracota-claro);}
 
 /* ---- Pantalla de pedido en construccion ---- */
 #live{position:fixed;inset:0;display:none;flex-direction:column;background:#fff;}
@@ -57,10 +63,13 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
 <div id="idle">
   <img id="idlePromoImg" class="hidden">
   <div id="idleBrand">
-    <div class="logo"><img id="idleLogoImg" class="hidden"><span id="idleLogoFallback">LS</span></div>
-    <h1>luna<b>smart</b> &middot; Sueño de Luna</h1>
-    <p>Café &amp; Roasters — Coffee, Bakery &amp; Roasters</p>
+    <div class="logo"><img id="idleLogoImg" src="logo-badge.png"><span id="idleLogoFallback" class="hidden">LS</span></div>
+    <h1>Sueño de Luna</h1>
+    <div class="tag">Coffee, Bakery &amp; Roasters</div>
+    <div class="rule"></div>
+    <p>Café puro 100% artesanal, tostado en casa.<br>Piedras Negras, Coahuila.</p>
   </div>
+  <div class="brandmark">luna<span>smart</span></div>
   <div class="suc" id="sucLbl"></div>
 </div>
 
@@ -164,9 +173,8 @@ var _slideTimer = null;
 
 function pintarConfig(cfg){
   cfg = cfg || {};
-  var logoImg=document.getElementById('idleLogoImg'), logoFallback=document.getElementById('idleLogoFallback');
-  if(cfg.logoUrl){ logoImg.src=cfg.logoUrl; logoImg.classList.remove('hidden'); logoFallback.classList.add('hidden'); }
-  else { logoImg.classList.add('hidden'); logoFallback.classList.remove('hidden'); }
+  var logoImg=document.getElementById('idleLogoImg');
+  logoImg.src = cfg.logoUrl || 'logo-badge.png';
 
   var promos = (cfg.promoImages||[]).filter(Boolean);
   var seg = cfg.duracionSegundos>0 ? cfg.duracionSegundos : 30;
@@ -193,7 +201,7 @@ function _mostrarSlideActual(){
 }
 
 if(!suc){
-  document.getElementById('idleBrand').innerHTML = '<div class="logo">LS</div><h1>Falta configurar</h1><p>Abre esta pantalla desde el POS: Configuración → Doble pantalla → Abrir pantalla de cliente.</p>';
+  document.getElementById('idleBrand').innerHTML = '<div class="logo"><img src="logo-badge.png"></div><h1>Falta configurar</h1><p>Abre esta pantalla desde el POS: Configuración → Doble pantalla → Abrir pantalla de cliente.</p>';
 } else {
   document.getElementById('sucLbl').textContent = NOMBRES[suc] || suc;
   fbAuthReady.then(function(){
