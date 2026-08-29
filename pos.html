@@ -902,7 +902,7 @@ var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta (terminal)', mercadopago:'
 
 function money(n){ return '$'+Number(n||0).toFixed(2); }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
-function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},2600);}
+function showToast(msg,dur){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},dur||2600);}
 
 /* ---- Alerta sonora (pedido nuevo en Monitor) ---- */
 var _audioCtx=null;
@@ -2634,7 +2634,7 @@ var USBPrinter=(function(){
       return abrirDispositivo(d).then(function(){ try{ localStorage.setItem('ls_usb_printer_ok','1'); }catch(e){} showToast('Impresora conectada'); return true; });
     }).catch(function(e){
       if(e && e.name==='NotFoundError'){ showToast('No se seleccion\u00f3 ninguna impresora'); }
-      else { showToast('No se pudo conectar la impresora'); console.error(e); }
+      else { showToast('Error al conectar: '+((e&&e.name)||'?')+' -- '+((e&&e.message)||e), 9000); console.error(e); }
       return false;
     });
   }
