@@ -41,28 +41,32 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .screen.active{display:flex;}
 
 /* ============ LOGIN PIN ============ */
-#scLogin{background:linear-gradient(160deg,var(--beige-claro),var(--beige));align-items:center;justify-content:center;color:var(--cafe);}
+/* overflow-y:auto como red de seguridad -- en tablets con pantalla chica
+   o cuadrada el contenido puede no caber completo, y sin esto quedaba
+   recortado sin ninguna forma de hacer scroll para ver el resto. */
+#scLogin{background:linear-gradient(160deg,var(--beige-claro),var(--beige));align-items:center;justify-content:center;color:var(--cafe);overflow-y:auto;}
 #btnActualizarLogin{position:fixed;top:16px;right:16px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(28,18,10,.15);background:rgba(28,18,10,.05);color:var(--cafe-medio);font-size:20px;z-index:20;}
-/* Lejos de la esquina superior a propósito -- ahí Android espera su propio
-   gesto de deslizar para salir de pantalla completa, y se pelea con el
-   toque sobre el botón si lo dejamos cerca. */
-#btnPantallaCompleta{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);min-width:220px;height:52px;padding:0 20px;border-radius:26px;border:1px solid rgba(28,18,10,.18);background:rgba(28,18,10,.06);color:var(--cafe-medio);font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;z-index:20;}
-#btnPantallaCompleta.activo{background:var(--terracota);color:#fff;border-color:var(--terracota);}
-.login-box{width:100%;max-width:360px;text-align:center;padding:20px;}
-.login-badge{width:88px;height:88px;border-radius:22px;margin:0 auto 14px;box-shadow:0 10px 24px rgba(177,70,24,.28);display:block;}
-.login-brand{font-family:'Playfair Display',Georgia,serif;font-size:32px;font-weight:700;letter-spacing:.3px;color:var(--cafe);}
+.login-box{width:100%;max-width:360px;text-align:center;padding:16px;margin:auto;}
+.login-badge{width:64px;height:64px;border-radius:18px;margin:0 auto 8px;box-shadow:0 8px 18px rgba(177,70,24,.28);display:block;}
+.login-brand{font-family:'Playfair Display',Georgia,serif;font-size:25px;font-weight:700;letter-spacing:.3px;color:var(--cafe);line-height:1.15;}
 .login-brand span{color:var(--terracota);}
-.login-tag{font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--terracota);margin-top:6px;text-transform:uppercase;}
-.login-hi{font-size:20px;margin-top:22px;font-weight:600;}
-.login-hint{font-size:14px;opacity:.75;margin-top:6px;line-height:1.4;}
-.pin-display{margin:22px auto 10px;height:54px;border-radius:12px;background:rgba(28,18,10,.05);border:1px solid rgba(28,18,10,.14);display:flex;align-items:center;justify-content:center;gap:14px;}
-.pin-dot{width:14px;height:14px;border-radius:50%;background:rgba(28,18,10,.18);}
+.login-tag{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--terracota);margin-top:4px;text-transform:uppercase;}
+.login-hi{font-size:17px;margin-top:12px;font-weight:600;}
+.login-hint{font-size:13px;opacity:.75;margin-top:3px;line-height:1.3;}
+.pin-display{margin:12px auto 8px;height:46px;border-radius:12px;background:rgba(28,18,10,.05);border:1px solid rgba(28,18,10,.14);display:flex;align-items:center;justify-content:center;gap:12px;}
+.pin-dot{width:12px;height:12px;border-radius:50%;background:rgba(28,18,10,.18);}
 .pin-dot.on{background:var(--terracota);}
-.login-suc select{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(28,18,10,.16);background:rgba(28,18,10,.04);color:var(--cafe);}
-.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px;}
-.key{height:64px;border-radius:14px;background:rgba(28,18,10,.05);font-size:24px;font-weight:700;color:var(--cafe);display:flex;align-items:center;justify-content:center;transition:.12s;}
+.login-suc select{width:100%;padding:10px;border-radius:12px;border:1px solid rgba(28,18,10,.16);background:rgba(28,18,10,.04);color:var(--cafe);}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;}
+.key{height:50px;border-radius:12px;background:rgba(28,18,10,.05);font-size:20px;font-weight:700;color:var(--cafe);display:flex;align-items:center;justify-content:center;transition:.12s;}
 .key:active{background:var(--terracota);color:#fff;}
 .key.enter{background:var(--terracota);color:#fff;}
+/* Ya no es position:fixed -- vive dentro del flujo normal, justo debajo
+   del teclado, para que nunca tape el botón de entrar (flecha) ni
+   compita por espacio en pantallas chicas. Si hace falta, aparece con
+   scroll como cualquier otro contenido. */
+#btnPantallaCompleta{width:100%;height:44px;margin-top:14px;border-radius:22px;border:1px solid rgba(28,18,10,.18);background:rgba(28,18,10,.06);color:var(--cafe-medio);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;}
+#btnPantallaCompleta.activo{background:var(--terracota);color:#fff;border-color:var(--terracota);}
 
 /* ============ TOPBAR ============ */
 .topbar{background:#fff;border-bottom:1px solid var(--linea);padding:0 14px;display:flex;align-items:center;gap:2px;flex-shrink:0;height:56px;}
@@ -373,7 +377,6 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <!-- ============ LOGIN PIN ============ -->
 <div class="screen active" id="scLogin">
   <button id="btnActualizarLogin" title="Actualizar la app a la ultima version">&#8635;</button>
-  <button id="btnPantallaCompleta" title="Pantalla completa">&#9974; Pantalla completa</button>
   <div class="login-box">
     <img class="login-badge" src="logo-badge.png" alt="Sue&ntilde;o de Luna">
     <div class="login-brand">Sue&ntilde;o de <span>Luna</span></div>
@@ -388,6 +391,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       <button class="key" data-k="7">7</button><button class="key" data-k="8">8</button><button class="key" data-k="9">9</button>
       <button class="key" data-k="del">&#9003;</button><button class="key" data-k="0">0</button><button class="key enter" data-k="enter">&rarr;</button>
     </div>
+    <button id="btnPantallaCompleta" title="Pantalla completa">&#9974; Pantalla completa</button>
   </div>
 </div>
 
