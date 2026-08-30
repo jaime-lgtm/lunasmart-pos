@@ -1193,6 +1193,7 @@ function renderRevisionPedidoWeb(fbKey){
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
     '<h2>🔔 Pedido nuevo del sitio web'+mesaBadge+'</h2>'+
     '<div class="sub" style="margin-bottom:12px">'+esc(p.id)+' · '+esc(TIPO_LABEL[p.tipo]||p.tipo)+' · '+esc(p.hora||'')+'</div>'+
+    (p.programado?'<div style="display:flex;align-items:center;gap:8px;background:#fff3cd;border:1px solid #ffe08a;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:800;color:#8a6100">📅 PROGRAMADO para '+esc(p.entregaProgramadaFecha||'')+' a las '+esc(p.entregaProgramadaHora||'')+' -- no es para ahora</div>':'')+
     '<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+
       '<div class="dc-l"><b>'+esc((p.cliente&&p.cliente.nombre)||'')+'</b>'+((p.cliente&&p.cliente.telefono)?' · '+esc(p.cliente.telefono):'')+'</div>'+
       ((p.cliente&&p.cliente.direccion)?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+
@@ -2667,7 +2668,7 @@ function confirmarLiberarMesa(n){
 function renderPedidos(){
   var html='<h2>Historial de pedidos</h2><div class="sub">Toca un pedido para ver el detalle</div><div class="card">';
   if(!state.pedidos.length){ html+='<div class="cart-empty">Sin pedidos</div>'; }
-  else{ html+=state.pedidos.map(function(p,ix){ var mt=p.metodo?(PAGO_LABEL[p.metodo]||p.metodo):(p.estado==='cancelado'?'Cancelado':'Pendiente de cobro'); return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+'</div><div class="pm">'+esc(mt)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
+  else{ html+=state.pedidos.map(function(p,ix){ var mt=p.metodo?(PAGO_LABEL[p.metodo]||p.metodo):(p.estado==='cancelado'?'Cancelado':'Pendiente de cobro'); return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+(p.programado?' &middot; <span style="color:var(--terra,#b14618);font-weight:800">📅 Programado '+esc(p.entregaProgramadaFecha||'')+' '+esc(p.entregaProgramadaHora||'')+'</span>':'')+'</div><div class="pm">'+esc(mt)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
   html+='</div>';
   document.getElementById('pedidosContent').innerHTML=html;
 }
@@ -2903,6 +2904,7 @@ function verPedido(ix){
   var metodoTxt = p.metodo ? esc(PAGO_LABEL[p.metodo]||p.metodo) : (p.estado==='cancelado'?'Cancelado':'Pendiente de cobro');
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
     '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+metodoTxt+' &middot; '+esc(p.hora)+'</div>'+
+    (p.programado?'<div style="display:flex;align-items:center;gap:8px;background:rgba(177,70,24,0.08);border:1px solid var(--terra);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-weight:800;color:var(--terra)">📅 Pedido programado para '+esc(p.entregaProgramadaFecha||'')+' a las '+esc(p.entregaProgramadaHora||'')+'</div>':'')+
     (p.cliente&&(p.cliente.telefono||p.cliente.direccion)?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b>'+(p.cliente.telefono?' \u00b7 '+esc(p.cliente.telefono):'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
     (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
