@@ -717,6 +717,21 @@ function fbDejarDeEscucharAlarmas(){
   state.alarmasConfigVal={};
 }
 
+/* ==== FIREBASE: tipo de cambio USD -> MXN, un solo valor global (no es
+   por sucursal, es el mismo dolar para todo el negocio) -- compartido
+   entre todas las terminales para que nadie cobre con un tipo de cambio
+   viejo. ==== */
+var fbTipoCambioListener=null;
+function fbEscucharTipoCambio(){
+  fbDejarDeEscucharTipoCambio();
+  fbTipoCambioListener=function(snap){ var v=snap.val(); if(v>0) state.tipoCambioUSD=v; };
+  fbAuthReady.then(function(){ fbDb.ref('tipoCambioUSD').on('value', fbTipoCambioListener); });
+}
+function fbDejarDeEscucharTipoCambio(){
+  if(fbTipoCambioListener) fbDb.ref('tipoCambioUSD').off('value', fbTipoCambioListener);
+  fbTipoCambioListener=null;
+}
+
 /* ==== FIREBASE: link del grupo de WhatsApp de repartidores, cacheado en
    vivo -- si se leyera con .once() justo al querer abrir la ventana, para
    cuando responde Firebase el navegador ya no lo considera un clic
@@ -867,6 +882,7 @@ var CONFIG_ITEMS = [{t:"Sincronizaci\u00f3n Luna Smart", ic:"\uD83D\uDD04", badg
   {ic:'&#128421;', t:'Monitores de estacion', badge:'Barra y Cocina', badgeClass:'ok'},
   {ic:'&#127860;', t:'Areas de preparacion', badge:'2 areas', badgeClass:'ok'},
   {ic:'&#128276;', t:'Alarmas', badge:'Activas', badgeClass:'ok'},
+  {ic:'&#128181;', t:'Tipo de cambio (USD)', badge:'', badgeClass:'ok'},
   {ic:'&#128273;', t:'Lector de huella', badge:'No disponible', badgeClass:'err'},
   {ic:'&#128241;', t:'Doble pantalla', badge:'Off', badgeClass:'err'},
   {ic:'&#11088;', t:'Favoritos', badge:'', badgeClass:''},
@@ -889,9 +905,9 @@ var state = {
   menu:null, sub:null, search:'',
   cart:[], descuento:{tipo:null,valor:0}, cargoDomicilio:0, cargoDomicilioPreguntado:false, turnoSales:[], pedidos:[], kdsArea:'todas',
   checkoutOpen:false,
-  pagosDivididos:[], dividirMetodoSel:'efectivo',
+  pagosDivididos:[], dividirMetodoSel:'efectivo', pagoUSD:false,
   cajaInicial:892, cajaAbierta:true, turno:null,
-  mesasConfigVal:null, mesasEstadoVal:{}, agotadosVal:{}, alarmasConfigVal:{},
+  mesasConfigVal:null, mesasEstadoVal:{}, agotadosVal:{}, alarmasConfigVal:{}, tipoCambioUSD:18,
   puntosDisponibles:0, puntosUsados:0, usarPuntos:false
 };
 
@@ -1062,6 +1078,7 @@ function doLogin(){
     fbEscucharMesas(suc);
     fbEscucharAgotados(suc);
     fbEscucharAlarmas(suc);
+    fbEscucharTipoCambio();
     fbEscucharRepartidorConfig(suc);
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
@@ -1089,7 +1106,7 @@ function doLogin(){
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharRepartidorConfig(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharTipoCambio(); fbDejarDeEscucharRepartidorConfig(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
 /* Instalada como app (pantalla completa, sin barra de navegador) no hay boton
    de recargar del navegador -- este es el unico modo de forzar que la tablet
    baje la version mas nueva en vez de seguir usando la que ya tenia en cache. */
@@ -1842,7 +1859,7 @@ function bindModal(onOk){
 function openCheckout(){
   if(!state.cart.length){ showToast('La orden esta vacia'); return; }
   if(state.tipoOrden==='domicilio' && !state.cargoDomicilioPreguntado){ openCargoDom(openCheckout); return; }
-  state.checkoutOpen=true; state.pagosDivididos=[]; state.dividirMetodoSel='efectivo'; renderCheckout();
+  state.checkoutOpen=true; state.pagosDivididos=[]; state.dividirMetodoSel='efectivo'; state.pagoUSD=false; renderCheckout();
 }
 function closeCheckout(){ state.checkoutOpen=false; closeModal(); }
 
@@ -1850,6 +1867,10 @@ function closeCheckout(){ state.checkoutOpen=false; closeModal(); }
 function _pagoRerender(){ if(state.checkoutOpen) renderCheckout(); else if(_cobroPedidoIx!=null) renderCobroPedido(); }
 function seleccionarMetodoDividido(m){ state.dividirMetodoSel=m; _pagoRerender(); }
 function totalPagosDivididos(){ return state.pagosDivididos.reduce(function(s,p){return s+p.monto;},0); }
+/* Cuando hay mas de un pago (mixto) o un solo pago en dolares, vale la
+   pena guardar/mostrar el detalle -- un pago sencillo en pesos no
+   necesita desglose. */
+function _pagosConDetalle(pagos){ return pagos && (pagos.length>1 || (pagos.length===1 && pagos[0].usd)); }
 
 /* ---- Cobro automático con la terminal física Mercado Pago Point ----
    Al agregar un pago "tarjeta" con la terminal configurada para esta
@@ -1937,6 +1958,20 @@ function agregarPagoDividido(total,monto){
   state.pagosDivididos.push({metodo:state.dividirMetodoSel,monto:monto});
   _pagoRerender();
 }
+/* Pago en efectivo pero en dolares -- se convierte a pesos con el tipo de
+   cambio y se guarda igual que cualquier pago en efectivo (mismo metodo,
+   asi el corte de caja lo suma junto con el resto de Efectivo), solo que
+   con el detalle en USD guardado aparte para que el cajero sepa cuantos
+   dolares fisicos debe tener en el cajon. */
+function agregarPagoDivididoUSD(total,montoUSDStr,tcStr){
+  var montoUSD=parseFloat(montoUSDStr)||0;
+  var tc=parseFloat(tcStr)||0;
+  if(montoUSD<=0){ showToast('Escribe cuántos dólares recibiste'); return; }
+  if(!(tc>0)){ showToast('Escribe un tipo de cambio válido'); return; }
+  var montoPesos=Math.round(montoUSD*tc*100)/100;
+  state.pagosDivididos.push({metodo:'efectivo',monto:montoPesos,usd:true,montoUSD:montoUSD,tipoCambio:tc});
+  _pagoRerender();
+}
 function quitarPagoDividido(i){ state.pagosDivididos.splice(i,1); _pagoRerender(); }
 function puedeConfirmarPago(total){
   var restante=total-totalPagosDivididos();
@@ -1952,24 +1987,45 @@ function _htmlPagos(total){
   if(!state.pagosDivididos.length){ h+='<div class="cart-empty" style="padding:8px 0;font-size:13px">Agrega el primer pago abajo</div>'; }
   else{
     h+=state.pagosDivididos.map(function(pg,i){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--linea)"><span>'+esc(PAGO_LABEL[pg.metodo])+'</span><span style="font-weight:700;margin-left:auto;margin-right:10px">'+money(pg.monto)+'</span><button data-quitardiv="'+i+'" style="color:var(--rojo);background:none;border:none;font-size:20px;line-height:1">&times;</button></div>';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--linea)"><span>'+esc(PAGO_LABEL[pg.metodo])+(pg.usd?' <small style="font-weight:600;color:var(--cafe-medio)">($'+pg.montoUSD.toFixed(2)+' USD · TC $'+pg.tipoCambio.toFixed(2)+')</small>':'')+'</span><span style="font-weight:700;margin-left:auto;margin-right:10px">'+money(pg.monto)+'</span><button data-quitardiv="'+i+'" style="color:var(--rojo);background:none;border:none;font-size:20px;line-height:1">&times;</button></div>';
     }).join('');
   }
   h+='<div style="display:flex;justify-content:space-between;padding-top:10px;font-weight:800;font-size:16px"><span>'+(restante>0.004?'Restante':(restante<-0.004?'Cambio':'Completo'))+'</span><span style="color:'+(restante>0.004?'var(--rojo)':'#1a7f37')+'">'+money(Math.abs(restante))+'</span></div></div>';
   if(restante>0.004){
+    var usdOn=state.dividirMetodoSel==='efectivo' && state.pagoUSD;
     h+='<div class="pay-grid">'+metodos.map(function(m){return '<button class="pay-btn dividir-metodo'+(state.dividirMetodoSel===m?' active':'')+'" data-dm="'+m+'">'+esc(PAGO_LABEL[m])+'</button>';}).join('')+'</div>';
-    h+='<div class="cash-box"><input id="dividirMontoInp" type="number" inputmode="decimal" placeholder="Monto" value="'+(restante>0?restante.toFixed(2):'')+'">'+
-      (state.dividirMetodoSel==='efectivo'?('<div class="quick-cash">'+[100,200,500,1000].map(function(v){return '<button data-cashdiv="'+v+'">$'+v+'</button>';}).join('')+'<button data-cashdiv="exact">Exacto</button></div>'):'')+
-      '<button class="btn-confirm" id="btnAgregarPagoDividido" style="width:100%;margin-top:8px">+ Agregar '+esc(PAGO_LABEL[state.dividirMetodoSel])+'</button></div>';
+    if(state.dividirMetodoSel==='efectivo'){
+      h+='<label style="display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:13px;font-weight:700;color:var(--cafe-medio);cursor:pointer"><input type="checkbox" id="chkPagoUSD" '+(state.pagoUSD?'checked':'')+' style="width:18px;height:18px">💵 Recibí dólares (USD)</label>';
+    }
+    if(usdOn){
+      h+='<div class="cash-box"><input id="dividirMontoInp" type="number" inputmode="decimal" placeholder="Dólares recibidos">'+
+        '<div class="quick-cash">'+[1,5,10,20,50,100].map(function(v){return '<button data-cashdiv="'+v+'">$'+v+'</button>';}).join('')+'</div>'+
+        '<div class="field" style="margin-top:8px"><label>Tipo de cambio hoy</label><input id="tcInp" type="number" inputmode="decimal" step="0.01" value="'+Number(state.tipoCambioUSD||0).toFixed(2)+'"></div>'+
+        '<div id="usdConvertido" style="text-align:right;font-weight:700;color:var(--cafe-medio);margin-top:4px">= $0.00 MXN</div>'+
+        '<button class="btn-confirm" id="btnAgregarPagoDividido" style="width:100%;margin-top:8px">+ Agregar Efectivo (USD)</button></div>';
+    } else {
+      h+='<div class="cash-box"><input id="dividirMontoInp" type="number" inputmode="decimal" placeholder="Monto" value="'+(restante>0?restante.toFixed(2):'')+'">'+
+        (state.dividirMetodoSel==='efectivo'?('<div class="quick-cash">'+[100,200,500,1000].map(function(v){return '<button data-cashdiv="'+v+'">$'+v+'</button>';}).join('')+'<button data-cashdiv="exact">Exacto</button></div>'):'')+
+        '<button class="btn-confirm" id="btnAgregarPagoDividido" style="width:100%;margin-top:8px">+ Agregar '+esc(PAGO_LABEL[state.dividirMetodoSel])+'</button></div>';
+    }
   }
   return h;
 }
 function _bindPagos(total){
   document.querySelectorAll('.dividir-metodo').forEach(function(b){ b.addEventListener('click',function(){ seleccionarMetodoDividido(b.dataset.dm); }); });
+  var chkUSD=document.getElementById('chkPagoUSD');
+  if(chkUSD) chkUSD.addEventListener('change',function(e){ state.pagoUSD=e.target.checked; _pagoRerender(); });
   var mi=document.getElementById('dividirMontoInp');
-  document.querySelectorAll('[data-cashdiv]').forEach(function(b){ b.addEventListener('click',function(){ var restante=total-totalPagosDivididos(); mi.value=(b.dataset.cashdiv==='exact'?restante.toFixed(2):b.dataset.cashdiv); }); });
+  var usdOn=state.dividirMetodoSel==='efectivo' && state.pagoUSD;
+  if(usdOn){
+    var tc=document.getElementById('tcInp');
+    var out=document.getElementById('usdConvertido');
+    var recalc=function(){ var u=parseFloat(mi.value)||0; var t=parseFloat(tc.value)||0; out.textContent='= '+money(u*t)+' MXN'; };
+    mi.addEventListener('input',recalc); tc.addEventListener('input',recalc); recalc();
+  }
+  document.querySelectorAll('[data-cashdiv]').forEach(function(b){ b.addEventListener('click',function(){ if(usdOn){ mi.value=b.dataset.cashdiv; mi.dispatchEvent(new Event('input')); return; } var restante=total-totalPagosDivididos(); mi.value=(b.dataset.cashdiv==='exact'?restante.toFixed(2):b.dataset.cashdiv); }); });
   var badd=document.getElementById('btnAgregarPagoDividido');
-  if(badd) badd.addEventListener('click',function(){ agregarPagoDividido(total,mi.value); });
+  if(badd) badd.addEventListener('click',function(){ if(usdOn){ agregarPagoDivididoUSD(total,mi.value,document.getElementById('tcInp').value); } else { agregarPagoDividido(total,mi.value); } });
   document.querySelectorAll('[data-quitardiv]').forEach(function(b){ b.addEventListener('click',function(){ quitarPagoDividido(parseInt(b.dataset.quitardiv,10)); }); });
 }
 
@@ -2025,7 +2081,7 @@ function confirmSale(){
     fbRegistrarVentaLealtad(telCliente,puntosUsadosMonto,puntosGanados);
   }
   var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosMonto,pedidoId:built.ref.key,items:state.cart.slice(),descuento:cartDescuentoMonto()};
-  if(pagos.length>1) ventaRec.pagos=pagos;
+  if(_pagosConDetalle(pagos)) ventaRec.pagos=pagos;
   fbAgregarVenta(state.sucursal,ventaRec);
   var change=Math.max(0,totalPagosDivididos()-total);
   state._editandoPedidoKey=null; state._editandoPedidoId=null;
@@ -2059,7 +2115,7 @@ function guardarPedidoAbierto(){
 var _cobroPedidoIx=null;
 function abrirCobroPedido(ix){
   var p=state.pedidos[ix]; if(!p||p.estado!=='abierto') return;
-  _cobroPedidoIx=ix; state.pagosDivididos=[]; state.dividirMetodoSel='efectivo';
+  _cobroPedidoIx=ix; state.pagosDivididos=[]; state.dividirMetodoSel='efectivo'; state.pagoUSD=false;
   renderCobroPedido();
 }
 function closeCobroPedido(){ _cobroPedidoIx=null; closeModal(); }
@@ -2115,20 +2171,20 @@ function confirmCobroPedido(){
   var pagos=state.pagosDivididos.slice();
   var metodo=pagos.length===1?pagos[0].metodo:'mixto';
   var updatePayload={estado:'pagado',metodo:metodo};
-  if(pagos.length>1) updatePayload.pagos=pagos;
+  if(_pagosConDetalle(pagos)) updatePayload.pagos=pagos;
   fbPedidosRef(state.sucursal).child(p._fbKey).update(updatePayload).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   procesarInventario((p.items||[]).map(function(l){return {id:l.id,name:l.name,qty:l.qty,size:l.size,modDeltas:l.modDeltas||[]};}), suc);
   var puntosUsadosPedido=p.puntosUsados||0;
   var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};}),descuento:_descuentoMontoDePedido(p)};
-  if(pagos.length>1) ventaRec.pagos=pagos;
+  if(_pagosConDetalle(pagos)) ventaRec.pagos=pagos;
   fbAgregarVenta(state.sucursal,ventaRec);
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
   var puntosGanados=0;
   if(telCliente){ puntosGanados=Math.round(total*PUNTOS_TASA); fbRegistrarVentaLealtad(telCliente,puntosUsadosPedido,puntosGanados); }
   if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
   var change=Math.max(0,totalPagosDivididos()-total);
-  var ticketData=Object.assign({},p,{metodo:metodo,pagos:pagos.length>1?pagos:undefined});
+  var ticketData=Object.assign({},p,{metodo:metodo,pagos:_pagosConDetalle(pagos)?pagos:undefined});
   state.pagosDivididos=[];
   closeCobroPedido();
   var msg=change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total));
@@ -2273,6 +2329,27 @@ function configAlarmas(){
     ALARMA_CATEGORIAS.forEach(function(c){ nuevo[c.id]=document.getElementById('alm-'+c.id).value; });
     fbDb.ref('alarmasConfig/'+suc).set(nuevo).then(function(){
       showToast('Alarmas guardadas');
+      closeModal();
+    }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar'); console.error(e); });
+  });
+}
+/* ============ TIPO DE CAMBIO USD -- se usa al cobrar en efectivo cuando
+   el cliente paga con dólares; el monto se sigue contando como Efectivo
+   en el corte de caja, solo se guarda el detalle en dólares aparte. ============ */
+function configTipoCambio(){
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>Tipo de cambio (USD)</h2>'+
+    '<div class="sub" style="margin-bottom:14px">Se usa cuando un cliente paga en dólares en efectivo -- convierte a pesos con este valor. Se puede ajustar también al momento de cobrar, por si cambia en el día.</div>'+
+    '<div class="field"><label>1 USD equivale a (MXN)</label><input id="tcVal" type="number" inputmode="decimal" step="0.01" value="'+Number(state.tipoCambioUSD||0).toFixed(2)+'"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('mOk').addEventListener('click',function(){
+    var v=parseFloat(document.getElementById('tcVal').value);
+    if(!(v>0)){ showToast('Escribe un tipo de cambio válido'); return; }
+    fbDb.ref('tipoCambioUSD').set(v).then(function(){
+      state.tipoCambioUSD=v;
+      showToast('Tipo de cambio guardado: $'+v.toFixed(2));
       closeModal();
     }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar'); console.error(e); });
   });
@@ -2685,7 +2762,7 @@ function construirTicketESCPOS(p){
   push(_escposLinea('Ticket '+(p.id||'')+' - '+(p.hora||'')));
   push(_escposLinea((TIPO_LABEL[p.tipo]||p.tipo||'')+(p.mesa?' - Mesa '+p.mesa:'')));
   push(_escposLinea('Pago: '+(PAGO_LABEL[p.metodo]||p.metodo||'Pendiente')));
-  if(p.pagos&&p.pagos.length>1){ p.pagos.forEach(function(pg){ push(_escposLinea('  '+(PAGO_LABEL[pg.metodo]||pg.metodo)+': '+money(pg.monto))); }); }
+  if(_pagosConDetalle(p.pagos)){ p.pagos.forEach(function(pg){ push(_escposLinea('  '+(PAGO_LABEL[pg.metodo]||pg.metodo)+(pg.usd?' ($'+pg.montoUSD.toFixed(2)+' USD)':'')+': '+money(pg.monto))); }); }
   if(p.cliente&&(p.cliente.telefono||p.cliente.direccion)){
     push(_escposLinea(''));
     push(_escposLinea('DATOS DE ENTREGA'));
@@ -2746,7 +2823,7 @@ function _imprimirTicketNavegador(p){
     '<div class="tk-logo">'+logoSVG()+'</div>'+
     '<div class="tk-biz">'+esc(NEGOCIO.nombre)+' '+esc(NEGOCIO.sucursal)+'<br>'+esc(NEGOCIO.dir1)+'<br>'+esc(NEGOCIO.dir2)+'<br>'+esc(NEGOCIO.wa)+'</div>'+
     '<div class="tk-meta">Ticket '+esc(p.id)+' \u00b7 '+esc(p.hora||'')+'<br>'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' \u00b7 Mesa '+esc(p.mesa):'')+' \u00b7 '+esc(PAGO_LABEL[p.metodo]||p.metodo)+
-    (p.pagos&&p.pagos.length>1?'<br>'+p.pagos.map(function(pg){return esc(PAGO_LABEL[pg.metodo]||pg.metodo)+': '+money(pg.monto);}).join(' + '):'')+'</div>'+
+    (_pagosConDetalle(p.pagos)?'<br>'+p.pagos.map(function(pg){return esc(PAGO_LABEL[pg.metodo]||pg.metodo)+(pg.usd?' ($'+pg.montoUSD.toFixed(2)+' USD)':'')+': '+money(pg.monto);}).join(' + '):'')+'</div>'+
     cli+
     '<table class="tk-items">'+rows+'</table>'+
     '<div class="tk-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
@@ -2776,7 +2853,7 @@ function ticketTextoWhatsApp(p){
   lineas.push('');
   lineas.push('Ticket '+p.id+' \u00b7 '+(p.hora||''));
   lineas.push((TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' \u00b7 Mesa '+p.mesa:'')+' \u00b7 '+(PAGO_LABEL[p.metodo]||p.metodo||''));
-  if(p.pagos&&p.pagos.length>1){ p.pagos.forEach(function(pg){ lineas.push('   '+(PAGO_LABEL[pg.metodo]||pg.metodo)+': '+money(pg.monto)); }); }
+  if(_pagosConDetalle(p.pagos)){ p.pagos.forEach(function(pg){ lineas.push('   '+(PAGO_LABEL[pg.metodo]||pg.metodo)+(pg.usd?' ($'+pg.montoUSD.toFixed(2)+' USD)':'')+': '+money(pg.monto)); }); }
   if(esDomicilio && p.cliente){
     lineas.push('');
     lineas.push('*Datos de entrega*');
@@ -2862,7 +2939,7 @@ function cambiarMetodoPago(ix){
   var opciones=['efectivo','tarjeta','mercadopago','transferencia','rappi'];
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:380px">'+
     '<h2>Cambiar método de pago</h2>'+
-    '<div class="sub" style="margin-bottom:14px">Pedido '+esc(p.id)+' &middot; '+money(p.total)+'<br>Actual: <b>'+esc(PAGO_LABEL[p.metodo]||p.metodo||'--')+'</b>'+(p.pagos&&p.pagos.length?' (pago mixto)':'')+'</div>'+
+    '<div class="sub" style="margin-bottom:14px">Pedido '+esc(p.id)+' &middot; '+money(p.total)+'<br>Actual: <b>'+esc(PAGO_LABEL[p.metodo]||p.metodo||'--')+'</b>'+(p.pagos&&p.pagos.length>1?' (pago mixto)':'')+(p.pagos&&p.pagos.length===1&&p.pagos[0].usd?' ($'+p.pagos[0].montoUSD.toFixed(2)+' USD)':'')+'<div class="sub" style="margin-top:4px">Al cambiar de método se pierde el detalle de dólares si lo había.</div></div>'+
     '<div class="field"><label>Nuevo método de pago</label><select id="nuevoMetodoPago">'+
       opciones.map(function(m){ return '<option value="'+m+'"'+(m===p.metodo?' selected':'')+'>'+esc(PAGO_LABEL[m])+'</option>'; }).join('')+
     '</select></div>'+
@@ -2920,11 +2997,13 @@ function renderConfig(){
   if(__itemDP){ var __usada=localStorage.getItem('ls_display_usada')==='1'; __itemDP.badge=__usada?'Activa':'Off'; __itemDP.badgeClass=__usada?'ok':'err'; }
   var __itemImp=CONFIG_ITEMS.filter(function(c){return c.t==='Impresora de tickets';})[0];
   if(__itemImp){ var __conectada=USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1'; __itemImp.badge=__conectada?'Conectada':'No conectada'; __itemImp.badgeClass=__conectada?'ok':'err'; }
+  var __itemTC=CONFIG_ITEMS.filter(function(c){return c.t==='Tipo de cambio (USD)';})[0];
+  if(__itemTC){ __itemTC.badge='$'+Number(state.tipoCambioUSD||0).toFixed(2); }
   var html='<h2>Configuraci&oacute;n</h2><div class="sub">Impresoras, alarmas, lector de huella y m&aacute;s</div><div class="cfg-grid">';
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Impresora de tickets'){ configImpresora(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Tipo de cambio (USD)'){ configTipoCambio(); } else if(b.dataset.t==='Impresora de tickets'){ configImpresora(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 function configImpresora(){
   var conectada=USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1';
@@ -2956,6 +3035,11 @@ function totalesPorMetodo(){
   });
   return t;
 }
+function totalUSDRecibido(){
+  var t=0;
+  state.turnoSales.forEach(function(v){ (v.pagos||[]).forEach(function(pg){ if(pg.usd) t+=pg.montoUSD; }); });
+  return t;
+}
 function productosEstrella(){ var m={}; state.turnoSales.forEach(function(v){ v.items.forEach(function(it){ m[it.name]=(m[it.name]||0)+it.qty; }); }); return Object.keys(m).map(function(k){return {name:k,qty:m[k]};}).sort(function(a,b){return b.qty-a.qty;}).slice(0,8); }
 function productosEstrellaResumen(){ var m={}; state.turnoSales.forEach(function(v){ v.items.forEach(function(it){ if(!m[it.name]) m[it.name]={name:it.name,qty:0,total:0}; m[it.name].qty+=it.qty; m[it.name].total+=it.price*it.qty; }); }); return Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return b.qty-a.qty;}).slice(0,5); }
 function fechaCorta(d){ var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; return (d.getDate()<10?'0':'')+d.getDate()+'/'+meses[d.getMonth()]+'/'+d.getFullYear(); }
@@ -2970,6 +3054,7 @@ function renderCaja(){
   var verDesglose=esRolSupervisorAdmin();
   var mov=cajaMovTotales();
   var esperadoCaja=(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros;
+  var totalUSD=totalUSDRecibido();
   document.getElementById('cajaContent').innerHTML=
     '<div id="printArea"><h2>Caja &mdash; '+esc(suc?suc.nombre:'')+'</h2><div class="sub">'+(state.cajaAbierta?'Caja abierta':'Caja cerrada')+' &middot; '+state.turnoSales.length+' ventas en el turno</div>'+
     '<div class="card"><h3>Estado de caja</h3><div class="caja-info"><div><div class="l">Efectivo inicial</div><div class="v">'+money(state.cajaInicial)+'</div></div>'+
@@ -2979,7 +3064,7 @@ function renderCaja(){
       '</div>'+
       '<div class="caja-ops"><button class="caja-op" data-op="corte"><span class="ci">&#128203;</span>Corte de caja</button><button class="caja-op" data-op="deposito"><span class="ci">&#11015;</span>Depositar</button><button class="caja-op" data-op="retiro"><span class="ci">&#11014;</span>Retirar</button><button class="caja-op" data-op="cajon"><span class="ci">&#128230;</span>Abrir caj&oacute;n</button></div></div>'+
     (verDesglose?('<div class="card"><h3>Desglose por metodo de pago</h3><div class="pay-summary">'+
-      '<div class="pill"><div class="l">Efectivo</div><div class="v">'+money(t.efectivo)+'</div></div>'+
+      '<div class="pill"><div class="l">Efectivo</div><div class="v">'+money(t.efectivo)+'</div>'+(totalUSD>0?'<div class="l" style="margin-top:2px">de eso, $'+totalUSD.toFixed(2)+' USD</div>':'')+'</div>'+
       '<div class="pill"><div class="l">Tarjeta</div><div class="v">'+money(t.tarjeta)+'</div></div>'+
       '<div class="pill"><div class="l">Transferencia</div><div class="v">'+money(t.transferencia)+'</div></div>'+
       '<div class="pill"><div class="l">Rappi/Uber</div><div class="v">'+money(t.rappi)+'</div></div>'+
