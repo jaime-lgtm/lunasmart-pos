@@ -1901,12 +1901,11 @@ function _mpMostrarCancelar(orderId){
     });
   }
 }
-function cobrarConTerminalMP(monto){
+function cobrarConTerminalMP(monto,onExito,onFallback){
   var terminalId=_terminalesMP[state.sucursal];
   if(!terminalId){
     showToast('Terminal no configurada para esta sucursal -- se registra como pago manual');
-    state.pagosDivididos.push({metodo:'tarjeta',monto:monto});
-    _pagoRerender();
+    if(onFallback){ onFallback(); } else { state.pagosDivididos.push({metodo:'tarjeta',monto:monto}); _pagoRerender(); }
     return;
   }
   if(_mpCobroActivo){ showToast('Ya hay un cobro en curso en la terminal'); return; }
@@ -1931,9 +1930,7 @@ function cobrarConTerminalMP(monto){
         if(!r||r.status!=='ok') return;
         if(r.estado==='processed'){
           _mpDetenerPolling(); _mpCerrarOverlay();
-          state.pagosDivididos.push({metodo:'tarjeta',monto:monto,mpOrderId:orderId});
-          _pagoRerender();
-          showToast('✓ Pago con tarjeta aprobado');
+          if(onExito){ onExito(orderId); } else { state.pagosDivididos.push({metodo:'tarjeta',monto:monto,mpOrderId:orderId}); _pagoRerender(); showToast('✓ Pago con tarjeta aprobado'); }
         } else if(r.estado==='failed'){
           _mpDetenerPolling(); _mpCerrarOverlay();
           showToast('El pago fue rechazado -- intenta de nuevo');
@@ -2943,17 +2940,35 @@ function cambiarMetodoPago(ix){
     '<div class="field"><label>Nuevo método de pago</label><select id="nuevoMetodoPago">'+
       opciones.map(function(m){ return '<option value="'+m+'"'+(m===p.metodo?' selected':'')+'>'+esc(PAGO_LABEL[m])+'</option>'; }).join('')+
     '</select></div>'+
+    '<div class="sub" id="avisoTerminal" style="display:none;margin:-8px 0 12px;color:var(--cafe-medio);font-weight:600">💳 Se enviará el cobro a la terminal física para que el cliente pague ahí.</div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Guardar</button></div></div></div>';
+  var sel=document.getElementById('nuevoMetodoPago');
+  var btnOk=document.getElementById('mOk');
+  var aviso=document.getElementById('avisoTerminal');
+  var actualizarUI=function(){
+    var vaATarjeta=sel.value==='tarjeta' && p.metodo!=='tarjeta';
+    aviso.style.display=vaATarjeta?'block':'none';
+    btnOk.textContent=vaATarjeta?'Cobrar con terminal':'Guardar';
+  };
+  sel.addEventListener('change',actualizarUI);
+  actualizarUI();
   bindModal(function(){
-    var nuevo=document.getElementById('nuevoMetodoPago').value;
+    var nuevo=sel.value;
     if(nuevo===p.metodo && !(p.pagos&&p.pagos.length)){ closeModal(); return; }
     var venta=(state.turnoSales||[]).filter(function(v){ return v.pedidoId===p._fbKey; })[0];
-    var tareas=[ fbPedidosRef(state.sucursal).child(p._fbKey).update({metodo:nuevo, pagos:null}) ];
-    if(venta && venta._fbKey){ tareas.push(fbDb.ref('turnoSales/'+state.sucursal+'/'+venta._fbKey).update({metodo:nuevo, pagos:null})); }
-    Promise.all(tareas).then(function(){
-      closeModal();
-      showToast('Método de pago actualizado a '+(PAGO_LABEL[nuevo]||nuevo));
-    }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar'); console.error(e); });
+    var aplicarCambio=function(){
+      var tareas=[ fbPedidosRef(state.sucursal).child(p._fbKey).update({metodo:nuevo, pagos:null}) ];
+      if(venta && venta._fbKey){ tareas.push(fbDb.ref('turnoSales/'+state.sucursal+'/'+venta._fbKey).update({metodo:nuevo, pagos:null})); }
+      Promise.all(tareas).then(function(){
+        closeModal();
+        showToast('Método de pago actualizado a '+(PAGO_LABEL[nuevo]||nuevo));
+      }).catch(function(e){ showToast('Sin conexión -- no se pudo guardar'); console.error(e); });
+    };
+    if(nuevo==='tarjeta' && p.metodo!=='tarjeta'){
+      cobrarConTerminalMP(p.total, aplicarCambio, aplicarCambio);
+      return;
+    }
+    aplicarCambio();
   });
 }
 function editarPedido(ix){
