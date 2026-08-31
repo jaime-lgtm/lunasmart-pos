@@ -1205,7 +1205,7 @@ function _asistenciaRenderConfirmar(usuarioId, nombre, abierto){
   var horaAhora=_asistenciaHoraAhora();
   var detalle = abierto ? ('Marcaste tu entrada a las '+esc(abierto.horaEntrada)+'.') : 'Aun no marcas tu entrada hoy.';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:360px">'+
-    '<h2>&#128343; Hola, '+esc(nombre)+'</h2>'+
+    '<h2>&#128343; Bienvenido(a), '+esc(nombre)+'</h2>'+
     '<div class="sub" style="margin-bottom:6px">'+detalle+'</div>'+
     '<div style="font-size:32px;font-weight:800;text-align:center;margin:18px 0">'+horaAhora+'</div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="btnAsisCancel2">Cancelar</button><button class="btn-confirm" id="btnAsisConfirmar">'+(accion==='entrada'?'Marcar ENTRADA':'Marcar SALIDA')+'</button></div>'+
