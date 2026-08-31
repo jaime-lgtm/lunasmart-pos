@@ -1124,19 +1124,43 @@ function _asistenciaHoraAhora(){
   var d=new Date();
   return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
+/* Usa el mismo teclado numerico en pantalla que el login (nunca el teclado
+   nativo de Android): en la tablet el teclado del sistema tapaba el boton
+   "Continuar" y ademas mostraba el PIN en texto plano -- con puntos ocultos
+   como el login, cualquiera puede marcar su asistencia sin que otro empleado
+   le vea el PIN por encima del hombro. */
+var _asisPinBuffer='';
 function abrirAsistencia(){
-  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:360px">'+
+  _asisPinBuffer='';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:340px">'+
     '<h2>&#128343; Registrar asistencia</h2>'+
-    '<div class="sub" style="margin-bottom:14px">Ingresa tu PIN para marcar tu entrada o salida.</div>'+
-    '<input type="tel" inputmode="numeric" id="asisPin" placeholder="PIN" maxlength="6" style="width:100%;font-size:24px;text-align:center;letter-spacing:8px;padding:14px;border:1.5px solid #ddd;border-radius:10px;margin-bottom:14px;box-sizing:border-box">'+
-    '<div class="modal-actions"><button class="btn-cancel" id="btnAsisCancel">Cancelar</button><button class="btn-confirm" id="btnAsisContinuar">Continuar</button></div>'+
+    '<div class="sub" style="margin-bottom:6px">Ingresa tu PIN para marcar tu entrada o salida.</div>'+
+    '<div class="pin-display" id="asisPinDisplay"></div>'+
+    '<div class="keypad" id="asisKeypad">'+
+      '<button class="key" data-k="1">1</button><button class="key" data-k="2">2</button><button class="key" data-k="3">3</button>'+
+      '<button class="key" data-k="4">4</button><button class="key" data-k="5">5</button><button class="key" data-k="6">6</button>'+
+      '<button class="key" data-k="7">7</button><button class="key" data-k="8">8</button><button class="key" data-k="9">9</button>'+
+      '<button class="key" data-k="del">&#9003;</button><button class="key" data-k="0">0</button><button class="key enter" data-k="enter">&rarr;</button>'+
+    '</div>'+
+    '<div class="modal-actions" style="margin-top:14px"><button class="btn-cancel" id="btnAsisCancel" style="width:100%">Cancelar</button></div>'+
     '</div></div>';
-  var pinEl=document.getElementById('asisPin');
   document.getElementById('btnAsisCancel').addEventListener('click',closeModal);
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
-  document.getElementById('btnAsisContinuar').addEventListener('click',function(){ _asistenciaVerificarPin(pinEl.value.trim()); });
-  pinEl.addEventListener('keydown',function(e){ if(e.key==='Enter'){ _asistenciaVerificarPin(pinEl.value.trim()); } });
-  setTimeout(function(){ pinEl.focus(); },80);
+  document.getElementById('asisKeypad').querySelectorAll('.key').forEach(function(k){ k.addEventListener('click',function(){ _asisPinKey(k.dataset.k); }); });
+  _renderAsisPinDisplay();
+}
+function _asisPinKey(k){
+  unlockAudio();
+  if(k==='del'){ _asisPinBuffer=_asisPinBuffer.slice(0,-1); }
+  else if(k==='enter'){ _asistenciaVerificarPin(_asisPinBuffer); return; }
+  else if(_asisPinBuffer.length<6){ _asisPinBuffer+=k; }
+  _renderAsisPinDisplay();
+}
+function _renderAsisPinDisplay(){
+  var d=document.getElementById('asisPinDisplay'); if(!d) return;
+  var dots=_asisPinBuffer.length, html='';
+  for(var i=0;i<Math.max(4,dots);i++){ html+='<span class="pin-dot'+(i<dots?' on':'')+'"></span>'; }
+  d.innerHTML=html;
 }
 function _asistenciaVerificarPin(pin){
   if(!pin || pin.length<4){ showToast('Ingresa tu PIN (min. 4 digitos)'); return; }
@@ -1145,13 +1169,13 @@ function _asistenciaVerificarPin(pin){
     Object.keys(val).forEach(function(id){
       if(match) return;
       var u=val[id];
-      if(u.pin!==pin || u.activo===false) return;
+      if(String(u.pin)!==String(pin) || u.activo===false) return;
       if(u.sucursales!=='todas' && (!u.sucursales || u.sucursales.indexOf(state.sucursal)===-1)) return;
       match=u; matchId=id;
     });
-    if(!match){ showToast('PIN no reconocido para esta sucursal'); return; }
+    if(!match){ showToast('PIN no reconocido para esta sucursal'); _asisPinBuffer=''; _renderAsisPinDisplay(); return; }
     _asistenciaResolverAbiertos(matchId, match.nombre);
-  }).catch(function(e){ console.error(e); showToast('Sin conexion -- intenta de nuevo'); });
+  }).catch(function(e){ console.error(e); showToast('Sin conexion -- intenta de nuevo'); _asisPinBuffer=''; _renderAsisPinDisplay(); });
 }
 /* Antes de mostrar el estado del empleado, cierra automaticamente cualquier
    turno que haya quedado abierto de un dia anterior (alguien olvido marcar
@@ -1174,7 +1198,7 @@ function _asistenciaResolverAbiertos(usuarioId, nombre){
       var abierto = (todos[usuarioId] && todos[usuarioId].fecha===hoy) ? todos[usuarioId] : null;
       _asistenciaRenderConfirmar(usuarioId, nombre, abierto);
     });
-  });
+  }).catch(function(e){ console.error('Error leyendo asistenciaActiva',e); showToast('Sin conexion -- intenta de nuevo'); });
 }
 function _asistenciaRenderConfirmar(usuarioId, nombre, abierto){
   var accion = abierto ? 'salida' : 'entrada';
@@ -1197,7 +1221,7 @@ function _asistenciaMarcarEntrada(usuarioId, nombre){
   var fecha=_asistenciaFechaHoy(), hora=_asistenciaHoraAhora();
   SYNC.registrarAsistenciaEntrada({ sucursal:state.sucursal, usuarioId:usuarioId, usuarioNombre:nombre, fecha:fecha, hora:hora }).then(function(res){
     if(!res || res.status!=='ok'){ showToast('No se pudo registrar -- intenta de nuevo'); return; }
-    fbDb.ref('asistenciaActiva/'+state.sucursal+'/'+usuarioId).set({ nombre:nombre, fecha:fecha, horaEntrada:hora, fila:res.fila });
+    fbDb.ref('asistenciaActiva/'+state.sucursal+'/'+usuarioId).set({ nombre:nombre, fecha:fecha, horaEntrada:hora, fila:res.fila }).catch(function(e){ console.error('No se pudo guardar el turno activo',e); });
     closeModal();
     showToast('Entrada registrada -- '+hora);
   }).catch(function(){ showToast('Sin conexion -- no se pudo registrar'); });
@@ -1206,7 +1230,7 @@ function _asistenciaMarcarSalida(usuarioId, nombre, abierto){
   var hora=_asistenciaHoraAhora();
   SYNC.registrarAsistenciaSalida({ fila:abierto.fila, fecha:abierto.fecha, horaEntrada:abierto.horaEntrada, horaSalida:hora, tipoSalida:'normal' }).then(function(res){
     if(!res || res.status!=='ok'){ showToast('No se pudo registrar -- intenta de nuevo'); return; }
-    fbDb.ref('asistenciaActiva/'+state.sucursal+'/'+usuarioId).remove();
+    fbDb.ref('asistenciaActiva/'+state.sucursal+'/'+usuarioId).remove().catch(function(e){ console.error('No se pudo limpiar el turno activo',e); });
     closeModal();
     showToast('Salida registrada -- '+hora);
   }).catch(function(){ showToast('Sin conexion -- no se pudo registrar'); });
