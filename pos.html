@@ -1212,28 +1212,35 @@ function _asistenciaRenderConfirmar(usuarioId, nombre, abierto){
     '</div></div>';
   document.getElementById('btnAsisCancel2').addEventListener('click',closeModal);
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
-  document.getElementById('btnAsisConfirmar').addEventListener('click',function(){
-    if(accion==='entrada'){ _asistenciaMarcarEntrada(usuarioId, nombre); }
-    else { _asistenciaMarcarSalida(usuarioId, nombre, abierto); }
+  document.getElementById('btnAsisConfirmar').addEventListener('click',function(e){
+    var btn=e.currentTarget;
+    if(btn.disabled) return; // el registro tarda un poco (va y viene de Sheets) -- sin esto, tocar varias veces mandaba varios registros duplicados
+    btn.disabled=true; btn.style.opacity='.6'; btn.textContent='Registrando...';
+    if(accion==='entrada'){ _asistenciaMarcarEntrada(usuarioId, nombre, btn); }
+    else { _asistenciaMarcarSalida(usuarioId, nombre, abierto, btn); }
   });
 }
-function _asistenciaMarcarEntrada(usuarioId, nombre){
+function _asistenciaReactivarBoton(btn, texto){
+  if(!btn) return;
+  btn.disabled=false; btn.style.opacity=''; btn.textContent=texto;
+}
+function _asistenciaMarcarEntrada(usuarioId, nombre, btn){
   var fecha=_asistenciaFechaHoy(), hora=_asistenciaHoraAhora();
   SYNC.registrarAsistenciaEntrada({ sucursal:state.sucursal, usuarioId:usuarioId, usuarioNombre:nombre, fecha:fecha, hora:hora }).then(function(res){
-    if(!res || res.status!=='ok'){ showToast('No se pudo registrar -- intenta de nuevo'); return; }
+    if(!res || res.status!=='ok'){ showToast('No se pudo registrar -- intenta de nuevo'); _asistenciaReactivarBoton(btn,'Marcar ENTRADA'); return; }
     fbDb.ref('asistenciaActiva/'+state.sucursal+'/'+usuarioId).set({ nombre:nombre, fecha:fecha, horaEntrada:hora, fila:res.fila }).catch(function(e){ console.error('No se pudo guardar el turno activo',e); });
     closeModal();
     showToast('Entrada registrada -- '+hora);
-  }).catch(function(){ showToast('Sin conexion -- no se pudo registrar'); });
+  }).catch(function(){ showToast('Sin conexion -- no se pudo registrar'); _asistenciaReactivarBoton(btn,'Marcar ENTRADA'); });
 }
-function _asistenciaMarcarSalida(usuarioId, nombre, abierto){
+function _asistenciaMarcarSalida(usuarioId, nombre, abierto, btn){
   var hora=_asistenciaHoraAhora();
   SYNC.registrarAsistenciaSalida({ fila:abierto.fila, fecha:abierto.fecha, horaEntrada:abierto.horaEntrada, horaSalida:hora, tipoSalida:'normal' }).then(function(res){
-    if(!res || res.status!=='ok'){ showToast('No se pudo registrar -- intenta de nuevo'); return; }
+    if(!res || res.status!=='ok'){ showToast('No se pudo registrar -- intenta de nuevo'); _asistenciaReactivarBoton(btn,'Marcar SALIDA'); return; }
     fbDb.ref('asistenciaActiva/'+state.sucursal+'/'+usuarioId).remove().catch(function(e){ console.error('No se pudo limpiar el turno activo',e); });
     closeModal();
     showToast('Salida registrada -- '+hora);
-  }).catch(function(){ showToast('Sin conexion -- no se pudo registrar'); });
+  }).catch(function(){ showToast('Sin conexion -- no se pudo registrar'); _asistenciaReactivarBoton(btn,'Marcar SALIDA'); });
 }
 /* Instalada como app (pantalla completa, sin barra de navegador) no hay boton
    de recargar del navegador -- este es el unico modo de forzar que la tablet
