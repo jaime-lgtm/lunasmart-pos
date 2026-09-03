@@ -44,6 +44,10 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
 .estado-caja.abierta{background:rgba(63,125,78,.22);color:#7fd196;}
 .estado-caja.cerrada{background:rgba(192,57,43,.22);color:#e88;}
 
+.periodos{display:flex;gap:6px;background:rgba(232,214,185,.06);border-radius:999px;padding:4px;}
+.periodos button{padding:8px 16px;border-radius:999px;font-size:13px;font-weight:700;color:var(--beige-claro);background:none;cursor:pointer;transition:.12s;}
+.periodos button.on{background:var(--terracota);}
+
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;padding:24px 32px;}
 .card{background:rgba(232,214,185,.05);border:1px solid rgba(232,214,185,.1);border-radius:18px;padding:20px 22px;}
 .card-lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gris);font-weight:700;}
@@ -55,7 +59,8 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
 .paneles{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:18px;padding:0 32px 32px;flex:1;}
 @media (max-width:1000px){.paneles{grid-template-columns:1fr;}}
 .panel{background:rgba(232,214,185,.05);border:1px solid rgba(232,214,185,.1);border-radius:18px;padding:22px;display:flex;flex-direction:column;min-height:0;}
-.panel h3{font-size:16px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.panel h3{font-size:16px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+.panel .sub{font-size:11.5px;color:var(--gris);margin-bottom:12px;}
 .panel-list{display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:52vh;}
 .fila{display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(232,214,185,.04);border-radius:10px;font-size:14.5px;}
 .fila .qty{background:var(--terracota);color:#fff;font-weight:800;font-size:13px;padding:2px 9px;border-radius:999px;min-width:26px;text-align:center;}
@@ -92,31 +97,41 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
   <div class="topbar">
     <div class="brand">luna<span>smart</span> · monitor</div>
     <select id="selSucursal"></select>
+    <div class="periodos" id="selPeriodo">
+      <button data-p="hoy">Hoy</button>
+      <button data-p="semana">Semana</button>
+      <button data-p="mes">Mes</button>
+      <button data-p="ano">Año</button>
+    </div>
     <span class="estado-caja" id="estadoCaja">—</span>
     <div class="spacer"></div>
     <div class="reloj" id="reloj">--:--:--</div>
   </div>
 
   <div class="grid">
-    <div class="card total"><div class="card-lbl">Venta del turno</div><div class="card-val" id="kpiTotal">$0</div></div>
-    <div class="card"><div class="card-lbl">Ventas registradas</div><div class="card-val" id="kpiCount">0</div></div>
-    <div class="card"><div class="card-lbl">Retiros del turno</div><div class="card-val" id="kpiRetiros">$0</div></div>
+    <div class="card total"><div class="card-lbl" id="kpiTotalLbl">Venta acumulada</div><div class="card-val" id="kpiTotal">$0</div></div>
+    <div class="card"><div class="card-lbl" id="kpiCountLbl">Turnos en el período</div><div class="card-val" id="kpiCount">0</div></div>
+    <div class="card"><div class="card-lbl">Retiros del período</div><div class="card-val" id="kpiRetiros">$0</div></div>
     <div class="card"><div class="card-lbl">Productos deshabilitados</div><div class="card-val" id="kpiAgotados">0</div></div>
   </div>
 
   <div class="paneles">
     <div class="panel">
       <h3>🧾 Productos vendidos</h3>
+      <div class="sub">Solo del turno actual -- el detalle por producto no queda guardado después del corte</div>
       <div class="panel-list" id="listaProductos"><div class="vacio">Sin ventas todavía</div></div>
     </div>
     <div class="panel">
       <h3>💳 Por método de pago</h3>
+      <div class="sub" id="metodosSub">&nbsp;</div>
       <div class="metodos" id="listaMetodos"><div class="vacio">Sin ventas todavía</div></div>
       <h3 style="margin-top:22px">🚫 Agotados</h3>
+      <div class="sub">En este momento</div>
       <div class="panel-list" id="listaAgotados"><div class="vacio">Todo disponible</div></div>
     </div>
     <div class="panel">
       <h3>💵 Retiros de caja</h3>
+      <div class="sub" id="retirosSub">&nbsp;</div>
       <div class="panel-list" id="listaRetiros"><div class="vacio">Sin retiros todavía</div></div>
     </div>
   </div>
@@ -130,9 +145,21 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
    abierta en un TV/monitor de oficina, sin login completo del POS. Cualquier
    empleado con PIN activo en usuariosPOS puede desbloquearla una vez por
    sesión (se recuerda con sessionStorage mientras la pestaña siga abierta).
-   Todo lo que muestra ya vive en Firebase en tiempo real -- no hay backend
-   nuevo que construir, solo listeners de lectura sobre lo que el POS ya
-   escribe (turnoSales, cajaEstado, agotados, catalogo). */
+
+   Combina DOS fuentes de datos:
+   1. Lo que ya vive en Firebase en tiempo real (turnoSales, cajaEstado,
+      agotados, catalogo) -- el turno que está abierto AHORA MISMO.
+   2. Los cortes ya cerrados hoy/esta semana/este mes/este año, leídos de la
+      hoja INGRESOS vía el mismo Apps Script que usa el admin -- turnoSales
+      se BORRA en cada corte, así que sin esto la venta "se reiniciaría" cada
+      vez que cambia el turno en vez de acumular en el día.
+   Nota importante: el detalle por PRODUCTO vendido solo existe mientras el
+   turno sigue abierto (turnoSales) -- una vez que se hace el corte, la hoja
+   de Sheets solo guarda totales por método de pago, no producto por
+   producto. Por eso el panel de "Productos vendidos" siempre dice
+   "del turno actual", incluso si el período elegido es Semana/Mes/Año. */
+
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec';
 
 var firebaseConfig = {
   apiKey: "AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM",
@@ -147,17 +174,49 @@ firebase.initializeApp(firebaseConfig);
 var fbDb = firebase.database();
 var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 
+// "inventario" es el nombre de sucursal tal como queda en la hoja INGRESOS
+// (SYNC.sucursalSheet en pos.html) -- cafeteria/grano/helfy comparten el
+// mismo corte de caja ("CASA DE LA CULTURA"), así que el histórico de esas
+// tres sucursales llega mezclado; el panel avisa cuando aplica.
 var SUCURSALES = [
-  {id:'cafeteria', nombre:'Casa de la Cultura'},
-  {id:'grano',    nombre:'Venta café en grano'},
-  {id:'helfy',    nombre:'Helfy Fü'},
-  {id:'eventos',  nombre:'Sueño de Luna Eventos'},
-  {id:'barbacoa', nombre:'Barbacoa y Menudo'}
+  {id:'cafeteria', nombre:'Casa de la Cultura',   inventario:'CASA DE LA CULTURA'},
+  {id:'grano',    nombre:'Venta café en grano',   inventario:'CASA DE LA CULTURA'},
+  {id:'helfy',    nombre:'Helfy Fü',              inventario:'CASA DE LA CULTURA'},
+  {id:'eventos',  nombre:'Sueño de Luna Eventos', inventario:'EVENTOS'},
+  {id:'barbacoa', nombre:'Barbacoa y Menudo',      inventario:'BARBACOA Y MENUDO'}
 ];
 var METODO_LABEL = {efectivo:'Efectivo', tarjeta:'Tarjeta', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi', mixto:'Mixto', otro:'Otro'};
+var PERIODO_LABEL = {hoy:'Hoy', semana:'la semana', mes:'el mes', ano:'el año'};
 
 function money(n){ return '$'+Number(n||0).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function esc(s){ return String(s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function _sucursalInventario(id){ var s=SUCURSALES.filter(function(x){return x.id===id;})[0]; return s?s.inventario:''; }
+
+// Normaliza cualquier formato de fecha de la hoja (dd/MM/yyyy, ISO, etc.) a
+// yyyy-MM-dd para poder comparar contra el rango del período elegido.
+function _fechaISO(fechaStr){
+  if(!fechaStr) return '';
+  var s=String(fechaStr).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0,10);
+  var partes=s.split(/[\/\-]/);
+  if(partes.length===3 && partes[2].length===4){
+    var p0=parseInt(partes[0],10), p1=parseInt(partes[1],10);
+    if(p0>12) return partes[2]+'-'+String(p1).padStart(2,'0')+'-'+String(p0).padStart(2,'0');
+    if(p1>12) return partes[2]+'-'+String(p0).padStart(2,'0')+'-'+String(p1).padStart(2,'0');
+    return partes[2]+'-'+String(p1).padStart(2,'0')+'-'+String(p0).padStart(2,'0');
+  }
+  return '';
+}
+
+function getRangoPeriodo(period){
+  var hoyD=new Date();
+  var iso=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  var anio=hoyD.getFullYear();
+  if(period==='semana'){ var d7=new Date(hoyD); d7.setDate(d7.getDate()-6); return { desde:iso(d7), hasta:iso(hoyD) }; }
+  if(period==='ano') return { desde:anio+'-01-01', hasta:anio+'-12-31' };
+  if(period==='mes'){ var m=hoyD.getMonth(); var primero=new Date(anio,m,1); var ultimo=new Date(anio,m+1,0); return { desde:iso(primero), hasta:iso(ultimo) }; }
+  return { desde:iso(hoyD), hasta:iso(hoyD) }; // hoy
+}
 
 /* ============ PIN ============ */
 var pin='';
@@ -195,7 +254,9 @@ document.addEventListener('keydown', function(e){
 
 /* ============ DASHBOARD ============ */
 var sucursalActual = localStorage.getItem('ls_monitor_suc') || 'cafeteria';
+var periodoActual = localStorage.getItem('ls_monitor_periodo') || 'hoy';
 var vivo = { turnoSales: [], cajaEstado: {}, agotados: {}, catalogo: [] };
+var historico = []; // filas de INGRESOS ya parseadas (todas las sucursales/fechas)
 var listeners = {};
 
 function mostrarDashboard(){
@@ -203,13 +264,46 @@ function mostrarDashboard(){
   document.getElementById('scDash').classList.add('active');
   var sel=document.getElementById('selSucursal');
   sel.innerHTML = SUCURSALES.map(function(s){ return '<option value="'+s.id+'"'+(s.id===sucursalActual?' selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
-  sel.addEventListener('change', function(){ sucursalActual=sel.value; localStorage.setItem('ls_monitor_suc', sucursalActual); escucharTodo(); });
+  sel.addEventListener('change', function(){ sucursalActual=sel.value; localStorage.setItem('ls_monitor_suc', sucursalActual); escucharTodo(); renderTotales(); });
+
+  document.querySelectorAll('#selPeriodo button').forEach(function(b){
+    b.classList.toggle('on', b.dataset.p===periodoActual);
+    b.addEventListener('click', function(){
+      periodoActual=b.dataset.p; localStorage.setItem('ls_monitor_periodo', periodoActual);
+      document.querySelectorAll('#selPeriodo button').forEach(function(x){ x.classList.toggle('on', x===b); });
+      renderTotales();
+    });
+  });
+
   escucharTodo();
+  cargarHistorico();
   setInterval(actualizarReloj, 1000);
+  setInterval(cargarHistorico, 120000); // refresca cortes cerrados cada 2 min, por si hubo uno nuevo
   actualizarReloj();
 }
 function actualizarReloj(){
   document.getElementById('reloj').textContent = new Date().toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function cargarHistorico(){
+  var url = APPS_SCRIPT_URL + '?accion=getINGRESOS&_=' + Date.now();
+  return fetch(url).then(function(r){ return r.json(); }).then(function(res){
+    var rows = (res && res.data) || [];
+    historico = rows.slice(1).filter(function(r){ return r && r.length>2 && r[1]; }).map(function(r){
+      return {
+        fecha: r[1]||'',
+        sucursal: String(r[2]||'').trim().toUpperCase(),
+        retiros: parseFloat(r[5])||0,
+        efectivo: parseFloat(r[7])||0,
+        tarjeta: parseFloat(r[8])||0,
+        transferencia: parseFloat(r[9])||0,
+        rappi: parseFloat(r[10])||0,
+        ventaTotal: parseFloat(r[12])||0,
+        mercadopago: parseFloat(r[16])||0,
+      };
+    });
+    renderTotales();
+  }).catch(function(e){ console.error('No se pudo cargar el histórico de INGRESOS', e); });
 }
 
 function escucharTodo(){
@@ -221,10 +315,10 @@ function escucharTodo(){
   listeners[pTurno] = function(snap){
     var val = snap.val()||{};
     vivo.turnoSales = Object.keys(val).map(function(k){ return val[k]; });
-    renderVentas();
+    renderTotales();
   };
   var pCaja = 'cajaEstado/'+suc;
-  listeners[pCaja] = function(snap){ vivo.cajaEstado = snap.val()||{}; renderCaja(); };
+  listeners[pCaja] = function(snap){ vivo.cajaEstado = snap.val()||{}; renderTotales(); };
   var pAgo = 'agotados/'+suc;
   listeners[pAgo] = function(snap){ vivo.agotados = snap.val()||{}; renderAgotados(); };
   var pCat = 'catalogo/'+suc;
@@ -242,42 +336,73 @@ function escucharTodo(){
   });
 }
 
-function renderCaja(){
+// Combina lo ya cerrado (histórico de Sheets, filtrado por sucursal+período)
+// con lo que está corriendo ahora mismo en el turno abierto (Firebase) --
+// así el total acumula todo el día sin importar cuántos turnos se cierren.
+function renderTotales(){
+  var inv = _sucursalInventario(sucursalActual);
+  var rango = getRangoPeriodo(periodoActual);
+  var filas = historico.filter(function(r){
+    if(r.sucursal!==inv) return false;
+    var f=_fechaISO(r.fecha);
+    return f && f>=rango.desde && f<=rango.hasta;
+  });
+
   var ce = vivo.cajaEstado || {};
   var el = document.getElementById('estadoCaja');
-  if(ce.abierta){ el.textContent = '● Caja abierta · '+(ce.turno||''); el.className='estado-caja abierta'; }
-  else { el.textContent = '● Caja cerrada'; el.className='estado-caja cerrada'; }
+  if(ce.abierta){ el.textContent='● Caja abierta · '+(ce.turno||''); el.className='estado-caja abierta'; }
+  else { el.textContent='● Caja cerrada'; el.className='estado-caja cerrada'; }
 
-  var movs = ce.movimientos || [];
-  var retiros = movs.filter(function(m){ return m.tipo==='retiro'; });
-  var totalRetiros = retiros.reduce(function(a,m){ return a+(m.monto||0); }, 0);
-  document.getElementById('kpiRetiros').textContent = money(totalRetiros);
-  var cont = document.getElementById('listaRetiros');
-  if(!retiros.length){ cont.innerHTML = '<div class="vacio">Sin retiros todavía</div>'; return; }
-  cont.innerHTML = retiros.slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); }).map(function(m){
-    var hora = m.ts ? new Date(m.ts).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '';
-    return '<div class="fila"><span class="hora">'+hora+'</span><span class="nombre">'+esc(m.motivo||'Retiro')+'</span><span class="monto">-'+money(m.monto)+'</span></div>';
-  }).join('');
-}
+  var ventasVivas = vivo.turnoSales || [];
+  var totalVivo = ventasVivas.reduce(function(a,v){ return a+(v.total||0); }, 0);
+  var totalHistorico = filas.reduce(function(a,r){ return a+r.ventaTotal; }, 0);
+  document.getElementById('kpiTotal').textContent = money(totalHistorico + totalVivo);
+  document.getElementById('kpiTotalLbl').textContent = periodoActual==='hoy' ? 'Venta acumulada · hoy' : 'Venta acumulada · '+PERIODO_LABEL[periodoActual];
 
-function renderVentas(){
-  var ventas = vivo.turnoSales || [];
-  var total = ventas.reduce(function(a,v){ return a+(v.total||0); }, 0);
-  document.getElementById('kpiTotal').textContent = money(total);
-  document.getElementById('kpiCount').textContent = ventas.length;
+  var turnos = filas.length + (ce.abierta ? 1 : 0);
+  document.getElementById('kpiCount').textContent = turnos;
+  document.getElementById('kpiCountLbl').textContent = periodoActual==='hoy' ? 'Turnos hoy' : 'Turnos en '+PERIODO_LABEL[periodoActual];
 
-  // Productos vendidos
+  var inv2 = (sucursalActual==='grano'||sucursalActual==='helfy'||sucursalActual==='cafeteria');
+  document.getElementById('metodosSub').textContent = inv2 ? 'Casa de la Cultura, Venta en grano y Helfy Fü comparten el mismo corte de caja' : ' ';
+
+  // Retiros: suma historica (sin detalle linea por linea) + detalle en vivo
+  // del turno actual (que si trae proveedor/concepto por movimiento).
+  var retirosVivos = (ce.movimientos||[]).filter(function(m){ return m.tipo==='retiro'; });
+  var totalRetirosVivos = retirosVivos.reduce(function(a,m){ return a+(m.monto||0); }, 0);
+  var totalRetirosHist = filas.reduce(function(a,r){ return a+r.retiros; }, 0);
+  document.getElementById('kpiRetiros').textContent = money(totalRetirosHist + totalRetirosVivos);
+  document.getElementById('retirosSub').textContent = periodoActual==='hoy'
+    ? 'Detalle disponible del turno actual; los turnos ya cerrados solo suman al total'
+    : 'Solo se ve el detalle de movimientos del turno actual';
+  var contR = document.getElementById('listaRetiros');
+  if(!retirosVivos.length){ contR.innerHTML = '<div class="vacio">Sin retiros en el turno actual</div>'; }
+  else {
+    contR.innerHTML = retirosVivos.slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); }).map(function(m){
+      var hora = m.ts ? new Date(m.ts).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '';
+      return '<div class="fila"><span class="hora">'+hora+'</span><span class="nombre">'+esc(m.motivo||'Retiro')+'</span><span class="monto">-'+money(m.monto)+'</span></div>';
+    }).join('');
+  }
+
+  // Productos vendidos: solo el turno vivo (ver nota arriba del porqué).
   var prodMap = {};
-  ventas.forEach(function(v){ (v.items||[]).forEach(function(it){ prodMap[it.name]=(prodMap[it.name]||0)+(it.qty||1); }); });
+  ventasVivas.forEach(function(v){ (v.items||[]).forEach(function(it){ prodMap[it.name]=(prodMap[it.name]||0)+(it.qty||1); }); });
   var prodArr = Object.keys(prodMap).map(function(k){ return {name:k, qty:prodMap[k]}; }).sort(function(a,b){ return b.qty-a.qty; });
   var contP = document.getElementById('listaProductos');
   contP.innerHTML = prodArr.length ? prodArr.map(function(p){
     return '<div class="fila"><span class="qty">'+p.qty+'</span><span class="nombre">'+esc(p.name)+'</span></div>';
-  }).join('') : '<div class="vacio">Sin ventas todavía</div>';
+  }).join('') : '<div class="vacio">Sin ventas en el turno actual</div>';
 
-  // Por método de pago
+  // Por método de pago: histórico (suma por método) + turno vivo.
   var metMap = {};
-  ventas.forEach(function(v){
+  filas.forEach(function(r){
+    if(r.efectivo) metMap.efectivo=(metMap.efectivo||0)+r.efectivo;
+    if(r.tarjeta) metMap.tarjeta=(metMap.tarjeta||0)+r.tarjeta;
+    if(r.transferencia) metMap.transferencia=(metMap.transferencia||0)+r.transferencia;
+    if(r.rappi) metMap.rappi=(metMap.rappi||0)+r.rappi;
+    if(r.mercadopago) metMap.mercadopago=(metMap.mercadopago||0)+r.mercadopago;
+  });
+  ventasVivas.forEach(function(v){
     if(v.pagos && v.pagos.length){ v.pagos.forEach(function(p){ metMap[p.metodo]=(metMap[p.metodo]||0)+(p.monto||0); }); }
     else { var met=v.metodo||'otro'; metMap[met]=(metMap[met]||0)+(v.total||0); }
   });
