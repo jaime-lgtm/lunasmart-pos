@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luna Smart — Monitor de venta en vivo</title>
+<link rel="icon" href="logo-badge.png" type="image/png">
+<style>
+:root{
+  --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
+  --terracota-claro:#d0632f; --beige:#e8d6b9; --beige-claro:#f5ecdd;
+  --verde-ok:#3f7d4e; --rojo:#c0392b; --gris:#8a7d6b; --linea:#e4dccb;
+  --azul:#2f6f9e;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x:hidden;}
+.hidden{display:none !important;}
+
+/* ==== PANTALLA DE PIN ==== */
+#scPin{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px;}
+#scPin .brand{font-size:28px;font-weight:800;color:var(--beige-claro);}
+#scPin .brand span{color:var(--terracota-claro);}
+#scPin .sub{color:var(--gris);font-size:15px;text-align:center;max-width:340px;}
+.pin-display{display:flex;gap:14px;margin:10px 0;}
+.pin-dot{width:16px;height:16px;border-radius:50%;background:rgba(232,214,185,.18);}
+.pin-dot.on{background:var(--terracota-claro);}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:280px;}
+.key{height:64px;border-radius:14px;background:rgba(232,214,185,.08);border:1px solid rgba(232,214,185,.14);color:var(--beige-claro);font-size:24px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.12s;}
+.key:active{background:rgba(232,214,185,.2);}
+.key.enter{background:var(--terracota);border-color:var(--terracota);}
+#pinError{color:#e77;font-size:13px;min-height:18px;}
+
+/* ==== DASHBOARD ==== */
+#scDash{min-height:100vh;display:none;flex-direction:column;}
+#scDash.active{display:flex;}
+.topbar{display:flex;align-items:center;gap:18px;padding:20px 32px;border-bottom:1px solid rgba(232,214,185,.14);flex-wrap:wrap;}
+.topbar .brand{font-size:22px;font-weight:800;}
+.topbar .brand span{color:var(--terracota-claro);}
+.topbar select{background:rgba(232,214,185,.08);border:1px solid rgba(232,214,185,.2);color:var(--beige-claro);padding:10px 14px;border-radius:10px;font-size:15px;font-weight:600;}
+.topbar .spacer{flex:1;}
+.topbar .reloj{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--beige-claro);}
+.topbar .estado-caja{padding:6px 14px;border-radius:999px;font-size:13px;font-weight:700;}
+.estado-caja.abierta{background:rgba(63,125,78,.22);color:#7fd196;}
+.estado-caja.cerrada{background:rgba(192,57,43,.22);color:#e88;}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;padding:24px 32px;}
+.card{background:rgba(232,214,185,.05);border:1px solid rgba(232,214,185,.1);border-radius:18px;padding:20px 22px;}
+.card-lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gris);font-weight:700;}
+.card-val{font-size:34px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;}
+.card.total{background:linear-gradient(135deg,var(--terracota),var(--terracota-claro));border:none;}
+.card.total .card-lbl{color:rgba(255,255,255,.85);}
+.card.total .card-val{color:#fff;font-size:42px;}
+
+.paneles{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:18px;padding:0 32px 32px;flex:1;}
+@media (max-width:1000px){.paneles{grid-template-columns:1fr;}}
+.panel{background:rgba(232,214,185,.05);border:1px solid rgba(232,214,185,.1);border-radius:18px;padding:22px;display:flex;flex-direction:column;min-height:0;}
+.panel h3{font-size:16px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.panel-list{display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:52vh;}
+.fila{display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(232,214,185,.04);border-radius:10px;font-size:14.5px;}
+.fila .qty{background:var(--terracota);color:#fff;font-weight:800;font-size:13px;padding:2px 9px;border-radius:999px;min-width:26px;text-align:center;}
+.fila .nombre{flex:1;font-weight:600;}
+.fila .monto{font-variant-numeric:tabular-nums;font-weight:700;color:var(--terracota-claro);}
+.fila.agotado{background:rgba(192,57,43,.1);}
+.fila .hora{color:var(--gris);font-size:12px;font-variant-numeric:tabular-nums;}
+.vacio{color:var(--gris);font-size:13.5px;padding:20px 0;text-align:center;}
+
+.metodos{display:flex;flex-direction:column;gap:10px;}
+.metodo-fila{display:flex;align-items:center;gap:12px;}
+.metodo-fila .met-nombre{width:120px;font-size:13.5px;color:var(--beige-claro);font-weight:600;}
+.metodo-fila .met-barra-wrap{flex:1;height:10px;background:rgba(232,214,185,.08);border-radius:999px;overflow:hidden;}
+.metodo-fila .met-barra{height:100%;background:var(--terracota-claro);border-radius:999px;}
+.metodo-fila .met-monto{font-variant-numeric:tabular-nums;font-weight:700;width:90px;text-align:right;font-size:14px;}
+</style>
+</head>
+<body>
+
+<div id="scPin">
+  <div class="brand">luna<span>smart</span></div>
+  <div class="sub">Monitor de venta en vivo. Ingresa tu PIN de empleado para ver el tablero.</div>
+  <div class="pin-display" id="pinDisplay"></div>
+  <div class="keypad" id="keypad">
+    <button class="key" data-k="1">1</button><button class="key" data-k="2">2</button><button class="key" data-k="3">3</button>
+    <button class="key" data-k="4">4</button><button class="key" data-k="5">5</button><button class="key" data-k="6">6</button>
+    <button class="key" data-k="7">7</button><button class="key" data-k="8">8</button><button class="key" data-k="9">9</button>
+    <button class="key" data-k="del">&#9003;</button><button class="key" data-k="0">0</button><button class="key enter" data-k="enter">&rarr;</button>
+  </div>
+  <div id="pinError"></div>
+</div>
+
+<div id="scDash">
+  <div class="topbar">
+    <div class="brand">luna<span>smart</span> · monitor</div>
+    <select id="selSucursal"></select>
+    <span class="estado-caja" id="estadoCaja">—</span>
+    <div class="spacer"></div>
+    <div class="reloj" id="reloj">--:--:--</div>
+  </div>
+
+  <div class="grid">
+    <div class="card total"><div class="card-lbl">Venta del turno</div><div class="card-val" id="kpiTotal">$0</div></div>
+    <div class="card"><div class="card-lbl">Ventas registradas</div><div class="card-val" id="kpiCount">0</div></div>
+    <div class="card"><div class="card-lbl">Retiros del turno</div><div class="card-val" id="kpiRetiros">$0</div></div>
+    <div class="card"><div class="card-lbl">Productos deshabilitados</div><div class="card-val" id="kpiAgotados">0</div></div>
+  </div>
+
+  <div class="paneles">
+    <div class="panel">
+      <h3>🧾 Productos vendidos</h3>
+      <div class="panel-list" id="listaProductos"><div class="vacio">Sin ventas todavía</div></div>
+    </div>
+    <div class="panel">
+      <h3>💳 Por método de pago</h3>
+      <div class="metodos" id="listaMetodos"><div class="vacio">Sin ventas todavía</div></div>
+      <h3 style="margin-top:22px">🚫 Agotados</h3>
+      <div class="panel-list" id="listaAgotados"><div class="vacio">Todo disponible</div></div>
+    </div>
+    <div class="panel">
+      <h3>💵 Retiros de caja</h3>
+      <div class="panel-list" id="listaRetiros"><div class="vacio">Sin retiros todavía</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script>
+/* Monitor de venta en vivo -- pantalla de solo lectura pensada para dejarse
+   abierta en un TV/monitor de oficina, sin login completo del POS. Cualquier
+   empleado con PIN activo en usuariosPOS puede desbloquearla una vez por
+   sesión (se recuerda con sessionStorage mientras la pestaña siga abierta).
+   Todo lo que muestra ya vive en Firebase en tiempo real -- no hay backend
+   nuevo que construir, solo listeners de lectura sobre lo que el POS ya
+   escribe (turnoSales, cajaEstado, agotados, catalogo). */
+
+var firebaseConfig = {
+  apiKey: "AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM",
+  authDomain: "luna-smart-pos.firebaseapp.com",
+  databaseURL: "https://luna-smart-pos-default-rtdb.firebaseio.com",
+  projectId: "luna-smart-pos",
+  storageBucket: "luna-smart-pos.firebasestorage.app",
+  messagingSenderId: "29167679041",
+  appId: "1:29167679041:web:0959c2161d86552ded38c0"
+};
+firebase.initializeApp(firebaseConfig);
+var fbDb = firebase.database();
+var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
+
+var SUCURSALES = [
+  {id:'cafeteria', nombre:'Casa de la Cultura'},
+  {id:'grano',    nombre:'Venta café en grano'},
+  {id:'helfy',    nombre:'Helfy Fü'},
+  {id:'eventos',  nombre:'Sueño de Luna Eventos'},
+  {id:'barbacoa', nombre:'Barbacoa y Menudo'}
+];
+var METODO_LABEL = {efectivo:'Efectivo', tarjeta:'Tarjeta', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi', mixto:'Mixto', otro:'Otro'};
+
+function money(n){ return '$'+Number(n||0).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function esc(s){ return String(s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+/* ============ PIN ============ */
+var pin='';
+function renderPinDisplay(){
+  var d=document.getElementById('pinDisplay'), dots=pin.length, html='';
+  for(var i=0;i<Math.max(4,dots);i++){ html+='<span class="pin-dot'+(i<dots?' on':'')+'"></span>'; }
+  d.innerHTML=html;
+}
+function pinKey(k){
+  document.getElementById('pinError').textContent='';
+  if(k==='del'){ pin=pin.slice(0,-1); }
+  else if(k==='enter'){ verificarPin(); return; }
+  else if(pin.length<6){ pin+=k; }
+  renderPinDisplay();
+}
+function verificarPin(){
+  if(pin.length<4){ document.getElementById('pinError').textContent='Ingresa tu PIN (min. 4 dígitos)'; return; }
+  fbAuthReady.then(function(){ return fbDb.ref('usuariosPOS').once('value'); }).then(function(snap){
+    var val=snap.val()||{}, match=false;
+    Object.keys(val).forEach(function(id){
+      if(match) return;
+      var u=val[id];
+      if(String(u.pin)===String(pin) && u.activo!==false) match=true;
+    });
+    if(!match){ document.getElementById('pinError').textContent='PIN no reconocido'; pin=''; renderPinDisplay(); return; }
+    sessionStorage.setItem('ls_monitor_unlocked','1');
+    mostrarDashboard();
+  }).catch(function(e){ console.error(e); document.getElementById('pinError').textContent='Sin conexión -- intenta de nuevo'; });
+}
+document.getElementById('keypad').querySelectorAll('.key').forEach(function(k){ k.addEventListener('click',function(){ pinKey(k.dataset.k); }); });
+document.addEventListener('keydown', function(e){
+  if(document.getElementById('scDash').classList.contains('active')) return;
+  if(e.key>='0'&&e.key<='9'){ pinKey(e.key); } else if(e.key==='Backspace'){ pinKey('del'); } else if(e.key==='Enter'){ pinKey('enter'); }
+});
+
+/* ============ DASHBOARD ============ */
+var sucursalActual = localStorage.getItem('ls_monitor_suc') || 'cafeteria';
+var vivo = { turnoSales: [], cajaEstado: {}, agotados: {}, catalogo: [] };
+var listeners = {};
+
+function mostrarDashboard(){
+  document.getElementById('scPin').classList.add('hidden');
+  document.getElementById('scDash').classList.add('active');
+  var sel=document.getElementById('selSucursal');
+  sel.innerHTML = SUCURSALES.map(function(s){ return '<option value="'+s.id+'"'+(s.id===sucursalActual?' selected':'')+'>'+esc(s.nombre)+'</option>'; }).join('');
+  sel.addEventListener('change', function(){ sucursalActual=sel.value; localStorage.setItem('ls_monitor_suc', sucursalActual); escucharTodo(); });
+  escucharTodo();
+  setInterval(actualizarReloj, 1000);
+  actualizarReloj();
+}
+function actualizarReloj(){
+  document.getElementById('reloj').textContent = new Date().toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function escucharTodo(){
+  Object.keys(listeners).forEach(function(path){ fbDb.ref(path).off('value', listeners[path]); });
+  listeners = {};
+  var suc = sucursalActual;
+
+  var pTurno = 'turnoSales/'+suc;
+  listeners[pTurno] = function(snap){
+    var val = snap.val()||{};
+    vivo.turnoSales = Object.keys(val).map(function(k){ return val[k]; });
+    renderVentas();
+  };
+  var pCaja = 'cajaEstado/'+suc;
+  listeners[pCaja] = function(snap){ vivo.cajaEstado = snap.val()||{}; renderCaja(); };
+  var pAgo = 'agotados/'+suc;
+  listeners[pAgo] = function(snap){ vivo.agotados = snap.val()||{}; renderAgotados(); };
+  var pCat = 'catalogo/'+suc;
+  listeners[pCat] = function(snap){
+    var val = snap.val()||{};
+    vivo.catalogo = Object.keys(val).map(function(k){ return val[k]; });
+    renderAgotados();
+  };
+
+  fbAuthReady.then(function(){
+    fbDb.ref(pTurno).on('value', listeners[pTurno]);
+    fbDb.ref(pCaja).on('value', listeners[pCaja]);
+    fbDb.ref(pAgo).on('value', listeners[pAgo]);
+    fbDb.ref(pCat).on('value', listeners[pCat]);
+  });
+}
+
+function renderCaja(){
+  var ce = vivo.cajaEstado || {};
+  var el = document.getElementById('estadoCaja');
+  if(ce.abierta){ el.textContent = '● Caja abierta · '+(ce.turno||''); el.className='estado-caja abierta'; }
+  else { el.textContent = '● Caja cerrada'; el.className='estado-caja cerrada'; }
+
+  var movs = ce.movimientos || [];
+  var retiros = movs.filter(function(m){ return m.tipo==='retiro'; });
+  var totalRetiros = retiros.reduce(function(a,m){ return a+(m.monto||0); }, 0);
+  document.getElementById('kpiRetiros').textContent = money(totalRetiros);
+  var cont = document.getElementById('listaRetiros');
+  if(!retiros.length){ cont.innerHTML = '<div class="vacio">Sin retiros todavía</div>'; return; }
+  cont.innerHTML = retiros.slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); }).map(function(m){
+    var hora = m.ts ? new Date(m.ts).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '';
+    return '<div class="fila"><span class="hora">'+hora+'</span><span class="nombre">'+esc(m.motivo||'Retiro')+'</span><span class="monto">-'+money(m.monto)+'</span></div>';
+  }).join('');
+}
+
+function renderVentas(){
+  var ventas = vivo.turnoSales || [];
+  var total = ventas.reduce(function(a,v){ return a+(v.total||0); }, 0);
+  document.getElementById('kpiTotal').textContent = money(total);
+  document.getElementById('kpiCount').textContent = ventas.length;
+
+  // Productos vendidos
+  var prodMap = {};
+  ventas.forEach(function(v){ (v.items||[]).forEach(function(it){ prodMap[it.name]=(prodMap[it.name]||0)+(it.qty||1); }); });
+  var prodArr = Object.keys(prodMap).map(function(k){ return {name:k, qty:prodMap[k]}; }).sort(function(a,b){ return b.qty-a.qty; });
+  var contP = document.getElementById('listaProductos');
+  contP.innerHTML = prodArr.length ? prodArr.map(function(p){
+    return '<div class="fila"><span class="qty">'+p.qty+'</span><span class="nombre">'+esc(p.name)+'</span></div>';
+  }).join('') : '<div class="vacio">Sin ventas todavía</div>';
+
+  // Por método de pago
+  var metMap = {};
+  ventas.forEach(function(v){
+    if(v.pagos && v.pagos.length){ v.pagos.forEach(function(p){ metMap[p.metodo]=(metMap[p.metodo]||0)+(p.monto||0); }); }
+    else { var met=v.metodo||'otro'; metMap[met]=(metMap[met]||0)+(v.total||0); }
+  });
+  var metArr = Object.keys(metMap).map(function(k){ return {metodo:k, monto:metMap[k]}; }).sort(function(a,b){ return b.monto-a.monto; });
+  var maxMonto = metArr.length ? metArr[0].monto : 0;
+  var contM = document.getElementById('listaMetodos');
+  contM.innerHTML = metArr.length ? metArr.map(function(m){
+    var pct = maxMonto>0 ? Math.round((m.monto/maxMonto)*100) : 0;
+    return '<div class="metodo-fila"><span class="met-nombre">'+(METODO_LABEL[m.metodo]||m.metodo)+'</span><span class="met-barra-wrap"><span class="met-barra" style="width:'+pct+'%"></span></span><span class="met-monto">'+money(m.monto)+'</span></div>';
+  }).join('') : '<div class="vacio">Sin ventas todavía</div>';
+}
+
+function renderAgotados(){
+  var ids = Object.keys(vivo.agotados||{});
+  document.getElementById('kpiAgotados').textContent = ids.length;
+  var cont = document.getElementById('listaAgotados');
+  if(!ids.length){ cont.innerHTML = '<div class="vacio">Todo disponible</div>'; return; }
+  var catMap = {};
+  (vivo.catalogo||[]).forEach(function(p){ catMap[p.id]=p.name; });
+  cont.innerHTML = ids.map(function(id){
+    return '<div class="fila agotado"><span class="nombre">'+esc(catMap[id]||id)+'</span></div>';
+  }).join('');
+}
+
+if(sessionStorage.getItem('ls_monitor_unlocked')==='1'){ mostrarDashboard(); } else { renderPinDisplay(); }
+</script>
+</body>
+</html>
