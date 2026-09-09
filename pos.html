@@ -907,8 +907,7 @@ var CONFIG_ITEMS = [{t:"Sincronizaci\u00f3n Luna Smart", ic:"\uD83D\uDD04", badg
   {ic:'&#128424;', t:'Impresora de tickets', badge:'No conectada', badgeClass:'err'},
   {ic:'&#128225;', t:'Integraciones', badge:'', badgeClass:''},
   {ic:'&#128666;', t:'Pedidos en linea', badge:'', badgeClass:''},
-  {ic:'&#9881;', t:'Ajustes', badge:'', badgeClass:''},
-  {ic:'&#127760;', t:'Wi-Fi principal', badge:'OK', badgeClass:'ok'}
+  {ic:'&#9881;', t:'Ajustes', badge:'', badgeClass:''}
 ];
 
 var PERMISOS = {
@@ -1098,6 +1097,7 @@ function doLogin(){
     fbEscucharAlarmas(suc);
     fbEscucharTipoCambio();
     fbEscucharHorarioTienda();
+    fbEscucharNegocioInfo(suc);
     fbEscucharRepartidorConfig(suc);
     fbEscucharTurnoSales(suc);
     fbEscucharCatalogo(suc);
@@ -1130,7 +1130,7 @@ function doLogin(){
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharTipoCambio(); fbDejarDeEscucharHorarioTienda(); fbDejarDeEscucharRepartidorConfig(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharTipoCambio(); fbDejarDeEscucharHorarioTienda(); fbDejarDeEscucharNegocioInfo(); fbDejarDeEscucharRepartidorConfig(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
 
 /* ============ REGISTRO DE ASISTENCIA (entrada/salida por PIN) ============
    Independiente del login de cajero: cualquier empleado con PIN activo en
@@ -2850,7 +2850,24 @@ function renderPedidos(){
   html+='</div>';
   document.getElementById('pedidosContent').innerHTML=html;
 }
-var NEGOCIO={nombre:'Sue\u00f1o de Luna',sucursal:'Suc. Casa de la Cultura',dir1:'Adolfo Lopez Mateo 1334 Col. Roma',dir2:'Piedras Negras, Coahuila',wa:'WhatsApp (878) 133 3237'};
+/* ==== FIREBASE: datos del negocio por sucursal (negocioInfo/{sucursal}) --
+   NEGOCIO empieza con estos valores por defecto (los que ya se imprimian
+   siempre, sin importar la sucursal real) y se sobreescriben en vivo si
+   Jaime los personaliza desde Configuracion > Ajustes. ==== */
+var NEGOCIO_DEFAULT={nombre:'Sue\u00f1o de Luna',sucursal:'Suc. Casa de la Cultura',dir1:'Adolfo Lopez Mateo 1334 Col. Roma',dir2:'Piedras Negras, Coahuila',wa:'WhatsApp (878) 133 3237'};
+var NEGOCIO=Object.assign({},NEGOCIO_DEFAULT);
+var fbNegocioInfoListener=null, fbNegocioInfoListenerSuc=null;
+function fbEscucharNegocioInfo(suc){
+  fbDejarDeEscucharNegocioInfo();
+  fbNegocioInfoListenerSuc=suc;
+  fbNegocioInfoListener=function(snap){ Object.assign(NEGOCIO, NEGOCIO_DEFAULT, snap.val()||{}); if(state.view==='config') renderConfig(); };
+  fbAuthReady.then(function(){ fbDb.ref('negocioInfo/'+suc).on('value', fbNegocioInfoListener); });
+}
+function fbDejarDeEscucharNegocioInfo(){
+  if(fbNegocioInfoListenerSuc && fbNegocioInfoListener) fbDb.ref('negocioInfo/'+fbNegocioInfoListenerSuc).off('value', fbNegocioInfoListener);
+  fbNegocioInfoListener=null; fbNegocioInfoListenerSuc=null;
+  Object.assign(NEGOCIO, NEGOCIO_DEFAULT);
+}
 function logoSVG(){ return '<svg viewBox="0 0 300 200" width="150" height="100" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">'+'<text x="150" y="90" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="72" letter-spacing="-2" fill="#000">SUE\u00d1O</text>'+'<text x="150" y="170" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="72" letter-spacing="-2" fill="#000">DE LUNA</text>'+'</svg>'; }
 
 /* ============ IMPRESORA TERMICA USB (ESC/POS) ============
@@ -3200,7 +3217,7 @@ function renderConfig(){
   html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Tipo de cambio (USD)'){ configTipoCambio(); } else if(b.dataset.t==='Impresora de tickets'){ configImpresora(); } else if(b.dataset.t==='Pedidos en linea'){ configPedidosEnLinea(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Tipo de cambio (USD)'){ configTipoCambio(); } else if(b.dataset.t==='Impresora de tickets'){ configImpresora(); } else if(b.dataset.t==='Pedidos en linea'){ configPedidosEnLinea(); } else if(b.dataset.t==='Ajustes'){ configAjustesNegocio(); } else if(b.dataset.t==='Favoritos'){ configFavoritos(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 function configImpresora(){
   var conectada=USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1';
@@ -3238,6 +3255,58 @@ function configPedidosEnLinea(){
       showToast(pausado?'Pedidos en línea reactivados':'Pedidos en línea pausados');
       closeModal();
     }).catch(function(e){ console.error(e); showToast('No se pudo cambiar -- intenta de nuevo'); });
+  });
+}
+
+function configAjustesNegocio(){
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>Ajustes del negocio</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Estos datos se imprimen en los tickets de esta sucursal (papel, en pantalla y por WhatsApp).</div>'+
+    '<div class="field"><label>Nombre</label><input type="text" id="anz-nombre" value="'+esc(NEGOCIO.nombre)+'"></div>'+
+    '<div class="field"><label>Sucursal</label><input type="text" id="anz-sucursal" value="'+esc(NEGOCIO.sucursal)+'"></div>'+
+    '<div class="field"><label>Dirección (línea 1)</label><input type="text" id="anz-dir1" value="'+esc(NEGOCIO.dir1)+'"></div>'+
+    '<div class="field"><label>Dirección (línea 2)</label><input type="text" id="anz-dir2" value="'+esc(NEGOCIO.dir2)+'"></div>'+
+    '<div class="field"><label>WhatsApp para tickets</label><input type="text" id="anz-wa" value="'+esc(NEGOCIO.wa)+'"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mOk">Guardar</button></div>'+
+    '</div></div>';
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('mOk').addEventListener('click',function(){
+    var datos={
+      nombre:document.getElementById('anz-nombre').value.trim()||NEGOCIO_DEFAULT.nombre,
+      sucursal:document.getElementById('anz-sucursal').value.trim()||NEGOCIO_DEFAULT.sucursal,
+      dir1:document.getElementById('anz-dir1').value.trim(),
+      dir2:document.getElementById('anz-dir2').value.trim(),
+      wa:document.getElementById('anz-wa').value.trim()
+    };
+    fbAuthReady.then(function(){ return fbDb.ref('negocioInfo/'+state.sucursal).set(datos); }).then(function(){
+      showToast('Datos del negocio guardados');
+      closeModal();
+    }).catch(function(e){ console.error(e); showToast('No se pudo guardar -- intenta de nuevo'); });
+  });
+}
+
+function configFavoritos(){
+  var favs=(CATALOG[state.sucursal]||[]).filter(function(p){ return p.fav===true; });
+  var rows=favs.length?favs.map(function(p){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--linea)"><span style="flex:1;font-weight:700">'+esc(p.name)+'</span><button data-id="'+esc(p.id)+'" class="btn-quitar-fav" style="background:none;border:1px solid var(--linea);border-radius:10px;padding:8px 12px;color:#c0392b;cursor:pointer;font-weight:700">Quitar</button></div>';
+  }).join(''):'<div class="cart-empty">Sin productos favoritos -- marcalos con la estrella desde el Catalogo POS en Luna Smart.</div>';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>&#11088; Favoritos</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Productos marcados como favoritos en esta sucursal.</div>'+
+    rows+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button></div>'+
+    '</div></div>';
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.querySelectorAll('.btn-quitar-fav').forEach(function(b){
+    b.addEventListener('click',function(){
+      var id=b.dataset.id;
+      fbAuthReady.then(function(){ return fbDb.ref('catalogo/'+state.sucursal+'/'+id).update({fav:false}); }).then(function(){
+        showToast('Quitado de favoritos');
+        configFavoritos();
+      }).catch(function(e){ console.error(e); showToast('No se pudo quitar -- intenta de nuevo'); });
+    });
   });
 }
 
