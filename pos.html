@@ -641,7 +641,9 @@ function fbBuscarClienteUnificado(tel){
 // transaccion sobre el nodo completo del cliente para evitar que dos escrituras
 // concurrentes del mismo telefono se pisen entre si.
 function fbRegistrarVentaLealtad(tel,gastar,ganar){
-  var t=_normTelLealtad(tel); gastar=Math.max(0,Math.round(gastar||0)); ganar=Math.max(0,Math.round(ganar||0));
+  // El dinero electronico (2%) nunca se redondea -- se guarda exacto, al
+  // centavo, aunque queden decimales.
+  var t=_normTelLealtad(tel); gastar=Math.max(0,Math.round((gastar||0)*100)/100); ganar=Math.max(0,Math.round((ganar||0)*100)/100);
   if(t.length!==10||(!gastar&&!ganar)) return Promise.resolve(true);
   return fbAuthReady.then(function(){
     var ref=fbLealtadRef(t);
@@ -1431,7 +1433,8 @@ function confirmarPedidoWeb(fbKey){
   var puntosUsados=p.puntosUsados||0;
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
   if(telCliente){
-    var puntosGanados=Math.round(p.total*PUNTOS_TASA);
+    var baseDE=Math.max(0,_baseDineroElectronico(items,0)+(p.cargoDomicilio||0)-puntosUsados);
+    var puntosGanados=Math.round(baseDE*PUNTOS_TASA*100)/100;
     fbRegistrarVentaLealtad(telCliente,puntosUsados,puntosGanados);
   }
 
@@ -1778,6 +1781,22 @@ function changeQty(uid,d){
 }
 function clearCart(){ state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; renderTopbar(); renderCart(); }
 function cartSubtotal(){ return state.cart.reduce(function(s,l){return s+l.price*l.qty;},0); }
+/* Dinero electronico (2%, ver PUNTOS_TASA): combos y promociones se pueden
+   marcar en Luna Smart > Catalogo POS para que NO generen este 2% -- aqui
+   se calcula solo sobre las lineas elegibles (aplicaDineroElectronico !==
+   false), aplicando el descuento del pedido de forma proporcional. */
+function _baseDineroElectronico(items, descuentoMonto){
+  var elegible=0, sub=0;
+  (items||[]).forEach(function(l){
+    var monto=(l.price||0)*(l.qty||1);
+    sub+=monto;
+    var prod=(CATALOG[state.sucursal]||[]).filter(function(p){return p.id===l.id;})[0];
+    if(!prod || prod.aplicaDineroElectronico!==false) elegible+=monto;
+  });
+  if(sub<=0) return 0;
+  var descProporcional=(descuentoMonto||0)*(elegible/sub);
+  return Math.max(0, elegible-descProporcional);
+}
 function puntosMontoUsado(){
   if(!state.usarPuntos || !(state.puntosDisponibles>0)) return 0;
   var baseSinPuntos=cartSubtotal()-cartDescuentoMonto();
@@ -1855,7 +1874,7 @@ function renderCart(){
   if(pr){
     if(state.puntosDisponibles>0){
       pr.classList.remove('hidden');
-      document.getElementById('cartPuntosLbl').textContent='🌙 '+state.puntosDisponibles+' puntos disponibles'+(state.usarPuntos?' (usando)':' -- toca para usar');
+      document.getElementById('cartPuntosLbl').textContent='🌙 '+Number(state.puntosDisponibles).toFixed(2)+' puntos disponibles'+(state.usarPuntos?' (usando)':' -- toca para usar');
       document.getElementById('cartPuntosVal').textContent=puntosMonto>0?('-'+money(puntosMonto)):'';
     } else { pr.classList.add('hidden'); }
   }
@@ -2281,7 +2300,9 @@ function confirmSale(){
   var puntosUsadosMonto=puntosMontoUsado();
   var puntosGanados=0;
   if(telCliente){
-    puntosGanados=Math.round(total*PUNTOS_TASA);
+    var __cargoDE=(state.tipoOrden==='domicilio')?(state.cargoDomicilio||0):0;
+    var baseDE=Math.max(0,_baseDineroElectronico(state.cart,cartDescuentoMonto())+__cargoDE-puntosUsadosMonto);
+    puntosGanados=Math.round(baseDE*PUNTOS_TASA*100)/100;
     fbRegistrarVentaLealtad(telCliente,puntosUsadosMonto,puntosGanados);
   }
   var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosMonto,pedidoId:built.ref.key,items:state.cart.slice(),descuento:cartDescuentoMonto()};
@@ -2294,7 +2315,7 @@ function confirmSale(){
   state.pagosDivididos=[];
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
   var msg=total<=0.004?'Cortesía registrada':(change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total)));
-  if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
+  if(puntosGanados>0) msg+=' · +'+puntosGanados.toFixed(2)+' 🌙';
   showToast(msg);
   if(localStorage.getItem('ls_auto_imprimir')!=='0' && USBPrinter.soportado() && (USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1')) imprimirTicketFisico(built.obj);
   ofrecerWhatsAppTicket(built.obj);
@@ -2385,14 +2406,18 @@ function confirmCobroPedido(){
   fbAgregarVenta(state.sucursal,ventaRec);
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
   var puntosGanados=0;
-  if(telCliente){ puntosGanados=Math.round(total*PUNTOS_TASA); fbRegistrarVentaLealtad(telCliente,puntosUsadosPedido,puntosGanados); }
+  if(telCliente){
+    var baseDE=Math.max(0,_baseDineroElectronico(p.items||[],_descuentoMontoDePedido(p))+(p.cargoDomicilio||0)-puntosUsadosPedido);
+    puntosGanados=Math.round(baseDE*PUNTOS_TASA*100)/100;
+    fbRegistrarVentaLealtad(telCliente,puntosUsadosPedido,puntosGanados);
+  }
   if(p.mesa){ liberarMesa(state.sucursal,p.mesa); }
   var change=Math.max(0,totalPagosDivididos()-total);
   var ticketData=Object.assign({},p,{metodo:metodo,pagos:_pagosConDetalle(pagos)?pagos:undefined});
   state.pagosDivididos=[];
   closeCobroPedido();
   var msg=total<=0.004?'Cortesía registrada':(change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total)));
-  if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
+  if(puntosGanados>0) msg+=' · +'+puntosGanados.toFixed(2)+' 🌙';
   showToast(msg);
   if(localStorage.getItem('ls_auto_imprimir')!=='0' && USBPrinter.soportado() && (USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1')) imprimirTicketFisico(ticketData);
   ofrecerWhatsAppTicket(ticketData);
