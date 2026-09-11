@@ -1433,7 +1433,7 @@ function confirmarPedidoWeb(fbKey){
   var puntosUsados=p.puntosUsados||0;
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
   if(telCliente){
-    var baseDE=Math.max(0,_baseDineroElectronico(items,0)+(p.cargoDomicilio||0)-puntosUsados);
+    var baseDE=_sinDescuentoAplicado(p.descuento)?Math.max(0,_baseDineroElectronico(items)+(p.cargoDomicilio||0)-puntosUsados):0;
     var puntosGanados=Math.round(baseDE*PUNTOS_TASA*100)/100;
     fbRegistrarVentaLealtad(telCliente,puntosUsados,puntosGanados);
   }
@@ -1782,21 +1782,21 @@ function changeQty(uid,d){
 function clearCart(){ state.cart=[]; state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; renderTopbar(); renderCart(); }
 function cartSubtotal(){ return state.cart.reduce(function(s,l){return s+l.price*l.qty;},0); }
 /* Dinero electronico (2%, ver PUNTOS_TASA): combos y promociones se pueden
-   marcar en Luna Smart > Catalogo POS para que NO generen este 2% -- aqui
-   se calcula solo sobre las lineas elegibles (aplicaDineroElectronico !==
-   false), aplicando el descuento del pedido de forma proporcional. */
-function _baseDineroElectronico(items, descuentoMonto){
-  var elegible=0, sub=0;
+   marcar en Luna Smart > Catalogo POS para que NO generen este 2%. Pero si
+   el pedido ya lleva CUALQUIER descuento aplicado, eso manda sobre todo lo
+   demas -- el pedido completo no genera nada de dinero electronico, sin
+   importar lo que diga el catalogo (se revisa ANTES de llamar esta func.,
+   ver _sinDescuentoAplicado). */
+function _baseDineroElectronico(items){
+  var elegible=0;
   (items||[]).forEach(function(l){
     var monto=(l.price||0)*(l.qty||1);
-    sub+=monto;
     var prod=(CATALOG[state.sucursal]||[]).filter(function(p){return p.id===l.id;})[0];
     if(!prod || prod.aplicaDineroElectronico!==false) elegible+=monto;
   });
-  if(sub<=0) return 0;
-  var descProporcional=(descuentoMonto||0)*(elegible/sub);
-  return Math.max(0, elegible-descProporcional);
+  return elegible;
 }
+function _sinDescuentoAplicado(desc){ return !(desc && desc.tipo); }
 function puntosMontoUsado(){
   if(!state.usarPuntos || !(state.puntosDisponibles>0)) return 0;
   var baseSinPuntos=cartSubtotal()-cartDescuentoMonto();
@@ -2301,7 +2301,7 @@ function confirmSale(){
   var puntosGanados=0;
   if(telCliente){
     var __cargoDE=(state.tipoOrden==='domicilio')?(state.cargoDomicilio||0):0;
-    var baseDE=Math.max(0,_baseDineroElectronico(state.cart,cartDescuentoMonto())+__cargoDE-puntosUsadosMonto);
+    var baseDE=_sinDescuentoAplicado(state.descuento)?Math.max(0,_baseDineroElectronico(state.cart)+__cargoDE-puntosUsadosMonto):0;
     puntosGanados=Math.round(baseDE*PUNTOS_TASA*100)/100;
     fbRegistrarVentaLealtad(telCliente,puntosUsadosMonto,puntosGanados);
   }
@@ -2407,7 +2407,7 @@ function confirmCobroPedido(){
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
   var puntosGanados=0;
   if(telCliente){
-    var baseDE=Math.max(0,_baseDineroElectronico(p.items||[],_descuentoMontoDePedido(p))+(p.cargoDomicilio||0)-puntosUsadosPedido);
+    var baseDE=_sinDescuentoAplicado(p.descuento)?Math.max(0,_baseDineroElectronico(p.items||[])+(p.cargoDomicilio||0)-puntosUsadosPedido):0;
     puntosGanados=Math.round(baseDE*PUNTOS_TASA*100)/100;
     fbRegistrarVentaLealtad(telCliente,puntosUsadosPedido,puntosGanados);
   }
