@@ -750,6 +750,22 @@ function fbDejarDeEscucharHorarioTienda(){
   fbHorarioTiendaListener=null;
 }
 
+/* ==== FIREBASE: tipos de descuento (tiposDescuento) -- catalogo compartido
+   entre todas las sucursales, administrado solo por el usuario admin desde
+   Configuracion. Cualquier rol puede aplicarlos al cobrar, pero siempre
+   pidiendo PIN de autorizacion (ver openDescuento). ==== */
+var _tiposDescuentoCache={};
+var fbTiposDescuentoListener=null;
+function fbEscucharTiposDescuento(){
+  fbDejarDeEscucharTiposDescuento();
+  fbTiposDescuentoListener=function(snap){ _tiposDescuentoCache=snap.val()||{}; if(state.view==='config') renderConfig(); };
+  fbAuthReady.then(function(){ fbDb.ref('tiposDescuento').on('value', fbTiposDescuentoListener); });
+}
+function fbDejarDeEscucharTiposDescuento(){
+  if(fbTiposDescuentoListener) fbDb.ref('tiposDescuento').off('value', fbTiposDescuentoListener);
+  fbTiposDescuentoListener=null;
+}
+
 /* ==== FIREBASE: link del grupo de WhatsApp de repartidores, cacheado en
    vivo -- si se leyera con .once() justo al querer abrir la ventana, para
    cuando responde Firebase el navegador ya no lo considera un clic
@@ -907,7 +923,8 @@ var CONFIG_ITEMS = [{t:"Sincronizaci\u00f3n Luna Smart", ic:"\uD83D\uDD04", badg
   {ic:'&#128424;', t:'Impresora de tickets', badge:'No conectada', badgeClass:'err'},
   {ic:'&#128225;', t:'Integraciones', badge:'', badgeClass:''},
   {ic:'&#128666;', t:'Pedidos en linea', badge:'', badgeClass:''},
-  {ic:'&#9881;', t:'Ajustes', badge:'', badgeClass:''}
+  {ic:'&#9881;', t:'Ajustes', badge:'', badgeClass:''},
+  {ic:'&#127991;', t:'Tipos de descuento', badge:'', badgeClass:'', soloAdmin:true}
 ];
 
 var PERMISOS = {
@@ -931,7 +948,7 @@ var state = {
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aqui'};
 var AREA_LABEL={barra:'Barra', cocina:'Cocina'};
 function areaDe(p){ if(p && p.area) return p.area; if(p && p.menu==='Alimentos') return 'cocina'; return 'barra'; }
-var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta (terminal)', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi/Uber', mixto:'Pago mixto'};
+var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta (terminal)', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi/Uber', mixto:'Pago mixto', cortesia:'Cortesía (sin cobro)'};
 
 function money(n){ return '$'+Number(n||0).toFixed(2); }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -1097,6 +1114,7 @@ function doLogin(){
     fbEscucharAlarmas(suc);
     fbEscucharTipoCambio();
     fbEscucharHorarioTienda();
+    fbEscucharTiposDescuento();
     fbEscucharNegocioInfo(suc);
     fbEscucharRepartidorConfig(suc);
     fbEscucharTurnoSales(suc);
@@ -1130,7 +1148,7 @@ function doLogin(){
     showToast('Bienvenido '+u.nombre+' -- '+s.nombre);
   });
 }
-function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharTipoCambio(); fbDejarDeEscucharHorarioTienda(); fbDejarDeEscucharNegocioInfo(); fbDejarDeEscucharRepartidorConfig(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
+function logout(){ state.logged=false; state.cart=[]; state.turnoSales=[]; state.pin=''; state.tipoOrden=null; state.mesa=null; state._editandoPedidoKey=null; state._editandoPedidoId=null; fbDejarDeEscucharPedidos(); fbDejarDeEscucharMesas(); fbDejarDeEscucharAgotados(); fbDejarDeEscucharAlarmas(); fbDejarDeEscucharTipoCambio(); fbDejarDeEscucharHorarioTienda(); fbDejarDeEscucharTiposDescuento(); fbDejarDeEscucharNegocioInfo(); fbDejarDeEscucharRepartidorConfig(); fbDejarDeEscucharTurnoSales(); fbDejarDeEscucharCatalogo(); renderPinDisplay(); showScreen('scLogin'); }
 
 /* ============ REGISTRO DE ASISTENCIA (entrada/salida por PIN) ============
    Independiente del login de cajero: cualquier empleado con PIN activo en
@@ -1830,7 +1848,7 @@ function renderCart(){
   var sub=cartSubtotal(); var desc=cartDescuentoMonto(); var puntosMonto=puntosMontoUsado(); var base=sub-desc-puntosMonto; var iva=base*CONFIG.IVA_RATE/(1+CONFIG.IVA_RATE);
   document.getElementById('cartSubtotal').textContent=money(sub);
   var dr=document.getElementById('cartDescRow');
-  if(desc>0){ dr.classList.remove('hidden'); document.getElementById('cartDescLbl').textContent='Descuento'+(state.descuento.tipo==='porcentaje'?' ('+state.descuento.valor+'%)':''); document.getElementById('cartDescVal').textContent='-'+money(desc); }
+  if(desc>0){ dr.classList.remove('hidden'); document.getElementById('cartDescLbl').textContent='Descuento'+(state.descuento.nombreTipo?' ('+state.descuento.nombreTipo+')':(state.descuento.tipo==='porcentaje'?' ('+state.descuento.valor+'%)':'')); document.getElementById('cartDescVal').textContent='-'+money(desc); }
   else{ dr.classList.add('hidden'); }
   document.getElementById('cartIva').textContent=money(iva);
   var pr=document.getElementById('cartPuntosRow');
@@ -1967,14 +1985,40 @@ function openNota(){
 /* ---- Descuento ---- */
 function openDescuento(){
   if(!state.cart.length){ showToast('Agrega art&iacute;culos primero'); return; }
+  var tipos=Object.keys(_tiposDescuentoCache||{}).map(function(id){ return Object.assign({id:id}, _tiposDescuentoCache[id]); });
+  var botonesTipo=tipos.map(function(t){
+    return '<button type="button" class="desc-tipo-btn" data-pct="'+t.porcentaje+'" data-nombre="'+esc(t.nombre)+'" style="padding:12px;border-radius:12px;border:2px solid var(--linea);background:#fff;font-weight:700;cursor:pointer;text-align:left">'+esc(t.nombre)+'<div style="font-weight:800;color:var(--terracota)">'+Number(t.porcentaje)+'%</div></button>';
+  }).join('');
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Aplicar descuento</h2>'+
+    (tipos.length?('<div class="sub" style="margin-bottom:8px">Elige un tipo, o captura uno personalizado abajo</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'+botonesTipo+'</div>'):'')+
     '<div class="seg" id="descSeg"><button data-t="porcentaje" class="active">Porcentaje %</button><button data-t="monto">Monto $</button></div>'+
-    '<div class="field"><label>Valor</label><input id="descVal" type="number" inputmode="decimal" placeholder="0"></div>'+
+    '<div class="field"><label>Valor'+(tipos.length?' personalizado':'')+'</label><input id="descVal" type="number" inputmode="decimal" placeholder="0"></div>'+
+    '<div class="field"><label>PIN de autorizaci&oacute;n</label><input id="descPin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN de quien autoriza"></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Quitar / Cancelar</button><button class="btn-confirm" id="mOk">Aplicar</button></div></div></div>';
-  var tipo='porcentaje';
-  document.querySelectorAll('#descSeg button').forEach(function(b){ b.addEventListener('click',function(){ document.querySelectorAll('#descSeg button').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); tipo=b.dataset.t; }); });
+  var tipo='porcentaje', nombreTipo=null;
+  document.querySelectorAll('#descSeg button').forEach(function(b){ b.addEventListener('click',function(){ document.querySelectorAll('#descSeg button').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); tipo=b.dataset.t; nombreTipo=null; document.querySelectorAll('.desc-tipo-btn').forEach(function(x){x.style.borderColor='var(--linea)';}); }); });
+  document.querySelectorAll('.desc-tipo-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.desc-tipo-btn').forEach(function(x){x.style.borderColor='var(--linea)';});
+      b.style.borderColor='var(--terracota)';
+      tipo='porcentaje'; nombreTipo=b.dataset.nombre;
+      document.getElementById('descVal').value=b.dataset.pct;
+      document.querySelectorAll('#descSeg button').forEach(function(x){x.classList.toggle('active', x.dataset.t==='porcentaje');});
+    });
+  });
   document.getElementById('mCancel').addEventListener('click',function(){ state.descuento={tipo:null,valor:0}; state.cargoDomicilio=0; state.cargoDomicilioPreguntado=false; closeModal(); renderCart(); });
-  document.getElementById('mOk').addEventListener('click',function(){ var v=parseFloat(document.getElementById('descVal').value)||0; state.descuento={tipo:tipo,valor:v}; closeModal(); renderCart(); showToast('Descuento aplicado'); });
+  document.getElementById('mOk').addEventListener('click',function(){
+    var v=parseFloat(document.getElementById('descVal').value)||0;
+    if(!(v>0)){ showToast('Captura un valor de descuento'); return; }
+    var pin=document.getElementById('descPin').value.trim();
+    if(pin.length<4){ showToast('Ingresa el PIN de quien autoriza'); return; }
+    API.login(pin, state.sucursal).then(function(u){
+      if(!u){ showToast('PIN incorrecto'); return; }
+      state.descuento={tipo:tipo, valor:v, nombreTipo:nombreTipo, autorizadoPor:u.nombre};
+      closeModal(); renderCart();
+      showToast('Descuento aplicado -- autorizó '+u.nombre);
+    });
+  });
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
 }
 function openCargoDom(continuarCon){
@@ -2130,6 +2174,9 @@ function agregarPagoDivididoUSD(total,montoUSDStr,tcStr){
 }
 function quitarPagoDividido(i){ state.pagosDivididos.splice(i,1); _pagoRerender(); }
 function puedeConfirmarPago(total){
+  // Un descuento del 100% deja el total en $0 -- no tiene sentido pedir un
+  // metodo de pago para cobrar nada, asi que se puede confirmar directo.
+  if(total<=0.004) return true;
   var restante=total-totalPagosDivididos();
   if(restante>0.004) return false;
   if(restante<-0.004){ return state.pagosDivididos.some(function(p){return p.metodo==='efectivo';}); }
@@ -2140,7 +2187,8 @@ function _htmlPagos(total){
   var restante=total-pagado;
   var metodos=['efectivo','tarjeta','transferencia','rappi'];
   var h='<div class="mgroup" style="margin:10px 0"><div class="mg-l">Pagos</div>';
-  if(!state.pagosDivididos.length){ h+='<div class="cart-empty" style="padding:8px 0;font-size:13px">Agrega el primer pago abajo</div>'; }
+  if(total<=0.004){ h+='<div class="cart-empty" style="padding:8px 0;font-size:13px">Cortes&iacute;a / descuento del 100% -- no se requiere m&eacute;todo de pago</div>'; }
+  else if(!state.pagosDivididos.length){ h+='<div class="cart-empty" style="padding:8px 0;font-size:13px">Agrega el primer pago abajo</div>'; }
   else{
     h+=state.pagosDivididos.map(function(pg,i){
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--linea)"><span>'+esc(PAGO_LABEL[pg.metodo])+(pg.usd?' <small style="font-weight:600;color:var(--cafe-medio)">($'+pg.montoUSD.toFixed(2)+' USD · TC $'+pg.tipoCambio.toFixed(2)+')</small>':'')+'</span><span style="font-weight:700;margin-left:auto;margin-right:10px">'+money(pg.monto)+'</span><button data-quitardiv="'+i+'" style="color:var(--rojo);background:none;border:none;font-size:20px;line-height:1">&times;</button></div>';
@@ -2211,7 +2259,7 @@ function _construirPedidoDesdeCart(estado,metodo,pagos){
   var editKey=state._editandoPedidoKey;
   var fbRef=editKey?fbPedidosRef(state.sucursal).child(editKey):fbPedidosRef(state.sucursal).push();
   var nid=editKey?state._editandoPedidoId:('#'+fbRef.key.replace(/[^a-zA-Z0-9]/g,'').slice(-5).toUpperCase());
-  var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:metodo,total:cartTotalFinal(),estado:estado,hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor},items:itemsPedido,cliente:state.cliente||null,estadoBarra:estadoBarraVal,estadoCocina:estadoCocinaVal,_ts:firebase.database.ServerValue.TIMESTAMP};
+  var pedidoObj={id:nid,tipo:state.mesa?'aqui':state.tipoOrden,metodo:metodo,total:cartTotalFinal(),estado:estado,hora:new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}),mesa:state.mesa,descuento:{tipo:state.descuento.tipo,valor:state.descuento.valor,nombreTipo:state.descuento.nombreTipo||null,autorizadoPor:state.descuento.autorizadoPor||null},items:itemsPedido,cliente:state.cliente||null,estadoBarra:estadoBarraVal,estadoCocina:estadoCocinaVal,_ts:firebase.database.ServerValue.TIMESTAMP};
   if(pagos && pagos.length) pedidoObj.pagos=pagos;
   if(pedidoObj.tipo==='domicilio' && state.cargoDomicilio>0) pedidoObj.cargoDomicilio=state.cargoDomicilio;
   // Se ofrece al repartidor desde que entra el pedido, aunque siga en preparacion --
@@ -2223,7 +2271,7 @@ function confirmSale(){
   var total=cartTotalFinal();
   if(!puedeConfirmarPago(total)){ showToast('Completa los pagos antes de confirmar'); return; }
   var pagos=state.pagosDivididos.slice();
-  var metodo=pagos.length===1?pagos[0].metodo:'mixto';
+  var metodo=pagos.length===0?'cortesia':(pagos.length===1?pagos[0].metodo:'mixto');
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var items=state.cart.map(function(l){ var st=l.price*l.qty; return {articulo:l.name,cantidad:l.qty,precio_unit:l.price,subtotal:st,nota:l.note}; });
   API.registrarVenta({items:items,metodoPago:metodo,tipoOrden:state.tipoOrden,mesa:state.mesa,descuento:state.descuento,sucursal:state.sucursal}).then(function(){ procesarInventario(state.cart.slice(),suc); });
@@ -2245,7 +2293,7 @@ function confirmSale(){
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   state.pagosDivididos=[];
   renderTopbar(); renderCart(); closeModal(); showAppView('tipo');
-  var msg=change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total));
+  var msg=total<=0.004?'Cortesía registrada':(change>0?('Venta lista -- Cambio '+money(change)):('Venta registrada '+money(total)));
   if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
   showToast(msg);
   if(localStorage.getItem('ls_auto_imprimir')!=='0' && USBPrinter.soportado() && (USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1')) imprimirTicketFisico(built.obj);
@@ -2325,7 +2373,7 @@ function confirmCobroPedido(){
   var total=p.total;
   if(!puedeConfirmarPago(total)){ showToast('Completa los pagos antes de confirmar'); return; }
   var pagos=state.pagosDivididos.slice();
-  var metodo=pagos.length===1?pagos[0].metodo:'mixto';
+  var metodo=pagos.length===0?'cortesia':(pagos.length===1?pagos[0].metodo:'mixto');
   var updatePayload={estado:'pagado',metodo:metodo};
   if(_pagosConDetalle(pagos)) updatePayload.pagos=pagos;
   fbPedidosRef(state.sucursal).child(p._fbKey).update(updatePayload).catch(function(e){ showToast('Sin conexión -- intenta de nuevo'); console.error(e); });
@@ -2343,7 +2391,7 @@ function confirmCobroPedido(){
   var ticketData=Object.assign({},p,{metodo:metodo,pagos:_pagosConDetalle(pagos)?pagos:undefined});
   state.pagosDivididos=[];
   closeCobroPedido();
-  var msg=change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total));
+  var msg=total<=0.004?'Cortesía registrada':(change>0?('Cobro listo -- Cambio '+money(change)):('Cobro registrado '+money(total)));
   if(puntosGanados>0) msg+=' · +'+puntosGanados+' 🌙';
   showToast(msg);
   if(localStorage.getItem('ls_auto_imprimir')!=='0' && USBPrinter.soportado() && (USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1')) imprimirTicketFisico(ticketData);
@@ -2938,7 +2986,7 @@ function _padIzq(s,n){ s=String(s); return s.length>=n? s.slice(0,n) : Array(n-s
 function construirTicketESCPOS(p){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
-  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='porcentaje'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
   var cargo=p.cargoDomicilio||0;
   var W=32, b=[];
   var push=function(arr){ b=b.concat(arr); };
@@ -3006,7 +3054,7 @@ function imprimirTicketFisico(p, silencioso){
 function _imprimirTicketNavegador(p){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
-  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='porcentaje'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
   var rows=items.map(function(l){ return '<tr><td class="tq">'+l.qty+'x</td><td class="tn">'+esc(l.name)+(l.mods?'<div class="tnote">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="tnote">'+esc(l.note)+'</div>':'')+'</td><td class="tp">'+money(l.price*l.qty)+'</td></tr>'; }).join('');
   var cli='';
   if(p.cliente&&(p.cliente.telefono||p.cliente.direccion)){ cli='<div class="tk-cli"><div class="tk-sec">DATOS DE ENTREGA</div>'+'<div>'+esc(p.cliente.nombre||'')+'</div>'+(p.cliente.telefono?'<div>Tel: '+esc(p.cliente.telefono)+'</div>':'')+(p.cliente.direccion?'<div>'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div>Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>'; }
@@ -3037,7 +3085,7 @@ function imprimirTicket(p){
 function ticketTextoWhatsApp(p){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
-  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='porcentaje'?subtotal*(p.descuento.valor/100):p.descuento.valor; }
   var cargo=p.cargoDomicilio||0;
   var esDomicilio=p.tipo==='domicilio';
   var lineas=[];
@@ -3094,7 +3142,7 @@ function verPedido(ix){
   var p=state.pedidos[ix]; if(!p) return;
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
-  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='pct'? subtotal*(p.descuento.valor/100) : p.descuento.valor; }
+  var desc=0; if(p.descuento&&p.descuento.tipo){ desc=p.descuento.tipo==='porcentaje'? subtotal*(p.descuento.valor/100) : p.descuento.valor; }
   var rows=items.length? items.map(function(l){ return '<div class="det-row"><div class="det-q">'+l.qty+'x</div><div class="det-n">'+esc(l.name)+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+(l.note?'<div class="det-note">'+esc(l.note)+'</div>':'')+'</div><div class="det-p">'+money(l.price*l.qty)+'</div></div>'; }).join('') : '<div class="cart-empty">Sin artículos registrados</div>';
   var metodoTxt = p.metodo ? esc(PAGO_LABEL[p.metodo]||p.metodo) : (p.estado==='cancelado'?'Cancelado':'Pendiente de cobro');
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Pedido '+esc(p.id)+'</h2>'+
@@ -3102,7 +3150,8 @@ function verPedido(ix){
     (p.programado?'<div style="display:flex;align-items:center;gap:8px;background:rgba(177,70,24,0.08);border:1px solid var(--terra);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-weight:800;color:var(--terra)">📅 Pedido programado para '+esc(p.entregaProgramadaFecha||'')+' a las '+esc(p.entregaProgramadaHora||'')+'</div>':'')+
     (p.cliente&&(p.cliente.telefono||p.cliente.direccion)?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b>'+(p.cliente.telefono?' \u00b7 '+esc(p.cliente.telefono):'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
-    (desc>0?'<div class="det-tot"><span>Descuento</span><span>-'+money(desc)+'</span></div>':'')+
+    (desc>0?'<div class="det-tot"><span>Descuento'+(p.descuento.nombreTipo?' ('+esc(p.descuento.nombreTipo)+')':'')+'</span><span>-'+money(desc)+'</span></div>':'')+
+    (desc>0&&p.descuento.autorizadoPor?'<div class="sub" style="margin:-8px 0 10px;font-weight:700">Autoriz&oacute; '+esc(p.descuento.autorizadoPor)+'</div>':'')+
     '<div class="det-tot det-grand"><span>Total</span><span>'+money(p.total)+'</span></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button>'+
     ((p.estado==='abierto'||p.estado==='pagado')?'<button class="btn-cancel" id="mCancelarPedido" style="color:var(--rojo);">Cancelar pedido</button>':'')+
@@ -3179,7 +3228,7 @@ function editarPedido(ix){
   state.cliente=p.cliente||null;
   // Firebase guarda tipo:null como campo ausente (no como null) -- reconstruir
   // defensivamente para no terminar con "undefined" al volver a guardar.
-  state.descuento={tipo:(p.descuento&&p.descuento.tipo)||null, valor:(p.descuento&&p.descuento.valor)||0};
+  state.descuento={tipo:(p.descuento&&p.descuento.tipo)||null, valor:(p.descuento&&p.descuento.valor)||0, nombreTipo:(p.descuento&&p.descuento.nombreTipo)||null, autorizadoPor:(p.descuento&&p.descuento.autorizadoPor)||null};
   state.puntosDisponibles=0; state.usarPuntos=false; state.puntosUsados=0;
   state._editandoPedidoKey=p._fbKey;
   state._editandoPedidoId=p.id;
@@ -3213,11 +3262,14 @@ function renderConfig(){
   if(__itemTC){ __itemTC.badge='$'+Number(state.tipoCambioUSD||0).toFixed(2); }
   var __itemPL=CONFIG_ITEMS.filter(function(c){return c.t==='Pedidos en linea';})[0];
   if(__itemPL){ var __pausado=!!(_horarioTiendaCache&&_horarioTiendaCache.pausadoManual); __itemPL.badge=__pausado?'Pausado':'Activo'; __itemPL.badgeClass=__pausado?'err':'ok'; }
+  var __itemTD=CONFIG_ITEMS.filter(function(c){return c.t==='Tipos de descuento';})[0];
+  if(__itemTD){ var __nTD=Object.keys(_tiposDescuentoCache||{}).length; __itemTD.badge=__nTD?(__nTD+' tipo'+(__nTD===1?'':'s')):'Sin tipos'; __itemTD.badgeClass=__nTD?'ok':''; }
+  var __itemsVisibles=CONFIG_ITEMS.filter(function(c){ return !c.soloAdmin || state.role==='admin'; });
   var html='<h2>Configuraci&oacute;n</h2><div class="sub">Impresoras, alarmas, lector de huella y m&aacute;s</div><div class="cfg-grid">';
-  html+=CONFIG_ITEMS.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
+  html+=__itemsVisibles.map(function(c){ return '<button class="cfg-card" data-t="'+esc(c.t)+'"><div class="cfg-ic">'+c.ic+'</div><div class="cfg-t">'+esc(c.t)+'</div>'+(c.badge?'<div class="cfg-badge '+c.badgeClass+'">'+esc(c.badge)+'</div>':'')+'</button>'; }).join('');
   html+='</div>';
   document.getElementById('configContent').innerHTML=html;
-  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Tipo de cambio (USD)'){ configTipoCambio(); } else if(b.dataset.t==='Impresora de tickets'){ configImpresora(); } else if(b.dataset.t==='Pedidos en linea'){ configPedidosEnLinea(); } else if(b.dataset.t==='Ajustes'){ configAjustesNegocio(); } else if(b.dataset.t==='Favoritos'){ configFavoritos(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
+  document.querySelectorAll('#configContent .cfg-card').forEach(function(b){ b.addEventListener('click',function(){ if(b.dataset.t.indexOf('Sincronizaci')===0){ configSync(); } else if(b.dataset.t==='Mesas'){ configMesas(); } else if(b.dataset.t==='Repartidores'){ configRepartidores(); } else if(b.dataset.t==='Doble pantalla'){ configDoblePantalla(); } else if(b.dataset.t==='Alarmas'){ configAlarmas(); } else if(b.dataset.t==='Tipo de cambio (USD)'){ configTipoCambio(); } else if(b.dataset.t==='Impresora de tickets'){ configImpresora(); } else if(b.dataset.t==='Pedidos en linea'){ configPedidosEnLinea(); } else if(b.dataset.t==='Ajustes'){ configAjustesNegocio(); } else if(b.dataset.t==='Favoritos'){ configFavoritos(); } else if(b.dataset.t==='Tipos de descuento'){ configTiposDescuento(); } else if(b.dataset.t==='Lector de huella'){ showToast('Este lector no es compatible con Luna Smart -- requiere el software propio de Parrot'); } else { showToast(b.dataset.t+' -- pendiente de configurar'); } }); });
 }
 function configImpresora(){
   var conectada=USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1';
@@ -3306,6 +3358,47 @@ function configFavoritos(){
         showToast('Quitado de favoritos');
         configFavoritos();
       }).catch(function(e){ console.error(e); showToast('No se pudo quitar -- intenta de nuevo'); });
+    });
+  });
+}
+
+function configTiposDescuento(){
+  if(state.role!=='admin'){ showToast('Solo el usuario admin puede configurar esto'); return; }
+  var tipos=Object.keys(_tiposDescuentoCache||{}).map(function(id){ return Object.assign({id:id}, _tiposDescuentoCache[id]); });
+  var rows=tipos.length?tipos.map(function(t){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--linea)">'+
+      '<span style="flex:1;font-weight:700">'+esc(t.nombre)+'</span>'+
+      '<span style="font-weight:800;color:var(--terracota)">'+Number(t.porcentaje)+'%</span>'+
+      '<button data-tdid="'+esc(t.id)+'" class="btn-quitar-td" style="background:none;border:none;color:var(--rojo);font-size:20px;line-height:1;cursor:pointer">&times;</button>'+
+    '</div>';
+  }).join(''):'<div class="cart-empty">Sin tipos de descuento -- agrega el primero abajo.</div>';
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>&#127991; Tipos de descuento</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Estos son los descuentos que el equipo puede elegir al cobrar. Aplicar cualquiera de ellos (o uno personalizado) siempre pide PIN de autorizaci&oacute;n.</div>'+
+    rows+
+    '<div class="field" style="margin-top:14px"><label>Nombre</label><input id="td-nombre" type="text" placeholder="Ej. Empleado, Cortes&iacute;a"></div>'+
+    '<div class="field"><label>Porcentaje</label><input id="td-pct" type="number" inputmode="decimal" min="1" max="100" placeholder="Ej. 20"></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cerrar</button><button class="btn-confirm" id="mAgregar">+ Agregar</button></div>'+
+    '</div></div>';
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  document.getElementById('mCancel').addEventListener('click',closeModal);
+  document.getElementById('mAgregar').addEventListener('click',function(){
+    var nombre=document.getElementById('td-nombre').value.trim();
+    var pct=parseFloat(document.getElementById('td-pct').value)||0;
+    if(!nombre){ showToast('Escribe un nombre'); return; }
+    if(!(pct>0 && pct<=100)){ showToast('Porcentaje inválido (1-100)'); return; }
+    fbAuthReady.then(function(){ return fbDb.ref('tiposDescuento').push({nombre:nombre,porcentaje:pct}); }).then(function(){
+      showToast('Tipo de descuento agregado');
+      configTiposDescuento();
+    }).catch(function(e){ console.error(e); showToast('No se pudo guardar -- intenta de nuevo'); });
+  });
+  document.querySelectorAll('.btn-quitar-td').forEach(function(b){
+    b.addEventListener('click',function(){
+      var id=b.dataset.tdid;
+      fbAuthReady.then(function(){ return fbDb.ref('tiposDescuento/'+id).remove(); }).then(function(){
+        showToast('Tipo eliminado');
+        configTiposDescuento();
+      }).catch(function(e){ console.error(e); showToast('No se pudo eliminar -- intenta de nuevo'); });
     });
   });
 }
