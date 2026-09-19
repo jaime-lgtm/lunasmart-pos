@@ -1,0 +1,221 @@
+/* ============================================================
+   lunasmart POS · capa de tema
+   ------------------------------------------------------------
+   Pégalo DESPUÉS del <style> existente de pos.html, o cárgalo
+   como archivo aparte después de ese bloque.
+
+   No renombra ni elimina ninguna clase. No toca JS.
+   Redefine los tokens del :root y reescribe las superficies
+   que los tokens solos no alcanzan.
+   ============================================================ */
+
+/* ---------- 1 · Tokens ---------- */
+:root{
+  /* Se conservan los nombres viejos para no romper las ~400 referencias
+     que ya existen en el archivo. Solo cambian los valores. */
+  --cafe:#16181a;          /* era #1c120a — tinta principal */
+  --cafe-medio:#3b3f43;    /* era #3d2010 — texto secundario */
+  --terracota:#b14618;     /* sin cambio — acción y dinero */
+  --terracota-claro:#e8763a;
+  --beige:#f1f3f5;         /* era #e8d6b9 — relleno neutro */
+  --beige-claro:#f1f3f5;   /* era #f5ecdd */
+  --verde-ok:#2e7d4f;
+  --rojo:#b3261e;
+  --gris:#6b7076;
+  --linea:rgba(22,24,26,.1);
+  --azul:#1c5f8f;
+
+  /* nuevos, para lo que antes no tenía token */
+  --superficie:#ffffff;
+  --fondo:#f4f5f6;
+  --tinta-suave:#9aa0a6;
+  --ambar:#a2571f;         /* avisos: pasa 4.5:1 sobre #fff7ed */
+  --ambar-fondo:#fff7ed;
+  --sombra:0 1px 3px rgba(22,24,26,.07);
+  --sombra-accion:0 2px 10px rgba(177,70,24,.3);
+
+  font-family:'Figtree',system-ui,-apple-system,sans-serif;
+}
+
+/* La fuente ya carga Figtree para la marca; el tema la extiende
+   a toda la app. Playfair Display deja de usarse. */
+body{background:var(--fondo);}
+
+/* ---------- 2 · Radios ---------- */
+/* De 14-20px a 10-14px: menos juguete, más instrumento de trabajo. */
+.card,.prod-btn,.chip{border-radius:10px;}
+.mesa,.modal{border-radius:12px;}
+.btn-cobrar,.btn-confirm,.btn-cancel,.btn-print,.btn-cerrar,.cart-act{border-radius:10px;}
+.to-card{border-radius:14px;}
+.chip,.kds-f{border-radius:999px;}
+
+/* ---------- 3 · Topbar ---------- */
+.topbar{background:var(--cafe);border-bottom:none;height:64px;padding:0 24px;gap:4px;}
+.topbar .brand{color:#fff;font-size:25px;margin-right:8px;gap:12px;}
+.topbar .brand span{color:var(--terracota-claro);}
+.topbar .brand img{width:38px;height:38px;border-radius:9px;}
+.topbar .brand .suf{color:rgba(255,255,255,.7);font-size:12px;margin-left:8px;}
+.topbar .suc-pill{background:rgba(255,255,255,.1);color:rgba(255,255,255,.75);}
+.topbar .logout{color:rgba(255,255,255,.6);}
+#tbUser{color:#fff;}
+
+/* Las pestañas pasan de subrayado a pastilla: más área táctil
+   y el estado activo no depende de 3px de borde. */
+.nav-tab{
+  padding:9px 16px;border-radius:8px;border-bottom:none;
+  font-size:14.5px;font-weight:600;color:rgba(255,255,255,.66);
+}
+.nav-tab.active{background:#fff;color:var(--cafe);font-weight:700;border-bottom-color:transparent;}
+.nav-tab .badge{background:var(--terracota);border-radius:999px;font-weight:800;padding:2px 8px;}
+.nav-tab.active .badge{background:var(--terracota);color:#fff;}
+
+/* ---------- 4 · Login ---------- */
+#scLogin{background:var(--cafe);color:#f7f8f9;}
+.login-brand{color:#f7f8f9;}
+.login-brand span{color:var(--terracota-claro);}
+.login-tag{color:var(--terracota-claro);letter-spacing:.24em;}
+.login-hi,.login-hint{color:rgba(247,248,249,.72);}
+.pin-display{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);}
+.pin-dot{background:rgba(255,255,255,.2);}
+.pin-dot.on{background:var(--terracota-claro);}
+.login-suc select{
+  background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#f7f8f9;
+}
+#btnActualizarLogin{
+  background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:rgba(247,248,249,.8);
+}
+/* El teclado numérico sube a 88px por tecla: se usa de pie y con prisa.
+   Selector real verificado en pos.html: los botones del PIN (login y
+   asistencia) usan la clase .key, no .pin-pad/.pin-key del tablero. */
+.key{min-height:88px;font-size:30px;font-weight:700;}
+/* .key no estaba en la lista de clases del tema, pero al oscurecer el
+   fondo del login su relleno casi transparente (pensado para el crema
+   viejo) y su texto oscuro quedan ilegibles. Se corrige solo dentro del
+   login; el teclado de asistencia (fondo claro, fuera de #scLogin) no
+   se toca. */
+#scLogin .key{background:rgba(255,255,255,.08);color:#f7f8f9;}
+#scLogin .key:active{background:var(--terracota-claro);color:var(--cafe);}
+#scLogin .key.enter{background:var(--terracota);color:#fff;}
+
+/* ---------- 5 · Tipo de orden ---------- */
+.to-title{color:var(--cafe);font-size:38px;font-weight:900;letter-spacing:-.03em;}
+.to-card{
+  width:268px;height:224px;background:var(--superficie);
+  border:1px solid var(--linea);box-shadow:var(--sombra);
+  font-size:21px;font-weight:800;color:var(--cafe);
+}
+.to-card:active{transform:scale(.98);background:var(--terracota);color:#fff;border-color:var(--terracota);}
+.to-ic{font-size:48px;}
+
+/* ---------- 6 · Rejilla de productos ---------- */
+.pos-search{border-radius:10px;height:48px;font-size:16px;}
+.chip{font-weight:600;color:var(--cafe-medio);}
+.chip.active{background:var(--cafe);color:#fff;border-color:var(--cafe);}
+.chip.sub.active{background:var(--terracota);border-color:var(--terracota);color:#fff;}
+.prod-btn{box-shadow:0 1px 2px rgba(22,24,26,.05);min-height:120px;}
+.prod-btn:active{transform:scale(.97);border-color:var(--terracota);border-width:2px;}
+.prod-btn .pn{font-size:15.5px;font-weight:700;color:var(--cafe);}
+.prod-btn .pd{color:var(--gris);}
+.prod-btn .pmods{color:var(--ambar);font-weight:700;}
+.prod-btn .pp{font-size:18px;font-weight:800;color:var(--cafe);}
+.prod-badge-ago{background:var(--rojo);border-radius:999px;font-weight:800;}
+.lbl{color:var(--gris);letter-spacing:.14em;}
+
+/* ---------- 7 · Carrito ---------- */
+.pos-right{background:var(--superficie);border-left:1px solid var(--linea);max-width:372px;}
+.cart-head .t{font-size:19px;font-weight:800;color:var(--cafe);}
+.cart-head .st{color:var(--gris);font-weight:600;}
+.cart-line .info .n{font-size:15px;font-weight:700;color:var(--cafe);}
+.cart-line{border-bottom-color:rgba(22,24,26,.08);}
+.cart-act{background:#f1f3f5;border-radius:9px;color:var(--cafe-medio);height:44px;}
+.cart-act:active{background:var(--cafe);color:#fff;}
+.cart-total{font-size:15px;letter-spacing:.14em;font-weight:800;color:var(--gris);}
+.cart-total .amt{
+  font-size:34px;font-weight:900;letter-spacing:-.03em;color:var(--terracota);
+}
+.btn-cobrar{
+  height:60px;padding:0;font-size:20px;font-weight:800;
+  box-shadow:var(--sombra-accion);
+}
+.btn-cobrar:disabled{background:var(--gris);box-shadow:none;}
+
+/* ---------- 8 · Mesas ---------- */
+/* Dos estados, los de la fuente. El color ya no carga solo el
+   significado: cada mesa lleva su etiqueta de texto. */
+.mesa{border-width:2px;box-shadow:none;padding:18px;text-align:left;}
+.mesa .mn{font-size:36px;font-weight:900;letter-spacing:-.03em;}
+.mesa .ms{
+  font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  padding:4px 12px;border-radius:999px;display:inline-block;margin-top:0;
+}
+.mesa.libre{background:var(--superficie);border-color:rgba(46,125,79,.4);color:var(--cafe);}
+.mesa.libre .ms{background:#e6f2ea;color:#1e5c39;}
+.mesa.ocupada{background:var(--terracota);border-color:var(--terracota);color:#fff;box-shadow:0 2px 8px rgba(177,70,24,.24);}
+.mesa.ocupada .ms{background:rgba(255,255,255,.22);color:#fff;}
+.mesa.ocupada .mt{color:#fff;font-size:19px;font-weight:800;}
+
+/* ---------- 9 · Estación (KDS) ---------- */
+/* La única pantalla en oscuro: se lee de lejos, en barra, con las
+   manos ocupadas. En claro competía con la luz del local. */
+#scKds{background:var(--cafe);}
+#scKds .panel h2{color:#f7f8f9;}
+#scKds .panel .sub{color:rgba(247,248,249,.6);}
+.kds-f{background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);font-weight:600;}
+/* Selector real: renderKds() marca el filtro activo con .on, no .active. */
+.kds-f.on{background:var(--terracota-claro);color:var(--cafe);font-weight:800;}
+.kds-card{
+  background:#1d2024;border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;color:#f7f8f9;
+}
+/* No existe una clase "demorado" a nivel de tarjeta en el HTML real
+   (renderKds() no la agrega) y crearla requeriría JS nuevo — fuera de
+   alcance de esta capa de tema. El umbral de tiempo ya vive en el
+   badge .kdc-timer (ver abajo), que sí es real. */
+/* El tiempo transcurrido es lo más grande de la tarjeta.
+   Selector real: .kdc-timer (con .tw-amarillo / .tw-rojo ya
+   gestionados por JS existente), no .kds-time/.medio/.tarde. */
+.kdc-timer{font-size:30px;font-weight:900;letter-spacing:-.03em;color:#7fd39b;background:transparent;padding:0;border-radius:0;}
+.kdc-timer.tw-amarillo{color:#f0c674;background:transparent;}
+.kdc-timer.tw-rojo{color:#ff8a7a;background:transparent;}
+/* Contraste: estos dos quedaban con tinta oscura sobre la tarjeta oscura
+   nueva (no estaban en la lista de clases del tema, pero heredan mal). */
+.kdc-folio{color:#f7f8f9;}
+.kdc-note{color:rgba(247,248,249,.55);}
+
+/* ---------- 10 · Paneles y corte ---------- */
+.panel{max-width:1200px;padding:32px 40px;}
+.panel h2{font-size:32px;font-weight:900;letter-spacing:-.03em;color:var(--cafe);}
+.panel .sub{color:var(--gris);font-size:16px;font-weight:600;}
+.card{background:var(--superficie);box-shadow:var(--sombra);padding:24px 26px;}
+.card h3{
+  font-size:12px;letter-spacing:.2em;font-weight:800;color:var(--gris);
+  text-transform:uppercase;padding-bottom:16px;
+}
+.grand .amt{font-size:30px;font-weight:900;letter-spacing:-.03em;color:var(--terracota);}
+.btn-print{height:58px;padding:0;background:var(--cafe);color:#fff;font-weight:800;font-size:16.5px;}
+.btn-cerrar{height:58px;padding:0;font-weight:800;font-size:16.5px;box-shadow:var(--sombra-accion);}
+
+/* ---------- 11 · Modales ---------- */
+.modal-bg{background:rgba(22,24,26,.6);}
+.modal{box-shadow:0 20px 60px rgba(22,24,26,.3);}
+.modal h2{font-size:22px;font-weight:900;letter-spacing:-.02em;color:var(--cafe);}
+.modal-total{font-size:34px;font-weight:900;letter-spacing:-.03em;color:var(--terracota);}
+.btn-cancel{background:#f1f3f5;color:var(--cafe-medio);font-weight:700;}
+.btn-confirm{background:var(--verde-ok);font-weight:800;}
+
+/* ---------- 12 · Avisos ---------- */
+/* El amarillo #fff3cd con texto #856404 no pasaba contraste.
+   El par ámbar sí: 4.6:1. */
+#alertaPedidosWeb{
+  background:var(--ambar-fondo)!important;color:#7a4418!important;
+  border:1px solid rgba(162,87,31,.22);border-radius:12px;font-weight:700;
+}
+@keyframes alertaPulso{0%,100%{background:#fff7ed;}50%{background:#ffe9d1;}}
+
+/* ---------- 13 · Estados de foco ---------- */
+/* La app se usa con teclado en caja. Antes no había foco visible. */
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:2px solid var(--terracota-claro);outline-offset:2px;
+}
+.topbar button:focus-visible{outline-color:#fff;}
+#scLogin button:focus-visible,#scKds button:focus-visible{outline-color:var(--terracota-claro);}
