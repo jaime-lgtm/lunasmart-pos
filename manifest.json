@@ -1,12 +1,15 @@
 {
-  "name": "Luna Smart POS",
-  "short_name": "Luna Smart",
+  "name": "lunasmart POS",
+  "short_name": "lunasmart POS",
   "start_url": "/pos.html",
   "display": "standalone",
   "orientation": "landscape",
-  "background_color": "#1c120a",
-  "theme_color": "#1c120a",
+  "background_color": "#B14618",
+  "theme_color": "#B14618",
   "icons": [
-    { "src": "logo-badge.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icons/pos/favicon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/pos/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/pos/icon-1024.png", "sizes": "1024x1024", "type": "image/png" },
+    { "src": "icons/pos/maskable-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ]
 }

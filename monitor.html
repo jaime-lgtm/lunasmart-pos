@@ -3,8 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Luna Smart — Monitor de venta en vivo</title>
-<link rel="icon" href="logo-badge.png" type="image/png">
+<title>lunasmart Monitor — Venta en vivo</title>
+<link rel="manifest" href="manifest-monitor.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/monitor/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/monitor/favicon-16.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/monitor/favicon-192.png">
+<meta name="theme-color" content="#16181A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="lunasmart">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/monitor/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
   --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
@@ -19,8 +31,9 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
 
 /* ==== PANTALLA DE PIN ==== */
 #scPin{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:20px;}
-#scPin .brand{font-size:28px;font-weight:800;color:var(--beige-claro);}
-#scPin .brand span{color:var(--terracota-claro);}
+#scPin .brand{display:flex;align-items:center;gap:14px;font-family:'Figtree',sans-serif;font-size:28px;font-weight:900;letter-spacing:-.04em;color:var(--beige-claro);}
+#scPin .brand span{color:var(--terracota-claro);font-weight:900;}
+#scPin .brand img{width:44px;height:44px;border-radius:12px;display:block;}
 #scPin .sub{color:var(--gris);font-size:15px;text-align:center;max-width:340px;}
 .pin-display{display:flex;gap:14px;margin:10px 0;}
 .pin-dot{width:16px;height:16px;border-radius:50%;background:rgba(232,214,185,.18);}
@@ -35,8 +48,10 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
 #scDash{min-height:100vh;display:none;flex-direction:column;}
 #scDash.active{display:flex;}
 .topbar{display:flex;align-items:center;gap:18px;padding:20px 32px;border-bottom:1px solid rgba(232,214,185,.14);flex-wrap:wrap;}
-.topbar .brand{font-size:22px;font-weight:800;}
-.topbar .brand span{color:var(--terracota-claro);}
+.topbar .brand{display:flex;align-items:center;gap:12px;font-family:'Figtree',sans-serif;font-size:22px;font-weight:900;letter-spacing:-.04em;}
+.topbar .brand span{color:var(--terracota-claro);font-weight:900;}
+.topbar .brand img{width:34px;height:34px;border-radius:9px;display:block;}
+.topbar .brand .suf{font-family:'Figtree',sans-serif;font-weight:800;font-size:11px;letter-spacing:.24em;color:var(--terracota-claro);text-transform:uppercase;margin-left:2px;}
 .topbar select{background:rgba(232,214,185,.08);border:1px solid rgba(232,214,185,.2);color:var(--beige-claro);padding:10px 14px;border-radius:10px;font-size:15px;font-weight:600;}
 .topbar .spacer{flex:1;}
 .topbar .reloj{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--beige-claro);}
@@ -81,7 +96,7 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
 <body>
 
 <div id="scPin">
-  <div class="brand">luna<span>smart</span></div>
+  <div class="brand"><img src="icons/monitor/favicon-192.png" alt="">luna<span>smart</span></div>
   <div class="sub">Monitor de venta en vivo. Ingresa tu PIN de empleado para ver el tablero.</div>
   <div class="pin-display" id="pinDisplay"></div>
   <div class="keypad" id="keypad">
@@ -95,7 +110,7 @@ body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x
 
 <div id="scDash">
   <div class="topbar">
-    <div class="brand">luna<span>smart</span> · monitor</div>
+    <div class="brand"><img src="icons/monitor/favicon-192.png" alt="">luna<span>smart</span><span class="suf">MONITOR</span></div>
     <select id="selSucursal"></select>
     <div class="periodos" id="selPeriodo">
       <button data-p="hoy">Hoy</button>

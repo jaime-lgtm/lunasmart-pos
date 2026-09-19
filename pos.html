@@ -3,18 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Luna Smart POS &mdash; Sueno de Luna</title>
+<title>lunasmart POS</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="logo-badge.png" type="image/png">
-<meta name="theme-color" content="#1c120a">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/pos/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/pos/favicon-16.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/pos/favicon-192.png">
+<meta name="theme-color" content="#B14618">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="logo-badge.png">
+<meta name="apple-mobile-web-app-title" content="lunasmart">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/pos/icon-180.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;700;800;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    LUNA SMART POS -- estilos (flujo inspirado en Parrot)
@@ -48,8 +51,8 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 #btnActualizarLogin{position:fixed;top:16px;right:16px;width:42px;height:42px;border-radius:12px;border:1px solid rgba(28,18,10,.15);background:rgba(28,18,10,.05);color:var(--cafe-medio);font-size:20px;z-index:20;}
 .login-box{width:100%;max-width:360px;text-align:center;padding:16px;margin:auto;}
 .login-badge{width:64px;height:64px;border-radius:18px;margin:0 auto 8px;box-shadow:0 8px 18px rgba(177,70,24,.28);display:block;}
-.login-brand{font-family:'Playfair Display',Georgia,serif;font-size:25px;font-weight:700;letter-spacing:.3px;color:var(--cafe);line-height:1.15;}
-.login-brand span{color:var(--terracota);}
+.login-brand{font-family:'Figtree',sans-serif;font-size:25px;font-weight:900;letter-spacing:-.04em;color:var(--cafe);line-height:1.15;}
+.login-brand span{color:var(--terracota);font-weight:900;}
 .login-tag{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--terracota);margin-top:4px;text-transform:uppercase;}
 .login-hi{font-size:17px;margin-top:12px;font-weight:600;}
 .login-hint{font-size:13px;opacity:.75;margin-top:3px;line-height:1.3;}
@@ -70,8 +73,10 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 
 /* ============ TOPBAR ============ */
 .topbar{background:#fff;border-bottom:1px solid var(--linea);padding:0 14px;display:flex;align-items:center;gap:2px;flex-shrink:0;height:56px;}
-.topbar .brand{font-weight:800;font-size:16px;color:var(--cafe);margin-right:8px;}
-.topbar .brand span{color:var(--terracota);}
+.topbar .brand{display:flex;align-items:center;gap:8px;font-family:'Figtree',sans-serif;font-weight:900;font-size:16px;letter-spacing:-.04em;color:var(--cafe);margin-right:10px;}
+.topbar .brand span{color:var(--terracota);font-weight:900;}
+.topbar .brand img{width:26px;height:26px;border-radius:7px;display:block;}
+.topbar .brand .suf{font-family:'Figtree',sans-serif;font-weight:800;font-size:10px;letter-spacing:.24em;color:var(--gris);margin-left:2px;}
 .nav-tab{padding:18px 12px;font-weight:600;font-size:15px;color:var(--gris);border-bottom:3px solid transparent;white-space:nowrap;}
 .nav-tab.active{color:var(--terracota);border-bottom-color:var(--terracota);}
 .nav-tab .badge{background:var(--terracota);color:#fff;border-radius:10px;font-size:12px;padding:1px 7px;margin-left:5px;}
@@ -379,9 +384,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <div class="screen active" id="scLogin">
   <button id="btnActualizarLogin" title="Actualizar la app a la ultima version">&#8635;</button>
   <div class="login-box">
-    <img class="login-badge" src="logo-badge.png" alt="Sue&ntilde;o de Luna">
-    <div class="login-brand">Sue&ntilde;o de <span>Luna</span></div>
-    <div class="login-tag">Coffee, Bakery &amp; Roasters</div>
+    <img class="login-badge" src="icons/pos/favicon-192.png" alt="lunasmart">
+    <div class="login-brand">luna<span>smart</span></div>
+    <div class="login-tag">Sue&ntilde;o de Luna &middot; Coffee, Bakery &amp; Roasters</div>
     <div class="login-hi">&iexcl;Hola!</div>
     <div class="login-hint">Usa tu PIN para acceder al POS</div>
     <div class="login-suc" style="margin-top:18px;"><select id="loginSucursal"></select></div>
@@ -399,7 +404,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <!-- ============ APP ============ -->
 <div class="screen" id="scApp">
   <div class="topbar">
-    <span class="brand">luna<span>smart</span></span>
+    <span class="brand"><img src="icons/pos/favicon-192.png" alt="">luna<span>smart</span><span class="suf">POS</span></span>
     <button class="nav-tab active" data-view="menu">Men&uacute;</button>
     <button class="nav-tab" data-view="mesas">Mesas</button>
     <button class="nav-tab" data-view="kds">Estaci&oacute;n<span class="badge" id="badgeKds">0</span></button>
