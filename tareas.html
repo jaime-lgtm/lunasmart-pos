@@ -7,7 +7,8 @@
 <link rel="manifest" href="manifest-tareas.json">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/tareas/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/tareas/favicon-192.png">
-<meta name="theme-color" content="#16181A">
+<meta name="theme-color" content="#16181A" id="metaTheme">
+<script>try{var _t=localStorage.getItem('ls_tareas_tema');if(_t==='dia'||_t==='ocular')document.documentElement.setAttribute('data-tema',_t);}catch(e){}</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,7 +23,22 @@
   --terracota-claro:#d0632f; --beige:#e8d6b9; --beige-claro:#f5ecdd;
   --verde-ok:#3f7d4e; --verde-claro:#7fd196; --rojo:#c0392b; --rojo-claro:#e88;
   --ambar:#d9a441; --gris:#8a7d6b;
+  --ink:232,214,185; --bg-rgb:28,18,10;
   font-family:'Figtree',system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+/* Formal: claro y corporativo */
+html[data-tema="dia"]{
+  --cafe:#f6f4f1; --beige-claro:#211c17; --beige:#4d453c; --gris:#857c70;
+  --terracota:#b14618; --terracota-claro:#a8430f;
+  --verde-ok:#2e7d52; --verde-claro:#2e7d52; --rojo-claro:#c23934; --ambar:#a8710f;
+  --ink:38,28,18; --bg-rgb:246,244,241;
+}
+/* Protección ocular: sepia, baja luz azul */
+html[data-tema="ocular"]{
+  --cafe:#e9ddc5; --beige-claro:#3a2c17; --beige:#62503a; --gris:#8c785a;
+  --terracota:#a8430f; --terracota-claro:#9c3f10;
+  --verde-ok:#3a7a4a; --verde-claro:#3a7a4a; --rojo-claro:#9b2f28; --ambar:#8f6212;
+  --ink:58,44,24; --bg-rgb:233,221,197;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{background:var(--cafe);color:var(--beige-claro);min-height:100vh;overflow-x:hidden;padding-bottom:env(safe-area-inset-bottom);}
@@ -36,49 +52,49 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit;background:n
 .brand img{width:42px;height:42px;border-radius:12px;display:block;}
 .sub{color:var(--gris);font-size:15px;text-align:center;max-width:320px;}
 .pin-display{display:flex;gap:14px;margin:6px 0;}
-.pin-dot{width:16px;height:16px;border-radius:50%;background:rgba(232,214,185,.18);}
+.pin-dot{width:16px;height:16px;border-radius:50%;background:rgba(var(--ink),.18);}
 .pin-dot.on{background:var(--terracota-claro);}
 .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:min(300px,86vw);}
-.key{height:66px;border-radius:16px;background:rgba(232,214,185,.08);border:1px solid rgba(232,214,185,.14);font-size:26px;font-weight:700;display:flex;align-items:center;justify-content:center;user-select:none;}
-.key:active{background:rgba(232,214,185,.22);}
-.key.enter{background:var(--terracota);border-color:var(--terracota);font-size:20px;}
+.key{height:66px;border-radius:16px;background:rgba(var(--ink),.08);border:1px solid rgba(var(--ink),.14);font-size:26px;font-weight:700;display:flex;align-items:center;justify-content:center;user-select:none;}
+.key:active{background:rgba(var(--ink),.22);}
+.key.enter{background:var(--terracota);border-color:var(--terracota);font-size:20px;color:#fff;}
 #pinError{color:var(--rojo-claro);font-size:14px;min-height:20px;text-align:center;}
 
 /* APP */
 #scApp{display:none;flex-direction:column;min-height:100vh;}
 #scApp.active{display:flex;}
-.top{padding:calc(14px + env(safe-area-inset-top)) 18px 14px;background:linear-gradient(180deg,rgba(232,214,185,.07),rgba(232,214,185,0));position:sticky;top:0;z-index:5;backdrop-filter:blur(10px);}
+.top{padding:calc(14px + env(safe-area-inset-top)) 18px 14px;background:rgba(var(--bg-rgb),.94);border-bottom:1px solid rgba(var(--ink),.08);position:sticky;top:0;z-index:5;backdrop-filter:blur(10px);}
 .top-row{display:flex;align-items:center;gap:10px;}
 .hola{font-size:20px;font-weight:800;letter-spacing:-.02em;}
 .hola small{display:block;font-size:12px;font-weight:600;color:var(--gris);letter-spacing:.04em;text-transform:uppercase;margin-top:2px;}
 .spacer{flex:1;}
-.chip-btn{padding:8px 12px;border-radius:999px;background:rgba(232,214,185,.1);border:1px solid rgba(232,214,185,.16);font-size:13px;font-weight:700;}
+.chip-btn{padding:8px 12px;border-radius:999px;background:rgba(var(--ink),.1);border:1px solid rgba(var(--ink),.16);font-size:13px;font-weight:700;}
 select.chip-btn{appearance:none;-webkit-appearance:none;color:var(--beige-claro);max-width:150px;}
 select.chip-btn option{background:var(--cafe);color:var(--beige-claro);}
 .prog{margin-top:14px;}
 .prog-lbl{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--beige);margin-bottom:6px;}
-.bar{height:10px;border-radius:999px;background:rgba(232,214,185,.12);overflow:hidden;}
+.bar{height:10px;border-radius:999px;background:rgba(var(--ink),.12);overflow:hidden;}
 .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--terracota),var(--terracota-claro));border-radius:999px;transition:width .35s ease;}
 .bar.ok>i{background:linear-gradient(90deg,var(--verde-ok),var(--verde-claro));}
 .team-line{margin-top:8px;font-size:12px;color:var(--gris);}
 
 .lista{padding:6px 14px 40px;display:flex;flex-direction:column;gap:10px;}
 .sec{margin:16px 4px 2px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--gris);display:flex;align-items:center;gap:8px;}
-.sec .n{background:rgba(232,214,185,.12);border-radius:999px;padding:2px 9px;font-size:11px;color:var(--beige);}
-.card{display:flex;gap:14px;align-items:flex-start;padding:14px 14px;border-radius:18px;background:rgba(232,214,185,.06);border:1px solid rgba(232,214,185,.1);}
+.sec .n{background:rgba(var(--ink),.12);border-radius:999px;padding:2px 9px;font-size:11px;color:var(--beige);}
+.card{display:flex;gap:14px;align-items:flex-start;padding:14px 14px;border-radius:18px;background:rgba(var(--ink),.06);border:1px solid rgba(var(--ink),.1);}
 .card.proceso{border-color:rgba(217,164,65,.55);background:rgba(217,164,65,.08);}
 .card.completada{opacity:.6;}
 .card.tarde:not(.completada){border-color:rgba(192,57,43,.6);background:rgba(192,57,43,.09);}
-.check{flex:0 0 auto;width:48px;height:48px;border-radius:50%;border:3px solid rgba(232,214,185,.35);display:flex;align-items:center;justify-content:center;font-size:26px;color:transparent;transition:.15s;}
+.check{flex:0 0 auto;width:48px;height:48px;border-radius:50%;border:3px solid rgba(var(--ink),.35);display:flex;align-items:center;justify-content:center;font-size:26px;color:transparent;transition:.15s;}
 .card.proceso .check{border-color:var(--ambar);}
 .card.completada .check{background:var(--verde-ok);border-color:var(--verde-ok);color:#fff;}
 .check:active{transform:scale(.92);}
 .body{flex:1;min-width:0;}
 .nombre{font-size:17px;font-weight:700;line-height:1.25;}
-.card.completada .nombre{text-decoration:line-through;text-decoration-color:rgba(232,214,185,.5);}
+.card.completada .nombre{text-decoration:line-through;text-decoration-color:rgba(var(--ink),.5);}
 .desc{font-size:13px;color:var(--gris);margin-top:3px;line-height:1.35;}
 .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-.tag{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(232,214,185,.1);color:var(--beige);}
+.tag{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(var(--ink),.1);color:var(--beige);}
 .tag.rojo{background:rgba(192,57,43,.25);color:var(--rojo-claro);}
 .tag.ambar{background:rgba(217,164,65,.22);color:var(--ambar);}
 .tag.verde{background:rgba(63,125,78,.25);color:var(--verde-claro);}
@@ -86,6 +102,16 @@ select.chip-btn option{background:var(--cafe);color:var(--beige-claro);}
 .empezar{margin-top:10px;padding:8px 14px;border-radius:12px;background:rgba(217,164,65,.16);border:1px solid rgba(217,164,65,.4);color:var(--ambar);font-size:13px;font-weight:800;}
 .vacio{padding:34px 16px;text-align:center;color:var(--gris);font-size:15px;line-height:1.5;}
 .vacio b{display:block;font-size:34px;margin-bottom:6px;}
+.tema-btn{position:fixed;top:calc(12px + env(safe-area-inset-top));right:14px;z-index:30;width:42px;height:42px;border-radius:50%;background:rgba(var(--ink),.1);border:1px solid rgba(var(--ink),.18);font-size:19px;display:flex;align-items:center;justify-content:center;}
+#scApp.active ~ .tema-btn{display:none;}
+.chip-btn.tema{padding:8px 11px;font-size:16px;line-height:1;}
+#temaMenu{position:fixed;top:calc(60px + env(safe-area-inset-top));right:14px;z-index:40;min-width:230px;background:var(--cafe);border:1px solid rgba(var(--ink),.22);border-radius:16px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.35);display:none;}
+#temaMenu.on{display:block;}
+#temaMenu button{width:100%;display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;text-align:left;}
+#temaMenu button.sel{background:rgba(var(--ink),.1);}
+#temaMenu .ico{font-size:20px;width:26px;text-align:center;}
+#temaMenu .nm{font-weight:800;font-size:15px;}
+#temaMenu .sb{font-size:12px;color:var(--gris);}
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#000c;color:#fff;padding:12px 18px;border-radius:14px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:20;max-width:90vw;text-align:center;}
 #toast.on{opacity:1;transform:translateX(-50%);}
 </style>
@@ -110,6 +136,7 @@ select.chip-btn option{background:var(--cafe);color:var(--beige-claro);}
     <div class="top-row">
       <div class="hola" id="hola">Hola<small id="holaSub"></small></div>
       <div class="spacer"></div>
+      <button class="chip-btn tema" id="btnTemaApp" aria-label="Cambiar vista">🌙</button>
       <select class="chip-btn hidden" id="selSuc"></select>
       <button class="chip-btn" id="btnSalir">Salir</button>
     </div>
@@ -121,6 +148,8 @@ select.chip-btn option{background:var(--cafe);color:var(--beige-claro);}
   </div>
   <div class="lista" id="lista"></div>
 </div>
+<button class="tema-btn" id="btnTemaPin" aria-label="Cambiar vista">🌙</button>
+<div id="temaMenu"></div>
 <div id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -368,6 +397,36 @@ function empezar(id){
 // Refresca "Atrasada" y cambia de día si la pestaña se queda abierta pasada la medianoche.
 setInterval(function(){ if(yo){ if(hoyISO()!==fecha) cargarTurno(); else render(); } },60000);
 document.addEventListener('visibilitychange',function(){ if(yo && !document.hidden){ if(hoyISO()!==fecha) cargarTurno(); else render(); } });
+
+
+/* ============ TEMA (vista) ============ */
+var TEMAS = {
+  noche:  { nombre:'Noche',             sub:'Café oscuro · alto contraste', ico:'🌙', color:'#1c120a' },
+  dia:    { nombre:'Formal',            sub:'Claro · corporativo',          ico:'☀️', color:'#f6f4f1' },
+  ocular: { nombre:'Protección ocular', sub:'Sepia · baja luz azul',        ico:'👁️', color:'#e9ddc5' }
+};
+function temaActual(){ var t=document.documentElement.getAttribute('data-tema'); return TEMAS[t]?t:'noche'; }
+function aplicarTema(k){
+  if(!TEMAS[k]) k='noche';
+  if(k==='noche') document.documentElement.removeAttribute('data-tema'); else document.documentElement.setAttribute('data-tema',k);
+  try{ localStorage.setItem('ls_tareas_tema',k); }catch(e){}
+  document.getElementById('metaTheme').setAttribute('content',TEMAS[k].color);
+  document.getElementById('btnTemaApp').textContent=TEMAS[k].ico;
+  document.getElementById('btnTemaPin').textContent=TEMAS[k].ico;
+  document.getElementById('temaMenu').innerHTML=Object.keys(TEMAS).map(function(id){
+    var t=TEMAS[id];
+    return '<button data-tema="'+id+'" class="'+(id===k?'sel':'')+'"><span class="ico">'+t.ico+'</span><span><div class="nm">'+t.nombre+'</div><div class="sb">'+t.sub+'</div></span></button>';
+  }).join('');
+}
+function alternarMenuTema(e){ e.stopPropagation(); document.getElementById('temaMenu').classList.toggle('on'); }
+document.getElementById('btnTemaApp').addEventListener('click',alternarMenuTema);
+document.getElementById('btnTemaPin').addEventListener('click',alternarMenuTema);
+document.getElementById('temaMenu').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-tema]'); if(!b) return;
+  aplicarTema(b.dataset.tema); this.classList.remove('on');
+});
+document.addEventListener('click',function(){ document.getElementById('temaMenu').classList.remove('on'); });
+aplicarTema(temaActual());
 
 renderPinDisplay();
 try{ var g=JSON.parse(sessionStorage.getItem('ls_tareas_user')||'null'); if(g && g.id) fbAuthReady.then(function(){ iniciarApp(g); }); }catch(e){}
