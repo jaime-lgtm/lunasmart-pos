@@ -7,9 +7,9 @@
   "background_color": "#16181A",
   "theme_color": "#16181A",
   "icons": [
-    { "src": "icons/monitor/favicon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/monitor/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/monitor/icon-1024.png", "sizes": "1024x1024", "type": "image/png" },
-    { "src": "icons/monitor/maskable-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+    { "src": "icons/tareas/favicon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/tareas/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/tareas/icon-1024.png", "sizes": "1024x1024", "type": "image/png" },
+    { "src": "icons/tareas/maskable-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ]
 }
