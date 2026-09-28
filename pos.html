@@ -2248,7 +2248,12 @@ function _bindPagos(total){
   if(chkUSD) chkUSD.addEventListener('change',function(e){ state.pagoUSD=e.target.checked; _pagoRerender(); });
   var mi=document.getElementById('dividirMontoInp');
   var usdOn=state.dividirMetodoSel==='efectivo' && state.pagoUSD;
-  if(usdOn){
+  if(usdOn && mi){
+    // Si el pago en dólares ya cubrió el total, _htmlPagos ya no dibuja esta
+    // caja (restante<=0) pero state.pagoUSD sigue en true -- sin este "&& mi"
+    // se intenta enganchar un input que ya no existe, truena, y como pasa
+    // ANTES de conectar Cancelar/Confirmar de más abajo, el modal se queda
+    // sin ningún botón funcionando (parece que el POS "se congeló").
     var tc=document.getElementById('tcInp');
     var out=document.getElementById('usdConvertido');
     var recalc=function(){ var u=parseFloat(mi.value)||0; var t=parseFloat(tc.value)||0; out.textContent='= '+money(u*t)+' MXN'; };
