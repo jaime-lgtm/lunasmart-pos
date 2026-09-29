@@ -6,13 +6,15 @@
 <title>Sueño de Luna — Pantalla de cliente</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
-  --terracota-claro:#d0632f; --beige:#e8d6b9; --beige-claro:#f5ecdd;
-  --verde-ok:#3f7d4e; --gris:#8a7d6b; --linea:#e4dccb;
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  /* Misma identidad que pos.html/theme-lunasmart.css -- tinta neutra en
+     vez del café cálido viejo, Figtree en vez de Playfair Display. */
+  --cafe:#16181a; --cafe-medio:#3b3f43; --terracota:#b14618;
+  --terracota-claro:#e8763a; --beige:#f1f3f5; --beige-claro:#f1f3f5;
+  --verde-ok:#2e7d4f; --gris:#6b7076; --linea:rgba(22,24,26,.1);
+  font-family:'Figtree',system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
@@ -26,12 +28,13 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
   background:linear-gradient(160deg,var(--cafe),var(--cafe-medio));color:var(--beige);text-align:center;padding:40px;}
 #idleBrand .logo{width:clamp(84px,9vw,120px);height:clamp(84px,9vw,120px);border-radius:24%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:var(--beige);background:var(--terracota);box-shadow:0 14px 40px rgba(177,70,24,.4);overflow:hidden;}
 #idleBrand .logo img{width:100%;height:100%;object-fit:cover;}
-#idleBrand h1{font-family:'Playfair Display',Georgia,serif;font-size:clamp(30px,4.4vw,58px);font-weight:700;letter-spacing:.3px;color:var(--beige);}
+#idleBrand h1{font-family:'Figtree',sans-serif;font-size:clamp(30px,4.4vw,58px);font-weight:900;letter-spacing:-.02em;color:var(--beige);}
 #idleBrand .tag{font-size:clamp(11px,1vw,14px);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--terracota-claro);}
 #idleBrand .rule{width:64px;height:1px;background:rgba(232,214,185,.35);margin:2px 0;}
 #idleBrand p{font-size:clamp(14px,1.3vw,18px);opacity:.8;max-width:640px;line-height:1.6;}
 #idle .suc{position:absolute;bottom:26px;right:30px;font-size:clamp(11px,1vw,13px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--beige);opacity:.9;z-index:2;border:1px solid rgba(232,214,185,.4);border-radius:999px;padding:8px 18px;}
-#idle .brandmark{position:absolute;bottom:26px;left:30px;font-size:clamp(12px,1vw,14px);font-weight:800;color:var(--beige);opacity:.55;z-index:2;}
+#idle .brandmark{position:absolute;bottom:26px;left:30px;display:flex;align-items:center;gap:8px;font-family:'Figtree',sans-serif;font-size:clamp(12px,1vw,14px);font-weight:800;color:var(--beige);opacity:.6;z-index:2;}
+#idle .brandmark img{width:20px;height:20px;border-radius:6px;display:block;}
 #idle .brandmark span{color:var(--terracota-claro);}
 
 /* ---- Pantalla de pedido en construccion ---- */
@@ -69,7 +72,7 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
     <div class="rule"></div>
     <p>Café puro 100% artesanal, tostado en casa.<br>Piedras Negras, Coahuila.</p>
   </div>
-  <div class="brandmark">luna<span>smart</span></div>
+  <div class="brandmark"><img src="icons/pos/favicon-192.png" alt="">luna<span>smart</span></div>
   <div class="suc" id="sucLbl"></div>
 </div>
 
