@@ -26,39 +26,46 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
 #idlePromoImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
 #idleBrand{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
   background:linear-gradient(160deg,var(--cafe),var(--cafe-medio));color:var(--beige);text-align:center;padding:40px;}
-#idleBrand .logo{width:clamp(84px,9vw,120px);height:clamp(84px,9vw,120px);border-radius:24%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:var(--beige);background:var(--terracota);box-shadow:0 14px 40px rgba(177,70,24,.4);overflow:hidden;}
+#idleBrand .logo{width:110px;height:110px;border-radius:24%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:var(--beige);background:var(--terracota);box-shadow:0 14px 40px rgba(177,70,24,.4);overflow:hidden;flex-shrink:0;}
 #idleBrand .logo img{width:100%;height:100%;object-fit:cover;}
-#idleBrand h1{font-family:'Figtree',sans-serif;font-size:clamp(30px,4.4vw,58px);font-weight:900;letter-spacing:-.02em;color:var(--beige);}
-#idleBrand .tag{font-size:clamp(11px,1vw,14px);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--terracota-claro);}
+#idleBrand h1{font-family:'Figtree',sans-serif;font-size:52px;font-weight:900;letter-spacing:-.02em;color:var(--beige);}
+#idleBrand .tag{font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--terracota-claro);}
 #idleBrand .rule{width:64px;height:1px;background:rgba(232,214,185,.35);margin:2px 0;}
-#idleBrand p{font-size:clamp(14px,1.3vw,18px);opacity:.8;max-width:640px;line-height:1.6;}
-#idle .suc{position:absolute;bottom:26px;right:30px;font-size:clamp(11px,1vw,13px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--beige);opacity:.9;z-index:2;border:1px solid rgba(232,214,185,.4);border-radius:999px;padding:8px 18px;}
-#idle .brandmark{position:absolute;bottom:26px;left:30px;display:flex;align-items:center;gap:8px;font-family:'Figtree',sans-serif;font-size:clamp(12px,1vw,14px);font-weight:800;color:var(--beige);opacity:.6;z-index:2;}
+#idleBrand p{font-size:17px;opacity:.8;max-width:640px;line-height:1.6;}
+#idle .suc{position:absolute;bottom:26px;right:30px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--beige);opacity:.9;z-index:2;border:1px solid rgba(232,214,185,.4);border-radius:999px;padding:8px 18px;}
+#idle .brandmark{position:absolute;bottom:26px;left:30px;display:flex;align-items:center;gap:8px;font-family:'Figtree',sans-serif;font-size:13px;font-weight:800;color:var(--beige);opacity:.6;z-index:2;}
 #idle .brandmark img{width:20px;height:20px;border-radius:6px;display:block;}
 #idle .brandmark span{color:var(--terracota-claro);}
 
-/* ---- Pantalla de pedido en construccion ---- */
+/* ---- Pantalla de pedido en construccion ----
+   Sin clamp()/vw ni env()+calc(): esta pantalla vive en una tablet fija con
+   navegador viejo (WebView de Android sin actualizar) que no soporta bien
+   esas funciones -- al ser invalidas, tiran TODA la declaracion (tamaños,
+   padding) y descuadran el layout de Subtotal/Total. Tamaños fijos en px,
+   universalmente soportados, en vez de "responsivo" innecesario para una
+   pantalla que siempre es del mismo tamaño físico. */
 #live{position:fixed;inset:0;display:none;flex-direction:column;background:#fff;}
 #live.show{display:flex;}
 #idle.hide{display:none;}
 .live-head{background:var(--cafe);color:var(--beige);padding:26px 40px;display:flex;align-items:center;justify-content:space-between;}
-.live-head .t{font-size:clamp(22px,2.6vw,32px);font-weight:800;}
-.live-head .tipo{font-size:clamp(14px,1.4vw,18px);opacity:.8;margin-top:4px;}
+.live-head .t{font-size:30px;font-weight:800;}
+.live-head .tipo{font-size:17px;opacity:.8;margin-top:4px;}
 .cliente-banner{background:var(--terracota);color:#fff;padding:16px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-.cliente-banner .cb-hola{font-size:clamp(18px,2vw,24px);font-weight:800;}
-.cliente-banner .cb-puntos{font-size:clamp(14px,1.6vw,18px);font-weight:700;opacity:.95;}
+.cliente-banner .cb-hola{font-size:22px;font-weight:800;}
+.cliente-banner .cb-puntos{font-size:17px;font-weight:700;opacity:.95;}
 .live-body{flex:1;overflow-y:auto;padding:20px 40px;}
-.live-empty{color:var(--gris);font-size:clamp(16px,1.8vw,20px);text-align:center;padding:60px 20px;}
+.live-empty{color:var(--gris);font-size:19px;text-align:center;padding:60px 20px;}
 .li{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:18px 0;border-bottom:1px solid var(--linea);}
 .li .info{flex:1;}
-.li .n{font-size:clamp(19px,2.2vw,27px);font-weight:700;color:var(--cafe);}
-.li .m{font-size:clamp(13px,1.3vw,16px);color:var(--terracota);margin-top:4px;}
-.li .note{font-size:clamp(12px,1.2vw,15px);color:var(--gris);margin-top:2px;font-style:italic;}
-.li .q{font-size:clamp(16px,1.8vw,22px);font-weight:800;color:var(--gris);min-width:44px;text-align:center;}
-.li .p{font-size:clamp(19px,2.2vw,27px);font-weight:800;color:var(--cafe);min-width:110px;text-align:right;}
-.live-foot{border-top:2px solid var(--linea);padding:22px 40px calc(22px + env(safe-area-inset-bottom));background:var(--beige-claro);}
-.row{display:flex;justify-content:space-between;font-size:clamp(15px,1.6vw,19px);color:var(--cafe-medio);padding:4px 0;}
-.row.total{font-size:clamp(30px,4vw,46px);font-weight:900;color:var(--terracota);padding-top:10px;}
+.li .n{font-size:25px;font-weight:700;color:var(--cafe);}
+.li .m{font-size:15px;color:var(--terracota);margin-top:4px;}
+.li .note{font-size:14px;color:var(--gris);margin-top:2px;font-style:italic;}
+.li .q{font-size:20px;font-weight:800;color:var(--gris);min-width:44px;text-align:center;flex-shrink:0;}
+.li .p{font-size:25px;font-weight:800;color:var(--cafe);min-width:110px;text-align:right;flex-shrink:0;}
+.live-foot{border-top:2px solid var(--linea);padding:22px 40px 28px;background:var(--beige-claro);}
+.row{display:flex;justify-content:space-between;font-size:18px;color:var(--cafe-medio);padding:4px 0;}
+.row span{white-space:nowrap;}
+.row.total{font-size:42px;font-weight:900;color:var(--terracota);padding-top:10px;}
 </style>
 </head>
 <body>
