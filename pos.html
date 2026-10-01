@@ -24,6 +24,8 @@
    ============================================================ */
 @keyframes alertaPulso{0%,100%{background:#fff3cd;}50%{background:#ffe69c;}}
 #alertaPedidosWeb{animation:alertaPulso 1.6s ease-in-out infinite;}
+@keyframes alertaPulsoRappi{0%,100%{background:#ffd9cc;}50%{background:#ff9d73;}}
+#alertaPedidosRappi{animation:alertaPulsoRappi 1s ease-in-out infinite;}
 :root{
   --cafe:#1c120a; --cafe-medio:#3d2010; --terracota:#b14618;
   --terracota-claro:#d0632f; --beige:#e8d6b9; --beige-claro:#f5ecdd;
@@ -425,6 +427,16 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     <span style="font-size:20px">🔔</span>
     <span style="flex:1;font-weight:800;color:#8a6100;font-size:14px" id="alertaPedidosWebTexto">Pedido nuevo del sitio web -- toca para revisar</span>
     <span style="font-weight:800;color:#8a6100">›</span>
+  </div>
+
+  <!-- Pedido de Rappi: tiene limite de 6 minutos para aceptar o rechazar
+       (lo impone Rappi, no nosotros) -- por eso lleva su propia barra, mas
+       urgente que la del sitio web, con el cronometro visible de una vez. -->
+  <div id="alertaPedidosRappi" onclick="abrirRevisionPedidosRappi()" style="display:none;position:sticky;top:0;z-index:401;border-bottom:2px solid #ff4c1f;padding:10px 16px;align-items:center;gap:10px;cursor:pointer;">
+    <span style="font-size:20px">🛵</span>
+    <span style="flex:1;font-weight:800;color:#8a2600;font-size:14px" id="alertaPedidosRappiTexto">Pedido nuevo de Rappi -- toca para revisar</span>
+    <span style="font-weight:900;color:#8a2600;font-variant-numeric:tabular-nums;font-size:15px" id="alertaPedidosRappiCount">6:00</span>
+    <span style="font-weight:800;color:#8a2600">›</span>
   </div>
 
   <!-- TIPO DE ORDEN -->
@@ -1006,7 +1018,10 @@ function playSonidoAlarma(id){ unlockAudio(); if(!_audioCtx) return; var s=SONID
 // conecte esa integracion). Los pedidos que arma el propio cajero desde el
 // POS no necesitan alarma -- el ya sabe que los creo.
 function _tipoAlarmaPedido(p){
-  if(p.canal==='rappi' || p.origen==='rappi') return 'rappi';
+  // Ojo: solo mientras sigue pendiente de aceptar -- si no, cualquier
+  // actualizacion normal de un pedido de Rappi YA aceptado (ej. Barra
+  // marcando un producto listo) volveria a sonar la alarma urgente.
+  if((p.canal==='rappi' || p.origen==='rappi') && p.estado==='pendienteRappi') return 'rappi';
   if(p.estado==='pendienteWeb' && p.tipo==='aqui') return 'qrMesas';
   if(p.estado==='pendienteWeb') return 'web';
   return null;
@@ -1022,17 +1037,23 @@ function playAlarmaParaPedido(p){
 // musica ambiental de por medio. Se detiene sola en cuanto se confirman o
 // descartan todos.
 var _alarmaRepeatTimer=null;
+function _pedidosPendientesDeConfirmar(){
+  return (state.pedidos||[]).filter(function(p){ return p.estado==='pendienteWeb'||p.estado==='pendienteRappi'; });
+}
 function _actualizarRepeticionAlarma(){
-  var pendientes=(state.pedidos||[]).filter(function(p){ return p.estado==='pendienteWeb'; });
+  var pendientes=_pedidosPendientesDeConfirmar();
   if(!pendientes.length){
     if(_alarmaRepeatTimer){ clearInterval(_alarmaRepeatTimer); _alarmaRepeatTimer=null; }
     return;
   }
   if(_alarmaRepeatTimer) return;
   _alarmaRepeatTimer=setInterval(function(){
-    var pend=(state.pedidos||[]).filter(function(p){ return p.estado==='pendienteWeb'; });
+    var pend=_pedidosPendientesDeConfirmar();
     if(!pend.length){ clearInterval(_alarmaRepeatTimer); _alarmaRepeatTimer=null; return; }
-    playAlarmaParaPedido(pend[pend.length-1]);
+    // Si hay un pedido de Rappi esperando, su alarma manda -- tiene 6
+    // minutos antes de que Rappi lo cancele solo, el del sitio web no.
+    var rappi=pend.filter(function(p){ return p.estado==='pendienteRappi'; });
+    playAlarmaParaPedido(rappi.length ? rappi[0] : pend[pend.length-1]);
   },5000);
 }
 
@@ -1346,6 +1367,7 @@ function renderTopbar(){
     t.style.display = allowed ? '' : 'none';
   });
   _actualizarAlertaPedidosWeb();
+  _actualizarAlertaPedidosRappi();
 }
 
 /* ============ PEDIDOS DEL SITIO WEB (llegan como estado:'pendienteWeb',
@@ -1456,6 +1478,121 @@ function descartarPedidoWeb(fbKey){
   fbPedidosRef(state.sucursal).child(fbKey).update({estado:'cancelado'}).catch(function(){});
   closeModal();
   showToast('Pedido descartado');
+}
+
+/* ============ PEDIDOS DE RAPPI (llegan como estado:'pendienteRappi',
+   ya armados y pagados desde la app) ============
+   Rappi exige aceptar o rechazar cada pedido en un maximo de 6 minutos o
+   lo cancela solo -- por eso aqui todo gira al rededor de ese cronometro.
+   El backend (Cloud Functions, fuera de este archivo) es quien escribe el
+   pedido en Firebase al llegar el webhook NEW_ORDER, y quien de verdad le
+   avisa a Rappi cuando aqui se acepta/rechaza/marca listo -- el POS nunca
+   habla directo con la API de Rappi (no tiene el token), solo escribe
+   banderas "avisoRappi" en Firebase y el backend reacciona a esas. */
+function _pedidosRappiPendientes(){ return (state.pedidos||[]).filter(function(p){ return p.estado==='pendienteRappi'; }); }
+function _msRestantesRappi(p){ return Math.max(0, (p.rappiDeadline||0) - Date.now()); }
+function _formatoMMSS(ms){
+  var totalSeg=Math.floor(ms/1000), mm=Math.floor(totalSeg/60), ss=totalSeg%60;
+  return mm+':'+(ss<10?'0':'')+ss;
+}
+function _actualizarAlertaPedidosRappi(){
+  var el=document.getElementById('alertaPedidosRappi'); if(!el) return;
+  var pend=_pedidosRappiPendientes();
+  if(!pend.length){ el.style.display='none'; return; }
+  el.style.display='flex';
+  pend.sort(function(a,b){ return (a.rappiDeadline||0)-(b.rappiDeadline||0); }); // el mas urgente manda en la barra
+  var masUrgente=pend[0];
+  document.getElementById('alertaPedidosRappiTexto').textContent=(pend.length===1?'1 pedido nuevo de Rappi':(pend.length+' pedidos nuevos de Rappi'))+' -- toca para revisar';
+  document.getElementById('alertaPedidosRappiCount').textContent=_formatoMMSS(_msRestantesRappi(masUrgente));
+}
+setInterval(_actualizarAlertaPedidosRappi,1000);
+function abrirRevisionPedidosRappi(){
+  var pend=_pedidosRappiPendientes();
+  if(!pend.length) return;
+  pend.sort(function(a,b){ return (a.rappiDeadline||0)-(b.rappiDeadline||0); });
+  renderRevisionPedidoRappi(pend[0]._fbKey);
+}
+var _rappiModalTimer=null;
+function renderRevisionPedidoRappi(fbKey){
+  var p=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
+  if(!p){ closeModal(); return; }
+  var itemsHtml=(p.items||[]).map(function(l){ return '<div class="det-row"><div class="det-q">'+(l.qty||1)+'x</div><div class="det-n">'+esc(l.name)+(l.size?' ('+esc(l.size)+')':'')+(l.mods?'<div class="det-note">'+esc(l.mods)+'</div>':'')+'</div><div class="det-p">'+money(l.price*(l.qty||1))+'</div></div>'; }).join('');
+  var subtotal=(p.items||[]).reduce(function(a,l){return a+l.price*(l.qty||1);},0);
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>🛵 Pedido nuevo de Rappi</h2>'+
+    '<div class="sub" style="margin-bottom:8px">'+esc(p.id)+' · Pedido Rappi #'+esc(p.rappiOrderId||'')+' · '+esc(p.hora||'')+'</div>'+
+    '<div style="display:flex;align-items:center;justify-content:center;gap:8px;background:#ffece6;border:1px solid #ffb599;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:900;color:#c23c00;font-size:22px;font-variant-numeric:tabular-nums" id="rappiModalCount">'+_formatoMMSS(_msRestantesRappi(p))+'</div>'+
+    '<div class="sub" style="margin:-10px 0 14px;text-align:center;color:var(--gris)">Tiempo para aceptar o rechazar -- si se agota, Rappi lo cancela solo</div>'+
+    '<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+
+      '<div class="dc-l"><b>'+esc((p.cliente&&p.cliente.nombre)||'')+'</b>'+((p.cliente&&p.cliente.telefono)?' · '+esc(p.cliente.telefono):'')+'</div>'+
+      ((p.cliente&&p.cliente.direccion)?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+
+      ((p.cliente&&p.cliente.referencia)?'<div class="dc-l dc-ref">Notas: '+esc(p.cliente.referencia)+'</div>':'')+
+    '</div>'+
+    '<div class="det-list">'+itemsHtml+'</div>'+
+    '<div style="margin-top:10px;font-size:13px;color:var(--gris)">Subtotal '+money(subtotal)+'</div>'+
+    '<div class="modal-total">'+money(p.total)+'</div>'+
+    '<div class="sub" style="margin:-6px 0 14px;font-weight:700;color:var(--cafe-medio)">Ya pagado en la app -- no se cobra en caja</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="btnRechazarRappi">✕ Rechazar</button><button class="btn-confirm" id="btnAceptarRappi">✓ Aceptar pedido</button></div>'+
+    '</div></div>';
+  document.getElementById('btnAceptarRappi').addEventListener('click',function(){ aceptarPedidoRappi(fbKey); });
+  document.getElementById('btnRechazarRappi').addEventListener('click',function(){ abrirRechazoPedidoRappi(fbKey); });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+  if(_rappiModalTimer) clearInterval(_rappiModalTimer);
+  _rappiModalTimer=setInterval(function(){
+    var cur=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
+    var elC=document.getElementById('rappiModalCount');
+    if(!cur || cur.estado!=='pendienteRappi' || !elC){ clearInterval(_rappiModalTimer); _rappiModalTimer=null; return; }
+    elC.textContent=_formatoMMSS(_msRestantesRappi(cur));
+  },1000);
+}
+function aceptarPedidoRappi(fbKey){
+  var p=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
+  if(!p) return;
+  var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
+  // Nota: NO se ofrece repartidor propio -- un pedido de Rappi lo entrega
+  // el repartidor de Rappi, nunca uno nuestro, por eso tampoco se toca
+  // estadoReparto (ese campo es solo para el reparto propio de la tienda).
+  var items=(p.items||[]).map(function(l){ return Object.assign({},l,{listo:false,listoTs:null}); });
+  var estadoBarraVal=items.some(function(l){return (l.area||'barra')==='barra';})?'pendiente':'listo';
+  var estadoCocinaVal=items.some(function(l){return (l.area||'barra')==='cocina';})?'pendiente':'listo';
+  var upd={ estado:'pagado', items:items, estadoBarra:estadoBarraVal, estadoCocina:estadoCocinaVal, avisoRappi:'accept', avisoRappiTs:Date.now() };
+  fbPedidosRef(state.sucursal).child(fbKey).update(upd).then(function(){
+    procesarInventario(items,suc);
+    closeModal();
+    showToast('Pedido de Rappi aceptado: '+p.id);
+  }).catch(function(e){ showToast('Sin conexión -- no se pudo aceptar, reintenta'); console.error(e); });
+}
+var MOTIVOS_RECHAZO_RAPPI=[
+  {id:'sin_stock', label:'Sin existencias de un producto'},
+  {id:'cerrado', label:'Ya cerramos / no podemos preparar'},
+  {id:'saturado', label:'Saturados, no llegamos a tiempo'},
+  {id:'otro', label:'Otro motivo'},
+];
+function abrirRechazoPedidoRappi(fbKey){
+  var p=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
+  if(!p) return;
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>¿Rechazar pedido '+esc(p.id)+'?</h2>'+
+    '<div class="sub" style="margin-bottom:12px">Dile a Rappi por qué, para que pueda avisarle al cliente</div>'+
+    '<div id="motivosRechazo">'+MOTIVOS_RECHAZO_RAPPI.map(function(m){ return '<button class="btn-cancel" data-motivo="'+m.id+'" style="display:block;width:100%;text-align:left;margin-bottom:8px">'+esc(m.label)+'</button>'; }).join('')+'</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="btnCancelarRechazo">Regresar</button></div>'+
+    '</div></div>';
+  document.querySelectorAll('#motivosRechazo button').forEach(function(b){ b.addEventListener('click',function(){ confirmarRechazoPedidoRappi(fbKey,b.dataset.motivo); }); });
+  document.getElementById('btnCancelarRechazo').addEventListener('click',function(){ renderRevisionPedidoRappi(fbKey); });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+}
+function confirmarRechazoPedidoRappi(fbKey,motivo){
+  fbPedidosRef(state.sucursal).child(fbKey).update({estado:'cancelado', avisoRappi:'reject', avisoRappiMotivo:motivo||'otro', avisoRappiTs:Date.now()}).catch(function(e){ console.error(e); });
+  if(_rappiModalTimer){ clearInterval(_rappiModalTimer); _rappiModalTimer=null; }
+  closeModal();
+  showToast('Pedido de Rappi rechazado');
+}
+// Cuando Barra+Cocina terminan un pedido de Rappi, se avisa al backend
+// (quien tiene el token) para que le diga a Rappi que mande a su
+// repartidor -- igual de espiritu que _avisarRepartidorListo, pero hacia
+// la API de Rappi en lugar de un WhatsApp al repartidor propio.
+function _avisarRappiListo(fbKey){
+  fbPedidosRef(state.sucursal).child(fbKey).update({avisoRappi:'ready', avisoRappiTs:Date.now()}).catch(function(e){ console.error(e); });
 }
 function switchView(v){
   if(!PERMISOS[state.role][v]){ showToast('Tu rol no puede acceder a esta seccion'); return; }
@@ -2840,6 +2977,7 @@ function kdsMarcarProductoListo(ix,area,itemIndex){
   var quedaListoPedido=todosListos && (!otra || otra==='listo');
   fbPedidosRef(state.sucursal).child(p._fbKey).update(upd).then(function(){
     if(p.tipo==='domicilio' && quedaListoPedido && p.repartidorId) _avisarRepartidorListo(Object.assign({},p,upd));
+    if(p.canal==='rappi' && quedaListoPedido) _avisarRappiListo(p._fbKey);
   }).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
 }
 // Atajo para marcar de un tiron todo lo que falte de esa area (comandas
@@ -2853,6 +2991,7 @@ function kdsMarcarListo(ix,area){
   var quedaListo=(!otra || otra==='listo');
   fbPedidosRef(state.sucursal).child(p._fbKey).update(upd).then(function(){
     if(p.tipo==='domicilio' && quedaListo && p.repartidorId) _avisarRepartidorListo(Object.assign({},p,upd));
+    if(p.canal==='rappi' && quedaListo) _avisarRappiListo(p._fbKey);
   }).catch(function(e){ showToast('Sin conexión con el monitor -- reintenta'); console.error(e); });
   showToast('Comanda '+p.id+' ('+(AREA_LABEL[area]||area)+') marcada como lista');
 }
