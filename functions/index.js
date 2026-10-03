@@ -158,7 +158,11 @@ exports.rappiAvisoProcesado = onValueUpdated(
    cron diario.
    ============================================================ */
 exports.rappiSincronizarMenu = onRequest(
-  { secrets: [RAPPI_CLIENT_ID, RAPPI_CLIENT_SECRET] },
+  // invoker:'private' -- solo quien tenga permisos de Google Cloud puede
+  // llamarla; sin esto cualquiera con la URL podria disparar subidas de
+  // menu a Rappi (el webhook, en cambio, si debe ser publico porque lo
+  // llama Rappi, y se protege con la firma HMAC).
+  { secrets: [RAPPI_CLIENT_ID, RAPPI_CLIENT_SECRET], invoker: 'private' },
   async (req, res) => {
     const suc = req.query.suc || 'cafeteria';
     const storeId = Object.keys(SUCURSAL_POR_STORE_ID).find(function (k) { return SUCURSAL_POR_STORE_ID[k] === suc; });
