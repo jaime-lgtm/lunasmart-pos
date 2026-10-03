@@ -2,7 +2,8 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { onValueUpdated } = require('firebase-functions/v2/database');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
-const admin = require('firebase-admin');
+const { initializeApp } = require('firebase-admin/app');
+const { getDatabase } = require('firebase-admin/database');
 
 const { firmaValida } = require('./lib/hmac');
 const { construirMenuRappi } = require('./lib/menu');
@@ -10,8 +11,8 @@ const { mapearPedidoRappi } = require('./lib/orderMapper');
 const { obtenerTokenVigente } = require('./lib/token');
 const rappiApi = require('./lib/rappiApi');
 
-admin.initializeApp();
-const db = admin.database();
+initializeApp();
+const db = getDatabase();
 
 const RAPPI_CLIENT_ID = defineSecret('RAPPI_CLIENT_ID');
 const RAPPI_CLIENT_SECRET = defineSecret('RAPPI_CLIENT_SECRET');
