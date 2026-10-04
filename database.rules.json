@@ -1,0 +1,162 @@
+{
+  "rules": {
+    "pedidos": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "cajaEstado": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "cajaLive": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "displayConfig": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "horarioTienda": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "negocioInfo": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "tiposDescuento": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "metasTiempo": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "terminalesMP": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "comisionesDelivery": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "usuariosPOS": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "mesasConfig": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "mesasEstado": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "turnoSales": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "catalogo": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "clientesLealtad": {
+      "$telefono": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "repartidores": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "modificadores": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "categoriasOrden": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "agotados": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "alarmasConfig": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "tipoCambioUSD": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "asistenciaActiva": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "eventos": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+    },
+    "eventosInscripciones": {
+      "$eventoId": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        "$regId": {
+          ".write": "auth != null && (auth.token.firebase.sign_in_provider === 'password' || !data.exists())",
+          ".validate": "newData.hasChildren(['nombre','telefono'])"
+        }
+      }
+    },
+    "checklistPlantillas": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "checklistTurnos": {
+      "$sucursal": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    ".read": false,
+    ".write": false,
+    "eventosCupo": {
+      "$eventoId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.firebase.sign_in_provider === 'password' || (!data.exists() && newData.val() === 1) || (data.exists() && (newData.val() === data.val() + 1 || newData.val() === data.val() - 1)))",
+        ".validate": "newData.isNumber() && newData.val() >= 0"
+      }
+    }
+  }
+}
