@@ -1,49 +1,67 @@
-// Llamadas HTTP reales a la API de Rappi. Las rutas y nombres de campo
-// exactos son los documentados en el Portal de Desarrolladores -- hay
-// que confirmarlos contra el sandbox real en cuanto Rappi entregue las
-// credenciales (client_id/client_secret); por eso la URL base es
-// configurable (RAPPI_API_BASE) y no esta "quemada" en cada funcion --
-// si algo no coincide, se corrige aqui sin tocar el resto del backend.
-const BASE = process.env.RAPPI_API_BASE || 'https://api.rappi.com';
+// Llamadas HTTP a la API de Rappi (documentacion: dev-portal.rappi.com).
+// - Login:    POST {AUTH}/restaurants/auth/v1/token/login/integrations
+// - Todo lo demas lleva el header  x-authorization: Bearer <token>
+// - Pedidos / webhooks / menu viven bajo  {HOST}/api/v2/restaurants-integrations-public-api
+// Hoy solo esta configurado el ambiente DEV (credenciales de pruebas); los
+// dominios de produccion de Mexico se agregan al pasar a produccion.
+const AUTH_BASE = process.env.RAPPI_AUTH_BASE || 'https://api.dev.rappi.com';
+const ORDERS_BASE = process.env.RAPPI_API_BASE || 'https://microservices.dev.rappi.com';
+const WEBHOOKS_BASE = process.env.RAPPI_WEBHOOKS_BASE || 'https://api.dev.rappi.com';
+const RUTA = '/api/v2/restaurants-integrations-public-api';
 
-async function _rappiFetch(path, token, opciones) {
+async function _rappiFetch(base, ruta, token, opciones) {
   opciones = opciones || {};
-  const res = await fetch(BASE + path, {
+  const res = await fetch(base + RUTA + ruta, {
     method: opciones.method || 'GET',
-    headers: Object.assign({
-      Authorization: 'Bearer ' + token,
+    headers: {
+      'x-authorization': 'Bearer ' + token,
       'Content-Type': 'application/json',
-    }, opciones.headers || {}),
+      Accept: 'application/json',
+    },
     body: opciones.body ? JSON.stringify(opciones.body) : undefined,
   });
-  if (!res.ok) {
-    const texto = await res.text().catch(function () { return ''; });
-    throw new Error('Rappi API ' + path + ' -> ' + res.status + ': ' + texto);
-  }
-  return res.status === 204 ? null : res.json().catch(function () { return null; });
+  const texto = await res.text().catch(function () { return ''; });
+  if (!res.ok) throw new Error('Rappi ' + (opciones.method || 'GET') + ' ' + ruta + ' -> ' + res.status + ': ' + texto.slice(0, 400));
+  try { return texto ? JSON.parse(texto) : null; } catch (e) { return texto; }
 }
 
 async function obtenerToken(clientId, clientSecret) {
-  const res = await fetch(BASE + '/oauth2/token', {
+  const res = await fetch(AUTH_BASE + '/restaurants/auth/v1/token/login/integrations', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(clientId) + '&client_secret=' + encodeURIComponent(clientSecret),
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
   });
-  if (!res.ok) throw new Error('No se pudo obtener token de Rappi: ' + res.status);
-  return res.json(); // { access_token, expires_in, ... }
+  const texto = await res.text().catch(function () { return ''; });
+  if (!res.ok) throw new Error('Login Rappi -> ' + res.status + ': ' + texto.slice(0, 300));
+  return JSON.parse(texto); // { access_token, token_type, expires_in }
 }
 
-function aceptarPedido(token, rappiOrderId) {
-  return _rappiFetch('/orders/' + rappiOrderId + '/accept', token, { method: 'POST' });
-}
-function rechazarPedido(token, rappiOrderId, motivo) {
-  return _rappiFetch('/orders/' + rappiOrderId + '/reject', token, { method: 'POST', body: { reason: motivo || 'other' } });
-}
-function marcarListoParaRecoger(token, rappiOrderId) {
-  return _rappiFetch('/orders/' + rappiOrderId + '/ready', token, { method: 'POST' });
-}
-function subirMenu(token, storeId, menu) {
-  return _rappiFetch('/menu', token, { method: 'POST', body: Object.assign({ store_id: storeId }, menu) });
+// Aceptar un pedido (pasa a TAKEN). cookingTime = minutos de preparacion.
+function tomarPedido(token, orderId, cookingTime) {
+  const min = parseInt(cookingTime, 10);
+  return _rappiFetch(ORDERS_BASE, '/orders/' + orderId + '/take' + (min > 0 ? '/' + min : ''), token, { method: 'PUT' });
 }
 
-module.exports = { obtenerToken, aceptarPedido, rechazarPedido, marcarListoParaRecoger, subirMenu };
+// Rechazar (solo pedidos en SENT). cancel_type obligatorio; si es de
+// producto (agotado/precio/no existe) hay que mandar los productos.
+function rechazarPedido(token, orderId, razon) {
+  const body = { reason: razon.reason || 'Pedido rechazado por la tienda', cancel_type: razon.cancelType };
+  if (razon.itemsIds && razon.itemsIds.length) body.items_ids = razon.itemsIds;
+  if (razon.itemsSkus && razon.itemsSkus.length) body.items_skus = razon.itemsSkus;
+  return _rappiFetch(ORDERS_BASE, '/orders/' + orderId + '/reject', token, { method: 'PUT', body: body });
+}
+
+// Avisa al repartidor de Rappi que el pedido esta listo. Rappi solo permite
+// 3 llamadas por pedido -- quien llame debe asegurarse de hacerlo una vez.
+function marcarListoParaRecoger(token, orderId) {
+  return _rappiFetch(ORDERS_BASE, '/orders/' + orderId + '/ready-for-pickup', token, { method: 'POST' });
+}
+
+function registrarWebhook(token, evento, url, tiendas) {
+  return _rappiFetch(WEBHOOKS_BASE, '/webhook', token, { method: 'POST', body: { event: evento, data: [{ url: url, stores: tiendas }] } });
+}
+function listarWebhooks(token) {
+  return _rappiFetch(WEBHOOKS_BASE, '/webhook', token, { method: 'GET' });
+}
+
+module.exports = { obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, listarWebhooks };

@@ -1562,27 +1562,54 @@ function aceptarPedidoRappi(fbKey){
     showToast('Pedido de Rappi aceptado: '+p.id);
   }).catch(function(e){ showToast('Sin conexión -- no se pudo aceptar, reintenta'); console.error(e); });
 }
+// Rappi solo acepta estos motivos de rechazo (cancel_type). Los tres primeros
+// exigen decir QUE productos son el problema.
 var MOTIVOS_RECHAZO_RAPPI=[
-  {id:'sin_stock', label:'Sin existencias de un producto'},
-  {id:'cerrado', label:'Ya cerramos / no podemos preparar'},
-  {id:'saturado', label:'Saturados, no llegamos a tiempo'},
-  {id:'otro', label:'Otro motivo'},
+  {id:'producto_agotado', label:'Producto agotado', items:true},
+  {id:'precio_incorrecto', label:'Precio incorrecto de un producto', items:true},
+  {id:'producto_inexistente', label:'Producto no disponible en el menú', items:true},
+  {id:'info_incompleta', label:'Información del pedido incompleta', items:false},
+  {id:'total_incorrecto', label:'Total del pedido incorrecto', items:false},
 ];
 function abrirRechazoPedidoRappi(fbKey){
   var p=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
   if(!p) return;
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
     '<h2>¿Rechazar pedido '+esc(p.id)+'?</h2>'+
-    '<div class="sub" style="margin-bottom:12px">Dile a Rappi por qué, para que pueda avisarle al cliente</div>'+
+    '<div class="sub" style="margin-bottom:12px">Elige el motivo -- Rappi se lo avisa al cliente</div>'+
     '<div id="motivosRechazo">'+MOTIVOS_RECHAZO_RAPPI.map(function(m){ return '<button class="btn-cancel" data-motivo="'+m.id+'" style="display:block;width:100%;text-align:left;margin-bottom:8px">'+esc(m.label)+'</button>'; }).join('')+'</div>'+
+    '<div class="sub" style="margin:4px 0 12px;font-size:12px">Si no pueden atender por estar cerrados o saturados, pausa la tienda desde el portal de Rappi para que no sigan entrando pedidos.</div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="btnCancelarRechazo">Regresar</button></div>'+
     '</div></div>';
-  document.querySelectorAll('#motivosRechazo button').forEach(function(b){ b.addEventListener('click',function(){ confirmarRechazoPedidoRappi(fbKey,b.dataset.motivo); }); });
+  document.querySelectorAll('#motivosRechazo button').forEach(function(b){ b.addEventListener('click',function(){
+    var m=MOTIVOS_RECHAZO_RAPPI.filter(function(x){return x.id===b.dataset.motivo;})[0];
+    if(m && m.items) abrirRechazoItemsRappi(fbKey,m); else confirmarRechazoPedidoRappi(fbKey,b.dataset.motivo,[]);
+  }); });
   document.getElementById('btnCancelarRechazo').addEventListener('click',function(){ renderRevisionPedidoRappi(fbKey); });
   document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
 }
-function confirmarRechazoPedidoRappi(fbKey,motivo){
-  fbPedidosRef(state.sucursal).child(fbKey).update({estado:'cancelado', avisoRappi:'reject', avisoRappiMotivo:motivo||'otro', avisoRappiTs:Date.now()}).catch(function(e){ console.error(e); });
+function abrirRechazoItemsRappi(fbKey,motivo){
+  var p=(state.pedidos||[]).filter(function(x){return x._fbKey===fbKey;})[0];
+  if(!p) return;
+  var lista=(p.items||[]).map(function(l,ix){
+    return '<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--linea);cursor:pointer"><input type="checkbox" class="chkItemRappi" data-iid="'+esc(l.rappiItemId||'')+'" style="width:20px;height:20px"> <span style="flex:1">'+(l.qty||1)+'x '+esc(l.name)+'</span></label>';
+  }).join('');
+  document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal">'+
+    '<h2>'+esc(motivo.label)+'</h2>'+
+    '<div class="sub" style="margin-bottom:10px">¿Cuál o cuáles productos?</div>'+
+    '<div id="itemsRechazo" style="max-height:40vh;overflow:auto">'+lista+'</div>'+
+    '<div class="modal-actions" style="margin-top:14px"><button class="btn-cancel" id="btnRegresarMotivo">Regresar</button><button class="btn-confirm" id="btnConfirmarRechazo" style="background:var(--rojo)">Rechazar pedido</button></div>'+
+    '</div></div>';
+  document.getElementById('btnRegresarMotivo').addEventListener('click',function(){ abrirRechazoPedidoRappi(fbKey); });
+  document.getElementById('btnConfirmarRechazo').addEventListener('click',function(){
+    var ids=Array.prototype.map.call(document.querySelectorAll('.chkItemRappi:checked'),function(c){ return c.dataset.iid; }).filter(Boolean);
+    if(!ids.length){ showToast('Marca al menos un producto'); return; }
+    confirmarRechazoPedidoRappi(fbKey,motivo.id,ids);
+  });
+  document.getElementById('mbg').addEventListener('click',function(e){ if(e.target.id==='mbg') closeModal(); });
+}
+function confirmarRechazoPedidoRappi(fbKey,motivo,itemsIds){
+  fbPedidosRef(state.sucursal).child(fbKey).update({estado:'cancelado', avisoRappi:'reject', avisoRappiMotivo:motivo||'info_incompleta', avisoRappiItems:itemsIds||[], avisoRappiTs:Date.now()}).catch(function(e){ console.error(e); });
   if(_rappiModalTimer){ clearInterval(_rappiModalTimer); _rappiModalTimer=null; }
   closeModal();
   showToast('Pedido de Rappi rechazado');

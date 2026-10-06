@@ -2,6 +2,9 @@
   "rules": {
     "pedidos": {
       "$sucursal": {
+        ".indexOn": [
+          "rappiOrderId"
+        ],
         ".read": "auth != null",
         ".write": "auth != null"
       }
@@ -157,6 +160,10 @@
         ".write": "auth != null && (auth.token.firebase.sign_in_provider === 'password' || (!data.exists() && newData.val() === 1) || (data.exists() && (newData.val() === data.val() + 1 || newData.val() === data.val() - 1)))",
         ".validate": "newData.isNumber() && newData.val() >= 0"
       }
+    },
+    "rappiAdmin": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     }
   }
 }

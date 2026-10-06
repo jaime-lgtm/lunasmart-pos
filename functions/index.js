@@ -1,13 +1,12 @@
 const { onRequest } = require('firebase-functions/v2/https');
-const { onValueUpdated } = require('firebase-functions/v2/database');
+const { onValueUpdated, onValueCreated } = require('firebase-functions/v2/database');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
 const { getDatabase } = require('firebase-admin/database');
 
 const { firmaValida } = require('./lib/hmac');
-const { construirMenuRappi } = require('./lib/menu');
-const { mapearPedidoRappi } = require('./lib/orderMapper');
+const { mapearPedidoRappi, MOTIVOS_RECHAZO } = require('./lib/orderMapper');
 const { obtenerTokenVigente } = require('./lib/token');
 const rappiApi = require('./lib/rappiApi');
 
@@ -16,174 +15,200 @@ const db = getDatabase();
 
 const RAPPI_CLIENT_ID = defineSecret('RAPPI_CLIENT_ID');
 const RAPPI_CLIENT_SECRET = defineSecret('RAPPI_CLIENT_SECRET');
-const RAPPI_WEBHOOK_SECRET = defineSecret('RAPPI_WEBHOOK_SECRET');
 
-// Mapa sucursal Luna Smart <-> store_id que Rappi asigna por tienda. Se
-// completa cuando Rappi confirme el store_id de cada sucursal conectada
-// -- hoy solo aplicaria a Casa de la Cultura ("cafeteria"), que es la
-// unica en proceso de conectarse.
+// store_id de Rappi -> sucursal de Luna Smart POS. El 900175250 es la tienda
+// de PRUEBAS (DEV) que Rappi asigno; sus pedidos de prueba caen en la
+// sucursal "eventos" para no sonarle alarmas al mostrador real. Al pasar a
+// produccion se agrega aqui el store_id real de Casa de la Cultura -> 'cafeteria'.
 const SUCURSAL_POR_STORE_ID = {
-  // 'STORE_ID_QUE_DE_RAPPI': 'cafeteria',
+  '900175250': 'eventos',
 };
 
-// Mientras solo haya una sucursal conectada a Rappi, esta es la lista
-// donde se busca un pedido por rappiOrderId (ej. al llegar una
-// cancelacion). Agregar aqui cuando se conecte otra sucursal.
-const SUCURSALES_CONECTADAS_RAPPI = ['cafeteria'];
+const URL_WEBHOOK = 'https://us-central1-luna-smart-pos.cloudfunctions.net/rappiWebhook';
+// Eventos que se registran en Rappi (cada uno lleva su propia URL y secreto).
+const EVENTOS_WEBHOOK = ['NEW_ORDER', 'ORDER_EVENT_CANCEL', 'ORDER_OTHER_EVENT', 'MENU_APPROVED', 'MENU_REJECTED', 'PING', 'STORE_CONNECTIVITY'];
+
+function _sucursalDeTienda(storeId) { return SUCURSAL_POR_STORE_ID[String(storeId)] || null; }
+
+async function _buscarPedido(suc, rappiOrderId) {
+  const snap = await db.ref('pedidos/' + suc).orderByChild('rappiOrderId').equalTo(String(rappiOrderId)).once('value');
+  const val = snap.val();
+  if (!val) return null;
+  const id = Object.keys(val)[0];
+  return { id, ref: db.ref('pedidos/' + suc + '/' + id), pedido: val[id] };
+}
 
 /* ============================================================
-   Webhook receptor -- aqui llega TODO lo que manda Rappi: pedidos
-   nuevos, cancelaciones, el PING cada 3 minutos, aprobacion de menu,
-   etc. Rappi firma cada request con HMAC-SHA256 (header
-   Rappi-Signature) -- si no coincide, se rechaza sin mirar el contenido.
+   Webhook receptor. Rappi NO manda el tipo de evento en el cuerpo: cada
+   evento se registra con su propia URL (aqui: .../rappiWebhook/<EVENTO>) y
+   un secreto propio, guardado en rappiAuth/webhookSecrets/<EVENTO>. Cada
+   request se valida con HMAC antes de mirar su contenido.
    ============================================================ */
-exports.rappiWebhook = onRequest(
-  { secrets: [RAPPI_WEBHOOK_SECRET] },
-  async (req, res) => {
-    const firmaOk = firmaValida(req.rawBody, req.get('Rappi-Signature'), RAPPI_WEBHOOK_SECRET.value());
-    if (!firmaOk) {
-      logger.warn('Webhook de Rappi con firma invalida -- se ignora');
-      res.status(401).send('firma invalida');
-      return;
-    }
+exports.rappiWebhook = onRequest(async (req, res) => {
+  const evento = String((req.path || '').split('/').filter(Boolean)[0] || '').toUpperCase();
+  if (!evento) { res.status(404).send('falta el evento en la URL'); return; }
 
-    const evento = req.body || {};
-    const tipo = evento.type || evento.event;
-    logger.info('Webhook de Rappi recibido', { tipo });
-
-    try {
-      switch (tipo) {
-        case 'PING':
-          // Rappi espera exactamente esto cada ~3 min -- si no se
-          // contesta a tiempo, puede desconectar la tienda.
-          res.status(200).json({ status: 'OK' });
-          return;
-        case 'NEW_ORDER':
-          await _procesarNuevoPedido(evento);
-          break;
-        case 'ORDER_EVENT_CANCEL':
-          await _procesarCancelacion(evento);
-          break;
-        case 'MENU_APPROVED':
-        case 'MENU_REJECTED':
-          await db.ref('rappiMenuEstado').set({ tipo, detalle: evento, ts: Date.now() });
-          break;
-        default:
-          logger.info('Evento de Rappi sin manejador especifico', { tipo });
-      }
-      res.status(200).json({ status: 'OK' });
-    } catch (e) {
-      logger.error('Error procesando webhook de Rappi', e);
-      res.status(500).send('error interno');
-    }
+  const secreto = (await db.ref('rappiAuth/webhookSecrets/' + evento).once('value')).val();
+  if (!firmaValida(req.rawBody, req.get('Rappi-Signature'), secreto)) {
+    logger.warn('Webhook de Rappi con firma invalida o sin secreto configurado', { evento });
+    res.status(401).send('firma invalida');
+    return;
   }
-);
 
-async function _procesarNuevoPedido(evento) {
-  const storeId = evento.store_id || (evento.data && evento.data.store_id);
-  const suc = SUCURSAL_POR_STORE_ID[storeId] || 'cafeteria'; // fallback mientras solo hay una tienda conectada
-  const rappiOrder = evento.data || evento.order || evento;
+  const cuerpo = req.body || {};
+  logger.info('Webhook de Rappi recibido', { evento });
+  try {
+    switch (evento) {
+      case 'PING':
+        // Rappi pregunta cada ~3 min si la tienda esta disponible; si el
+        // status no es "OK" la considera no disponible.
+        res.status(200).json({ status: 'OK', description: 'Store on' });
+        return;
+      case 'NEW_ORDER':
+        await _procesarNuevoPedido(cuerpo);
+        break;
+      case 'ORDER_EVENT_CANCEL':
+        await _procesarCancelacion(cuerpo);
+        break;
+      case 'ORDER_OTHER_EVENT':
+        await _procesarOtroEvento(cuerpo);
+        break;
+      case 'MENU_APPROVED':
+      case 'MENU_REJECTED':
+        await db.ref('rappiAuth/menuEstado/' + (cuerpo.store_id || 'x')).set({ evento, detalle: cuerpo, ts: Date.now() });
+        break;
+      case 'STORE_CONNECTIVITY':
+        await db.ref('rappiAuth/conectividad/' + (cuerpo.external_store_id || 'x')).set({ enabled: cuerpo.enabled, message: cuerpo.message || '', ts: Date.now() });
+        break;
+      default:
+        logger.info('Evento de Rappi sin manejador especifico', { evento });
+    }
+    res.status(200).json({ status: 'OK' });
+  } catch (e) {
+    logger.error('Error procesando webhook de Rappi', e);
+    res.status(500).send('error interno');
+  }
+});
+
+async function _procesarNuevoPedido(cuerpo) {
+  const store = cuerpo.store || {};
+  const suc = _sucursalDeTienda(store.internal_id) || _sucursalDeTienda(store.external_id);
+  if (!suc) { logger.warn('NEW_ORDER de una tienda sin sucursal asignada', { store }); return; }
+
+  const orderId = String((cuerpo.order_detail || {}).order_id || '');
+  if (orderId && await _buscarPedido(suc, orderId)) { logger.info('NEW_ORDER duplicado, se ignora', { orderId }); return; }
 
   const catSnap = await db.ref('catalogo/' + suc).once('value');
   const catalogoVal = catSnap.val() || {};
   const catalogo = Object.keys(catalogoVal).map(function (k) { return catalogoVal[k]; });
 
-  const pedido = mapearPedidoRappi(rappiOrder, catalogo);
+  const pedido = mapearPedidoRappi(cuerpo, catalogo);
   await db.ref('pedidos/' + suc).push(pedido);
   logger.info('Pedido de Rappi creado en Firebase', { suc, rappiOrderId: pedido.rappiOrderId });
 }
 
-async function _procesarCancelacion(evento) {
-  const rappiOrderId = String((evento.data && evento.data.order_id) || evento.order_id || '');
-  if (!rappiOrderId) return;
-  for (const suc of SUCURSALES_CONECTADAS_RAPPI) {
-    // Nota: una busqueda por rappiOrderId en una sucursal con muchos
-    // pedidos activos se beneficia de un indice (.indexOn en las reglas
-    // de Firebase) -- sin el, Firebase igual funciona pero avisa en el
-    // log que seria mas eficiente con uno.
-    const snap = await db.ref('pedidos/' + suc).orderByChild('rappiOrderId').equalTo(rappiOrderId).once('value');
-    const val = snap.val();
-    if (val) {
-      const pedidoId = Object.keys(val)[0];
-      await db.ref('pedidos/' + suc + '/' + pedidoId).update({ estado: 'cancelado' });
-      logger.info('Pedido de Rappi cancelado por Rappi', { suc, rappiOrderId });
-      return;
-    }
-  }
-  logger.warn('Cancelacion de Rappi para un pedido que no se encontro', { rappiOrderId });
+async function _procesarCancelacion(cuerpo) {
+  const suc = _sucursalDeTienda(cuerpo.store_id);
+  if (!suc || !cuerpo.order_id) return;
+  const hallado = await _buscarPedido(suc, cuerpo.order_id);
+  if (!hallado) { logger.warn('Cancelacion de Rappi para un pedido que no se encontro', { order_id: cuerpo.order_id }); return; }
+  await hallado.ref.update({ estado: 'cancelado', rappiCancelEvento: cuerpo.event || '', estadoBarra: 'listo', estadoCocina: 'listo' });
+  logger.info('Pedido de Rappi cancelado por Rappi', { suc, order_id: cuerpo.order_id });
+}
+
+async function _procesarOtroEvento(cuerpo) {
+  const suc = _sucursalDeTienda(cuerpo.store_id);
+  if (!suc || !cuerpo.order_id) return;
+  const hallado = await _buscarPedido(suc, cuerpo.order_id);
+  if (!hallado) return;
+  const info = cuerpo.additional_information || {};
+  const upd = { rappiUltimoEvento: cuerpo.event || '', rappiUltimoEventoTs: Date.now() };
+  if (info.courier_data) upd.rappiRepartidor = { nombre: info.courier_data.full_name || '', telefono: info.courier_data.phone || '' };
+  if (info.eta_to_store != null) upd.rappiEtaTienda = info.eta_to_store;
+  await hallado.ref.update(upd);
 }
 
 /* ============================================================
    Reacciona a las banderas que deja el POS (pos.html) al aceptar,
    rechazar o marcar listo un pedido de Rappi -- el POS nunca llama a la
-   API de Rappi directamente (no tiene el token), solo escribe aqui y
-   esta funcion es quien de verdad le avisa a Rappi.
+   API de Rappi (no tiene el token), solo escribe aqui y esta funcion es
+   quien de verdad le avisa a Rappi.
    ============================================================ */
 exports.rappiAvisoProcesado = onValueUpdated(
   { ref: '/pedidos/{suc}/{pedidoId}/avisoRappi', secrets: [RAPPI_CLIENT_ID, RAPPI_CLIENT_SECRET] },
   async (event) => {
     const aviso = event.data.after.val();
-    if (!aviso || aviso === 'hecho') return; // ya procesado o se borro la bandera
+    if (!aviso || aviso === 'hecho') return;
 
     const { suc, pedidoId } = event.params;
-    const pedidoSnap = await db.ref('pedidos/' + suc + '/' + pedidoId).once('value');
-    const pedido = pedidoSnap.val();
+    const ref = db.ref('pedidos/' + suc + '/' + pedidoId);
+    const pedido = (await ref.once('value')).val();
     if (!pedido || !pedido.rappiOrderId) return;
 
     try {
       const token = await obtenerTokenVigente(db, RAPPI_CLIENT_ID.value(), RAPPI_CLIENT_SECRET.value());
       if (aviso === 'accept') {
-        await rappiApi.aceptarPedido(token, pedido.rappiOrderId);
+        await rappiApi.tomarPedido(token, pedido.rappiOrderId, pedido.rappiCookingTime);
       } else if (aviso === 'reject') {
-        await rappiApi.rechazarPedido(token, pedido.rappiOrderId, pedido.avisoRappiMotivo);
+        const motivo = MOTIVOS_RECHAZO[pedido.avisoRappiMotivo] || MOTIVOS_RECHAZO.info_incompleta;
+        const ids = Array.isArray(pedido.avisoRappiItems) ? pedido.avisoRappiItems : [];
+        await rappiApi.rechazarPedido(token, pedido.rappiOrderId, { reason: motivo.texto, cancelType: motivo.cancelType, itemsIds: motivo.requiereItems ? ids : [] });
       } else if (aviso === 'ready') {
+        // Rappi permite 3 llamadas por pedido: nunca mas de una desde aqui.
+        if (pedido.rappiListoEnviado) { await ref.child('avisoRappi').set('hecho'); return; }
         await rappiApi.marcarListoParaRecoger(token, pedido.rappiOrderId);
+        await ref.child('rappiListoEnviado').set(true);
       } else {
         return;
       }
-      await db.ref('pedidos/' + suc + '/' + pedidoId + '/avisoRappi').set('hecho');
+      await ref.child('avisoRappi').set('hecho');
       logger.info('Aviso a Rappi enviado', { suc, pedidoId, aviso });
     } catch (e) {
-      // No se marca "hecho" si de verdad fallo -- asi queda visible para
-      // reintentar o revisar a mano en vez de perderse en silencio.
+      // No se marca "hecho" si de verdad fallo -- queda visible para revisar.
       logger.error('Error avisando a Rappi (' + aviso + ')', e);
+      await ref.child('avisoRappiError').set(String(e.message || e).slice(0, 300));
     }
   }
 );
 
 /* ============================================================
-   Sincroniza el menu de una sucursal con Rappi. Se dispara a mano por
-   ahora (llamando esta URL), no en cada cambio del catalogo -- asi no se
-   satura la API de Rappi con una llamada por cada edicion pequena. Mas
-   adelante se puede agregar un boton en el admin que la llame, o un
-   cron diario.
+   Tareas de administracion (registrar webhooks, probar login). Se piden
+   escribiendo en rappiAdmin/solicitudes/<id> desde una sesion de admin
+   (correo/contrasena -- las reglas de la base lo exigen) y el resultado
+   queda en rappiAdmin/resultados/<id>.
    ============================================================ */
-exports.rappiSincronizarMenu = onRequest(
-  // invoker:'private' -- solo quien tenga permisos de Google Cloud puede
-  // llamarla; sin esto cualquiera con la URL podria disparar subidas de
-  // menu a Rappi (el webhook, en cambio, si debe ser publico porque lo
-  // llama Rappi, y se protege con la firma HMAC).
-  { secrets: [RAPPI_CLIENT_ID, RAPPI_CLIENT_SECRET], invoker: 'private' },
-  async (req, res) => {
-    const suc = req.query.suc || 'cafeteria';
-    const storeId = Object.keys(SUCURSAL_POR_STORE_ID).find(function (k) { return SUCURSAL_POR_STORE_ID[k] === suc; });
-    if (!storeId) {
-      res.status(400).json({ ok: false, error: 'No hay store_id de Rappi registrado para la sucursal "' + suc + '"' });
-      return;
-    }
+exports.rappiAdminSolicitud = onValueCreated(
+  { ref: '/rappiAdmin/solicitudes/{id}', secrets: [RAPPI_CLIENT_ID, RAPPI_CLIENT_SECRET] },
+  async (event) => {
+    const sol = event.data.val() || {};
+    const id = event.params.id;
+    let resultado;
     try {
-      const catSnap = await db.ref('catalogo/' + suc).once('value');
-      const catalogoVal = catSnap.val() || {};
-      const catalogo = Object.keys(catalogoVal).map(function (k) { return catalogoVal[k]; });
-      const menu = construirMenuRappi(catalogo, { storeId });
-
       const token = await obtenerTokenVigente(db, RAPPI_CLIENT_ID.value(), RAPPI_CLIENT_SECRET.value());
-      await rappiApi.subirMenu(token, storeId, menu);
-
-      res.status(200).json({ ok: true, productos: menu.products.length });
+      if (sol.accion === 'probarAuth') {
+        resultado = { ok: true, mensaje: 'Login con Rappi correcto' };
+      } else if (sol.accion === 'listarWebhooks') {
+        resultado = { ok: true, webhooks: await rappiApi.listarWebhooks(token) };
+      } else if (sol.accion === 'registrarWebhooks') {
+        const tiendas = Object.keys(SUCURSAL_POR_STORE_ID);
+        const detalle = {};
+        for (const ev of EVENTOS_WEBHOOK) {
+          try {
+            const r = await rappiApi.registrarWebhook(token, ev, URL_WEBHOOK + '/' + ev, tiendas);
+            if (r && r.secret) await db.ref('rappiAuth/webhookSecrets/' + ev).set(r.secret);
+            detalle[ev] = r && r.secret ? 'registrado (secreto guardado)' : 'respuesta sin secreto: ' + JSON.stringify(r).slice(0, 200);
+          } catch (e) {
+            detalle[ev] = 'ERROR: ' + String(e.message || e).slice(0, 300);
+          }
+        }
+        resultado = { ok: true, detalle };
+      } else {
+        resultado = { ok: false, error: 'accion desconocida: ' + sol.accion };
+      }
     } catch (e) {
-      logger.error('Error sincronizando menu con Rappi', e);
-      res.status(500).json({ ok: false, error: String(e.message || e) });
+      logger.error('Error en tarea de administracion de Rappi', e);
+      resultado = { ok: false, error: String(e.message || e).slice(0, 500) };
     }
+    await db.ref('rappiAdmin/resultados/' + id).set(Object.assign({ ts: Date.now(), accion: sol.accion || '' }, resultado));
   }
 );
