@@ -215,6 +215,7 @@ exports.rappiAdminSolicitud = onValueCreated(
         const tienda = sol.tienda || _tiendaDeSucursal(suc);
         if (!tienda) throw new Error('La sucursal ' + suc + ' no tiene tienda de Rappi asignada');
         const menu = construirMenuRappi(await _catalogoDe(suc), { storeId: tienda });
+        if (sol.limite) menu.items = menu.items.slice(0, Number(sol.limite));
         if (!menu.items.length) throw new Error('Ningun producto de ' + suc + ' esta activado para Rappi en Catalogo POS');
         resultado = { ok: true, productos: menu.items.length, respuesta: await rappiApi.enviarMenu(token, menu) };
       } else if (sol.accion === 'estadoMenu') {
