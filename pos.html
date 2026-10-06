@@ -938,9 +938,9 @@ var SUCURSALES = [
    (functions/index.js, TIENDAS_RAPPI). Cada marca tiene su propio catalogo
    (catalogo/<marca>), por eso se escuchan tambien los de las marcas hermanas. */
 var MARCAS = {
-  cafeteria:{nombre:'Casa de la Cultura', color:'#6b3f23'},
-  helfy:{nombre:'Helfy Fu', color:'#c2410c'},
-  eventos:{nombre:'Sue\u00f1o de Luna Eventos', color:'#2b5d7a'}
+  cafeteria:{nombre:'Casa de la Cultura', color:'#6b3f23', hoja:'CASA DE LA CULTURA'},
+  helfy:{nombre:'Helfy Fu', color:'#c2410c', hoja:'HELFY FU'},
+  eventos:{nombre:'Sue\u00f1o de Luna Eventos', color:'#2b5d7a', hoja:'EVENTOS'}
 };
 var MARCAS_POR_SUCURSAL = { cafeteria:['cafeteria','helfy'] };
 function marcaNombre(id){ return (MARCAS[id]||{}).nombre || id || ''; }
@@ -997,7 +997,7 @@ var state = {
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aqui'};
 var AREA_LABEL={barra:'Barra', cocina:'Cocina'};
 function areaDe(p){ if(p && p.area) return p.area; if(p && p.menu==='Alimentos') return 'cocina'; return 'barra'; }
-var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta (terminal)', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi/Uber', mixto:'Pago mixto', cortesia:'Cortesía (sin cobro)'};
+var PAGO_LABEL={efectivo:'Efectivo', tarjeta:'Tarjeta (terminal)', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi', uber:'Uber Eats', mixto:'Pago mixto', cortesia:'Cortesía (sin cobro)'};
 
 function money(n){ return '$'+Number(n||0).toFixed(2); }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -2416,7 +2416,7 @@ function puedeConfirmarPago(total){
 function _htmlPagos(total){
   var pagado=totalPagosDivididos();
   var restante=total-pagado;
-  var metodos=['efectivo','tarjeta','transferencia','rappi'];
+  var metodos=['efectivo','tarjeta','transferencia','rappi','uber'];
   var h='<div class="mgroup" style="margin:10px 0"><div class="mg-l">Pagos</div>';
   if(total<=0.004){ h+='<div class="cart-empty" style="padding:8px 0;font-size:13px">Cortes&iacute;a / descuento del 100% -- no se requiere m&eacute;todo de pago</div>'; }
   else if(!state.pagosDivididos.length){ h+='<div class="cart-empty" style="padding:8px 0;font-size:13px">Agrega el primer pago abajo</div>'; }
@@ -3430,7 +3430,7 @@ function verPedido(ix){
 // de turnoSales) seguiría mostrando el método viejo.
 function cambiarMetodoPago(ix){
   var p=state.pedidos[ix]; if(!p||!p._fbKey||p.estado!=='pagado') return;
-  var opciones=['efectivo','tarjeta','mercadopago','transferencia','rappi'];
+  var opciones=['efectivo','tarjeta','mercadopago','transferencia','rappi','uber'];
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal" style="max-width:380px">'+
     '<h2>Cambiar método de pago</h2>'+
     '<div class="sub" style="margin-bottom:14px">Pedido '+esc(p.id)+' &middot; '+money(p.total)+'<br>Actual: <b>'+esc(PAGO_LABEL[p.metodo]||p.metodo||'--')+'</b>'+(p.pagos&&p.pagos.length>1?' (pago mixto)':'')+(p.pagos&&p.pagos.length===1&&p.pagos[0].usd?' ($'+p.pagos[0].montoUSD.toFixed(2)+' USD)':'')+'<div class="sub" style="margin-top:4px">Al cambiar de método se pierde el detalle de dólares si lo había.</div></div>'+
@@ -3766,9 +3766,10 @@ function configTiposDescuento(){
 // Desglose del turno por marca y canal. Canal: comedor, para recoger,
 // domicilio propio o Rappi. Las ventas anteriores a este campo se clasifican
 // por el pedido al que pertenecen (si aun esta en pantalla).
-var CANALES_CORTE=[{id:'aqui',label:'Comedor'},{id:'llevar',label:'Para recoger'},{id:'domicilio',label:'Domicilio'},{id:'rappi',label:'Rappi'},{id:'otro',label:'Sin clasificar'}];
+var CANALES_CORTE=[{id:'aqui',label:'Comedor'},{id:'llevar',label:'Para recoger'},{id:'domicilio',label:'Domicilio'},{id:'rappi',label:'Rappi'},{id:'uber',label:'Uber Eats'},{id:'otro',label:'Sin clasificar'}];
 function ventaCanal(v){
   if(v.canal==='rappi' || v.metodo==='rappi') return 'rappi';
+  if(v.canal==='uber' || v.metodo==='uber') return 'uber';
   var t=v.tipoOrden;
   if(!t){ var p=(state.pedidos||[]).filter(function(x){return x._fbKey===v.pedidoId;})[0]; t=p&&p.tipo; }
   return (t==='aqui'||t==='llevar'||t==='domicilio')?t:'otro';
@@ -3801,9 +3802,9 @@ function desgloseHtml(des){
       }).join('');
   }).join('');
 }
-function totalesPorMetodo(){
-  var t={efectivo:0,tarjeta:0,mercadopago:0,transferencia:0,rappi:0};
-  state.turnoSales.forEach(function(v){
+function totalesPorMetodo(sales){
+  var t={efectivo:0,tarjeta:0,mercadopago:0,transferencia:0,rappi:0,uber:0};
+  (sales||state.turnoSales).forEach(function(v){
     if(v.pagos && v.pagos.length){ v.pagos.forEach(function(pg){ t[pg.metodo]=(t[pg.metodo]||0)+pg.monto; }); }
     else { t[v.metodo]=(t[v.metodo]||0)+v.total; }
   });
@@ -3822,7 +3823,7 @@ function getUltimoCierre(suc){ try{ return JSON.parse(localStorage.getItem(ultim
 function setUltimoCierre(suc,data){ try{ localStorage.setItem(ultimoCierreKey(suc), JSON.stringify(data)); }catch(e){} }
 function esRolSupervisorAdmin(){ return state.role==='admin'||state.role==='supervisor'; }
 function renderCaja(){
-  var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi;
+  var t=totalesPorMetodo(); var total=t.efectivo+t.tarjeta+t.transferencia+t.rappi+t.uber;
   var totalDescuentos=state.turnoSales.reduce(function(a,v){ return a+(v.descuento||0); },0);
   var est=productosEstrella(); var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   var verDesglose=esRolSupervisorAdmin();
@@ -3841,7 +3842,8 @@ function renderCaja(){
       '<div class="pill"><div class="l">Efectivo</div><div class="v">'+money(t.efectivo)+'</div>'+(totalUSD>0?'<div class="l" style="margin-top:2px">de eso, $'+totalUSD.toFixed(2)+' USD</div>':'')+'</div>'+
       '<div class="pill"><div class="l">Tarjeta</div><div class="v">'+money(t.tarjeta)+'</div></div>'+
       '<div class="pill"><div class="l">Transferencia</div><div class="v">'+money(t.transferencia)+'</div></div>'+
-      '<div class="pill"><div class="l">Rappi/Uber</div><div class="v">'+money(t.rappi)+'</div></div>'+
+      '<div class="pill"><div class="l">Rappi</div><div class="v">'+money(t.rappi)+'</div></div>'+
+      '<div class="pill"><div class="l">Uber Eats</div><div class="v">'+money(t.uber)+'</div></div>'+
     '</div>'+
     (totalDescuentos>0?'<div class="row" style="display:flex;justify-content:space-between;padding:8px 0;color:var(--rojo);font-weight:700"><span>Descuentos aplicados en el turno</span><span>-'+money(totalDescuentos)+'</span></div>':'')+
     '<div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'+
@@ -4193,29 +4195,53 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   var __abiertas=(state.pedidos||[]).filter(function(p){ return p.estado==='abierto'; });
   if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar.'); return; }
   if(!state.turnoSales.length){ showToast("No hay ventas que cerrar"); return; }
-  var t = totalesPorMetodo();
-  var total = t.efectivo + t.tarjeta + t.mercadopago + t.transferencia + t.rappi;
+  // Una sola caja y un solo corte, pero cada marca distinta a la de la
+  // sucursal (ej. Helfy Fu) queda como registro aparte en INGRESOS, con su
+  // propia hoja/sucursal, para llevar el monitoreo de ventas por marca.
+  var t = totalesPorMetodo();                       // TODO el turno (cuadre de caja)
+  var __marcaPrincipal = state.sucursal;
+  var __ventasPrincipal = state.turnoSales.filter(function(v){ return (v.marca||__marcaPrincipal)===__marcaPrincipal; });
+  var __otrasMarcas = [];
+  state.turnoSales.forEach(function(v){ var m=v.marca||__marcaPrincipal; if(m!==__marcaPrincipal && __otrasMarcas.indexOf(m)===-1) __otrasMarcas.push(m); });
+  var tp = totalesPorMetodo(__ventasPrincipal);     // solo la marca principal
+  var total = tp.efectivo + tp.tarjeta + tp.mercadopago + tp.transferencia + tp.rappi + tp.uber;
   var sucSheet = SYNC.sucursalSheet(state.sucursal);
   var turno = state.turno || "TURNO MAÑANA";
-  var mapDet = {};
-  state.turnoSales.forEach(function(v){
-    (v.items||[]).forEach(function(it){
-      var precio = (typeof it.price==="number") ? it.price : (typeof it.precio==="number" ? it.precio : (it.total&&it.qty? it.total/it.qty : 0));
-      var nombre = it.name || it.nombre || it.articulo || "ARTICULO";
-      var key = nombre + "||" + precio;
-      if(!mapDet[key]) mapDet[key] = { articulo: nombre, cantidad: 0, precio: precio };
-      mapDet[key].cantidad += (it.qty || it.cantidad || 1);
+  function _detallesDe(ventas){
+    var mapDet = {};
+    ventas.forEach(function(v){
+      (v.items||[]).forEach(function(it){
+        var precio = (typeof it.price==="number") ? it.price : (typeof it.precio==="number" ? it.precio : (it.total&&it.qty? it.total/it.qty : 0));
+        var nombre = it.name || it.nombre || it.articulo || "ARTICULO";
+        var key = nombre + "||" + precio;
+        if(!mapDet[key]) mapDet[key] = { articulo: nombre, cantidad: 0, precio: precio };
+        mapDet[key].cantidad += (it.qty || it.cantidad || 1);
+      });
     });
-  });
-  var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
-  var puntosCanjeados = state.turnoSales.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
+    return Object.keys(mapDet).map(function(k){ return mapDet[k]; });
+  }
+  var detalles = _detallesDe(__ventasPrincipal);
+  var puntosCanjeados = __ventasPrincipal.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
   var __desg = desgloseTurno(state.turnoSales);
+  var fechaCorte = fechaHoyDDMMYYYY();
+  var __corteBase = (sucSheet||state.sucursal||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+  var __payloadsExtra = __otrasMarcas.map(function(m){
+    var vs = state.turnoSales.filter(function(v){ return v.marca===m; });
+    var tm = totalesPorMetodo(vs);
+    var totM = tm.efectivo + tm.tarjeta + tm.mercadopago + tm.transferencia + tm.rappi + tm.uber;
+    return { corteId: __corteBase+'_'+m, sucursal: (MARCAS[m]&&MARCAS[m].hoja)||String(m).toUpperCase(), cliente: turno, fecha: fechaCorte, inicioCaja: 0, retiros: 0, depositos: 0,
+      efectivo: tm.efectivo, tarjeta: tm.tarjeta, mercadopago: tm.mercadopago, transferencia: tm.transferencia, rappi: tm.rappi, uber: tm.uber, ventaTotal: totM,
+      puntosCanjeados: vs.reduce(function(s,v){ return s+(v.puntosUsados||0); },0),
+      observaciones: "POS LunaSmart | Mismo corte de caja que "+marcaNombre(__marcaPrincipal)+" ("+turno+")"+(tm.efectivo>0?" | Efectivo en la caja compartida: "+money(tm.efectivo):""),
+      desglose: desgloseTurno(vs), detalles: _detallesDe(vs), marca: m };
+  });
+  var __efectivoOtras = __payloadsExtra.reduce(function(a,x){ return a+x.efectivo; },0);
   var mov = cajaMovTotales();
   var movTxt = (state.cajaMovimientos||[]).map(function(m){ return (m.tipo==='retiro'?'Retiro ':'Depósito ')+money(m.monto)+(m.motivo?' ('+m.motivo+')':''); }).join('; ');
   // fecha capturada AQUI (momento real del cierre), no dejada al valor por
   // defecto del servidor -- si este corte se queda pendiente y se reenvia
   // dias despues, debe conservar la fecha real de la venta, no la del reenvio.
-  var payload = { corteId: (sucSheet||state.sucursal||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), sucursal: sucSheet, cliente: turno, fecha: fechaHoyDDMMYYYY(), inicioCaja: state.cajaInicial || 0, retiros: mov.retiros, depositos: mov.depositos, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart"+(movTxt?(" | "+movTxt):"")+(__desg.length?(" | "+desgloseTexto(__desg)):""), desglose: __desg, detalles: detalles };
+  var payload = { corteId: __corteBase, sucursal: sucSheet, cliente: turno, fecha: fechaCorte, inicioCaja: state.cajaInicial || 0, retiros: mov.retiros, depositos: mov.depositos, efectivo: tp.efectivo, tarjeta: tp.tarjeta, mercadopago: tp.mercadopago, transferencia: tp.transferencia, rappi: tp.rappi, uber: tp.uber, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart"+(movTxt?(" | "+movTxt):"")+(__desg.length?(" | "+desgloseTexto(__desg)):"")+(__payloadsExtra.length?(" | "+__payloadsExtra.map(function(x){return marcaNombre(x.marca)+" registrada aparte en "+x.sucursal;}).join(', ')+(__efectivoOtras>0?" (su efectivo, "+money(__efectivoOtras)+", esta en esta caja)":"")):""), desglose: __desg, marcasAparte: __payloadsExtra.map(function(x){return {marca:x.marca,sucursal:x.sucursal,ventaTotal:x.ventaTotal};}), detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
@@ -4224,12 +4250,23 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   // corte (Sheets), ya que Firebase se vacia al cerrar turno.
   var __registrosTiempo=_calcularTiemposCorte(payload.corteId);
   function _finalizar(msg){ showToast(msg); fbLimpiarTurnoSales(state.sucursal); fbLimpiarPedidos(state.sucursal); state.turno = null; state.cajaAbierta = false; fbAuthReady.then(function(){ fbDb.ref('cajaEstado/'+state.sucursal).set({abierta:false}).catch(function(){}); }); if(__registrosTiempo.length) SYNC.registrarTiempos(__registrosTiempo).catch(function(){}); renderCaja(); renderTopbar(); if(typeof onDone==='function') onDone(payload); }
-  if(!SYNC.configurado()){ guardarCortePendiente(payload); _finalizar("Turno cerrado (guardado local – falta configurar sincronización)"); return; }
+  var __todos = [payload].concat(__payloadsExtra);
+  if(!SYNC.configurado()){ __todos.forEach(guardarCortePendiente); _finalizar("Turno cerrado (guardado local – falta configurar sincronización)"); return; }
   showToast("Enviando corte a Luna Smart...");
-  SYNC.enviarCorte(payload).then(function(res){
-    if(res && (res.ok || res.status==="ok" || res.id)){ _finalizar("Corte registrado en INGRESOS (" + (res.id||"") + ")"); }
-    else { guardarCortePendiente(payload); _finalizar("Corte guardado local: respuesta inesperada del servidor"); }
-  }).catch(function(err){ guardarCortePendiente(payload); _finalizar("Sin conexión: corte guardado local para reintentar"); });
+  // Se envian uno por uno; el que falle queda pendiente para reintentar solo.
+  var __fallidos = 0, __ultimoId = "";
+  __todos.reduce(function(cadena, pl){
+    return cadena.then(function(){
+      return SYNC.enviarCorte(pl).then(function(res){
+        if(res && (res.ok || res.status==="ok" || res.id)){ __ultimoId = res.id || __ultimoId; }
+        else { __fallidos++; guardarCortePendiente(pl); }
+      }).catch(function(){ __fallidos++; guardarCortePendiente(pl); });
+    });
+  }, Promise.resolve()).then(function(){
+    var n = __todos.length;
+    _finalizar(__fallidos===0 ? ("Corte registrado en INGRESOS"+(n>1?" ("+n+" marcas)":" (" + __ultimoId + ")"))
+      : ("Corte guardado local ("+__fallidos+" de "+n+" por reintentar)"));
+  });
 }
 function fechaHoyDDMMYYYY(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear(); }
 /* Un renglon por articulo marcado "listo" en este turno -- tiempo desde que
@@ -4266,7 +4303,7 @@ function abrirResumenCierre(finalDelDia){
   if(__abiertas.length){ showToast('No puedes cerrar: hay '+__abiertas.length+' cuenta(s) abierta(s) sin cobrar. Ve a Pedidos y cóbralas primero.'); return; }
   if(!state.turnoSales.length){ showToast('No hay ventas que cerrar'); return; }
   var t=totalesPorMetodo();
-  var total=t.efectivo+t.tarjeta+t.mercadopago+t.transferencia+t.rappi;
+  var total=t.efectivo+t.tarjeta+t.mercadopago+t.transferencia+t.rappi+t.uber;
   var mov=cajaMovTotales();
   var esperado=(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros;
   var esperadoTerminal=t.tarjeta;
@@ -4291,7 +4328,7 @@ function abrirResumenCierre(finalDelDia){
     (verInfo?(
     '<div class="resumen-venta"><div class="rv-lbl">Venta total</div><div class="rv-total">'+money(total)+'</div>'+compHtml+'</div>'+
     '<div class="card"><h3>Métodos de pago</h3>'+
-      ['efectivo','tarjeta','mercadopago','transferencia','rappi'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+((m==='mercadopago')&&t[m]>0?' (auto)':'')+'</span><b>'+money(t[m])+' · '+pct(t[m])+'%</b></div>'; }).join('')+
+      ['efectivo','tarjeta','mercadopago','transferencia','rappi','uber'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+((m==='mercadopago')&&t[m]>0?' (auto)':'')+'</span><b>'+money(t[m])+' · '+pct(t[m])+'%</b></div>'; }).join('')+
     '</div>'+
     (puntosCanjeados>0?'<div class="card"><h3>🌙 Puntos de Lealtad</h3><div class="star-row"><span>Canjeados este turno</span><b>-'+money(puntosCanjeados)+'</b></div></div>':'')+
     '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas · '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
@@ -4303,7 +4340,8 @@ function abrirResumenCierre(finalDelDia){
       '<div class="field" style="margin-top:14px"><label>Reporte de terminal (tarjeta física)</label><input id="rDeclaradoTerminal" type="number" inputmode="decimal" placeholder="0.00"></div>'+
       '<div class="field" style="margin-top:14px"><label>Transferencia recibida</label><input id="rDeclaradoTransferencia" type="number" inputmode="decimal" placeholder="0.00"></div>'+
       (t.mercadopago>0?'<div class="caja-check" style="margin-top:14px"><span>Mercado Pago (auto, no se declara)</span><b>'+money(t.mercadopago)+'</b></div>':'')+
-      (t.rappi>0?'<div class="caja-check"><span>Rappi/Uber (no se declara)</span><b>'+money(t.rappi)+'</b></div>':'')+
+      (t.rappi>0?'<div class="caja-check"><span>Rappi (no se declara)</span><b>'+money(t.rappi)+'</b></div>':'')+
+      (t.uber>0?'<div class="caja-check"><span>Uber Eats (no se declara)</span><b>'+money(t.uber)+'</b></div>':'')+
     '</div>'+
     '<div class="resumen-foot"><button class="btn-cancel" id="rCancel" style="flex:1">Cancelar</button><button class="btn-confirm" id="rConfirm" style="flex:2">Confirmar '+(finalDelDia?'cierre':'corte')+'</button></div>'+
   '</div>';
@@ -4340,7 +4378,8 @@ function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
         '<div class="star-row"><span>Terminal</span><b>'+money(acumulado.tarjeta)+'</b></div>'+
         '<div class="star-row"><span>Transferencia</span><b>'+money(acumulado.transferencia)+'</b></div>'+
         '<div class="star-row"><span>Mercado Pago</span><b>'+money(acumulado.mercadopago)+'</b></div>'+
-        '<div class="star-row"><span>Rappi/Uber</span><b>'+money(acumulado.rappi)+'</b></div>'+
+        '<div class="star-row"><span>Rappi</span><b>'+money(acumulado.rappi)+'</b></div>'+
+        '<div class="star-row"><span>Uber Eats</span><b>'+money(acumulado.uber)+'</b></div>'+
       '</div>';
     }
     var textoWA=_construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulado);
@@ -4350,8 +4389,8 @@ function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
       '<div class="card"><h3>Efectivo</h3>'+filaMetodo(payload.cajaDeclarada, payload.cajaEsperada, payload.cajaDiferencia)+'</div>'+
       '<div class="card"><h3>Terminal (tarjeta física)</h3>'+filaMetodo(payload.terminalDeclarada, payload.terminalEsperada, payload.terminalDiferencia)+'</div>'+
       '<div class="card"><h3>Transferencia</h3>'+filaMetodo(payload.transferenciaDeclarada, payload.transferenciaEsperada, payload.transferenciaDiferencia)+'</div>'+
-      (payload.mercadopago>0||payload.rappi>0?'<div class="card"><h3>Automático</h3>'+(payload.mercadopago>0?'<div class="star-row"><span>Mercado Pago</span><b>'+money(payload.mercadopago)+'</b></div>':'')+(payload.rappi>0?'<div class="star-row"><span>Rappi/Uber</span><b>'+money(payload.rappi)+'</b></div>':'')+'</div>':'')+
-      ((payload.desglose&&payload.desglose.length)?'<div class="card"><h3>Por marca y canal</h3>'+desgloseHtml(payload.desglose)+'</div>':'')+
+      (payload.mercadopago>0||payload.rappi>0||payload.uber>0?'<div class="card"><h3>Automático</h3>'+(payload.mercadopago>0?'<div class="star-row"><span>Mercado Pago</span><b>'+money(payload.mercadopago)+'</b></div>':'')+(payload.rappi>0?'<div class="star-row"><span>Rappi</span><b>'+money(payload.rappi)+'</b></div>':'')+(payload.uber>0?'<div class="star-row"><span>Uber Eats</span><b>'+money(payload.uber)+'</b></div>':'')+'</div>':'')+
+      ((payload.desglose&&payload.desglose.length)?'<div class="card"><h3>Por marca y canal</h3>'+desgloseHtml(payload.desglose)+((payload.marcasAparte&&payload.marcasAparte.length)?'<div class="sub" style="margin-top:8px">'+payload.marcasAparte.map(function(x){return esc(marcaNombre(x.marca))+' se registr\u00f3 aparte en INGRESOS como '+esc(x.sucursal)+' ('+money(x.ventaTotal)+')';}).join('<br>')+'</div>':'')+'</div>':'')+
       (top5.length?'<div class="card"><h3>Top 5 productos</h3>'+top5.map(function(p,i){return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.articulo)+'</span><b>'+p.cantidad+' pzas</b></div>';}).join('')+'</div>':'')+
       accHtml+
       '<div class="resumen-foot" style="flex-direction:column;gap:10px">'+
@@ -4376,7 +4415,8 @@ function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
           tarjeta:(parseFloat(res.tarjeta)||0)+payload.tarjeta,
           transferencia:(parseFloat(res.transferencia)||0)+payload.transferencia,
           mercadopago:(parseFloat(res.mercadopago)||0)+payload.mercadopago,
-          rappi:(parseFloat(res.rappi)||0)+payload.rappi
+          rappi:(parseFloat(res.rappi)||0)+payload.rappi,
+          uber:(parseFloat(res.uber)||0)+(payload.uber||0)
         };
         _pintarReporte(acumulado);
       } else { _pintarReporte(null); }
@@ -4397,7 +4437,8 @@ function _construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulad
   lineas.push('Terminal: declarado '+money(payload.terminalDeclarada)+' / sistema '+money(payload.terminalEsperada)+' / dif '+(payload.terminalDiferencia>=0?'+':'')+money(payload.terminalDiferencia));
   lineas.push('Transferencia: declarado '+money(payload.transferenciaDeclarada)+' / sistema '+money(payload.transferenciaEsperada)+' / dif '+(payload.transferenciaDiferencia>=0?'+':'')+money(payload.transferenciaDiferencia));
   if(payload.mercadopago>0) lineas.push('Mercado Pago (auto): '+money(payload.mercadopago));
-  if(payload.rappi>0) lineas.push('Rappi/Uber: '+money(payload.rappi));
+  if(payload.rappi>0) lineas.push('Rappi: '+money(payload.rappi));
+  if(payload.uber>0) lineas.push('Uber Eats: '+money(payload.uber));
   if(payload.desglose&&payload.desglose.length){
     lineas.push('');
     lineas.push('*Por marca y canal*');
@@ -4410,7 +4451,7 @@ function _construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulad
     lineas.push('');
     lineas.push('*Acumulado del día (mañana + tarde)*');
     lineas.push('Venta total: '+money(acumulado.ventaTotal));
-    lineas.push('Efectivo: '+money(acumulado.efectivo)+' · Terminal: '+money(acumulado.tarjeta)+' · Transferencia: '+money(acumulado.transferencia)+' · Mercado Pago: '+money(acumulado.mercadopago)+' · Rappi/Uber: '+money(acumulado.rappi));
+    lineas.push('Efectivo: '+money(acumulado.efectivo)+' · Terminal: '+money(acumulado.tarjeta)+' · Transferencia: '+money(acumulado.transferencia)+' · Mercado Pago: '+money(acumulado.mercadopago)+' · Rappi: '+money(acumulado.rappi)+' · Uber Eats: '+money(acumulado.uber||0));
   }
   return lineas.join('\n');
 }
