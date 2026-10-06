@@ -212,22 +212,22 @@ exports.rappiAdminSolicitud = onValueCreated(
         resultado = { ok: true, webhooks: await rappiApi.listarWebhooks(token) };
       } else if (sol.accion === 'enviarMenu') {
         const suc = sol.suc || 'eventos';
-        const tienda = _tiendaDeSucursal(suc);
+        const tienda = sol.tienda || _tiendaDeSucursal(suc);
         if (!tienda) throw new Error('La sucursal ' + suc + ' no tiene tienda de Rappi asignada');
         const menu = construirMenuRappi(await _catalogoDe(suc), { storeId: tienda });
         if (!menu.items.length) throw new Error('Ningun producto de ' + suc + ' esta activado para Rappi en Catalogo POS');
         resultado = { ok: true, productos: menu.items.length, respuesta: await rappiApi.enviarMenu(token, menu) };
       } else if (sol.accion === 'estadoMenu') {
-        resultado = { ok: true, estado: await rappiApi.estadoMenu(token, _tiendaDeSucursal(sol.suc || 'eventos')) };
+        resultado = { ok: true, estado: await rappiApi.estadoMenu(token, sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos')) };
       } else if (sol.accion === 'listarTiendas') {
         resultado = { ok: true, tiendas: await rappiApi.listarTiendas(token) };
       } else if (sol.accion === 'tiendaAbierta') {
-        resultado = { ok: true, respuesta: await rappiApi.habilitarTienda(token, _tiendaDeSucursal(sol.suc || 'eventos'), sol.abierta !== false) };
+        resultado = { ok: true, respuesta: await rappiApi.habilitarTienda(token, sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos'), sol.abierta !== false) };
       } else if (sol.accion === 'sincronizarDisponibilidad') {
         const suc = sol.suc || 'eventos';
         const agotados = (await db.ref('agotados/' + suc).once('value')).val() || {};
         const cambios = calcularDisponibilidadCompleta(agotados, await _catalogoDe(suc));
-        resultado = { ok: true, apagados: cambios.turnOff.length, encendidos: cambios.turnOn.length, respuesta: await rappiApi.disponibilidadItems(token, _tiendaDeSucursal(suc), cambios) };
+        resultado = { ok: true, apagados: cambios.turnOff.length, encendidos: cambios.turnOn.length, respuesta: await rappiApi.disponibilidadItems(token, sol.tienda || _tiendaDeSucursal(suc), cambios) };
       } else if (sol.accion === 'registrarWebhooks') {
         const tiendas = Object.keys(SUCURSAL_POR_STORE_ID);
         const detalle = {};
