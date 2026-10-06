@@ -1597,6 +1597,9 @@ function aceptarPedidoRappi(fbKey){
     procesarInventario(items,suc);
     closeModal();
     showToast('Pedido de Rappi aceptado: '+p.id);
+    // Misma regla que los demas tickets: solo si la impresora USB ya esta
+    // emparejada y la impresion automatica sigue activa (Configuracion).
+    if(localStorage.getItem('ls_auto_imprimir')!=='0' && USBPrinter.soportado() && (USBPrinter.conectada()||localStorage.getItem('ls_usb_printer_ok')==='1')) imprimirTicketFisico(Object.assign({},p,{items:items,estado:'pagado'}),true);
   }).catch(function(e){ showToast('Sin conexión -- no se pudo aceptar, reintenta'); console.error(e); });
 }
 // Rappi solo acepta estos motivos de rechazo (cancel_type). Los tres primeros
@@ -3224,6 +3227,10 @@ function _escposBytes(s){
 function _escposLinea(s){ return _escposBytes(s).concat([0x0A]); }
 function _padDer(s,n){ s=String(s); return s.length>=n? s.slice(0,n) : s+Array(n-s.length+1).join(' '); }
 function _padIzq(s,n){ s=String(s); return s.length>=n? s.slice(0,n) : Array(n-s.length+1).join(' ')+s; }
+// Un pedido de Rappi se imprime con el nombre de SU marca (Helfy Fu, Casa de
+// la Cultura...), no con el del negocio general, para que el repartidor y la
+// cocina sepan de cual tienda es.
+function _nombreMarcaTicket(p){ return (p&&p.canal==='rappi'&&p.marca&&MARCAS[p.marca])?MARCAS[p.marca].nombre:NEGOCIO.nombre; }
 function construirTicketESCPOS(p){
   var items=(p.items||[]);
   var subtotal=items.reduce(function(a,l){return a+l.price*l.qty;},0);
@@ -3234,14 +3241,16 @@ function construirTicketESCPOS(p){
   push([ESCPOS_ESC,0x40]);
   push([ESCPOS_ESC,0x61,1]);
   push([ESCPOS_ESC,0x21,0x30]);
-  push(_escposLinea(_sinAcentos(NEGOCIO.nombre)));
+  push(_escposLinea(_sinAcentos(_nombreMarcaTicket(p))));
   push([ESCPOS_ESC,0x21,0x00]);
+  if(p.canal==='rappi'){ push([ESCPOS_ESC,0x21,0x08]); push(_escposLinea('PEDIDO RAPPI')); push([ESCPOS_ESC,0x21,0x00]); }
   push(_escposLinea(NEGOCIO.sucursal));
   push(_escposLinea(NEGOCIO.dir1));
   push(_escposLinea(NEGOCIO.dir2));
   push(_escposLinea(''));
   push([ESCPOS_ESC,0x61,0]);
   push(_escposLinea('Ticket '+(p.id||'')+' - '+(p.hora||'')));
+  if(p.rappiOrderId) push(_escposLinea('Rappi #'+p.rappiOrderId));
   push(_escposLinea((TIPO_LABEL[p.tipo]||p.tipo||'')+(p.mesa?' - Mesa '+p.mesa:'')));
   push(_escposLinea('Pago: '+(PAGO_LABEL[p.metodo]||p.metodo||'Pendiente')));
   if(_pagosConDetalle(p.pagos)){ p.pagos.forEach(function(pg){ push(_escposLinea('  '+(PAGO_LABEL[pg.metodo]||pg.metodo)+(pg.usd?' ($'+pg.montoUSD.toFixed(2)+' USD)':'')+': '+money(pg.monto))); }); }
@@ -3272,7 +3281,7 @@ function construirTicketESCPOS(p){
   push([ESCPOS_ESC,0x21,0x00]);
   push(_escposLinea(''));
   push([ESCPOS_ESC,0x61,1]);
-  push(_escposLinea('Gracias por tu compra!'));
+  push(_escposLinea(p.canal==='rappi'?'Pagado en Rappi - no cobrar':'Gracias por tu compra!'));
   push(_escposLinea(''));
   push(_escposLinea(''));
   push(_escposLinea(''));
@@ -3303,7 +3312,7 @@ function _imprimirTicketNavegador(p){
   var host=document.getElementById('printHost')||(function(){ var d=document.createElement('div'); d.id='printHost'; document.body.appendChild(d); return d; })();
   host.innerHTML='<div id="printArea"><div class="tk">'+
     '<div class="tk-logo">'+logoSVG()+'</div>'+
-    '<div class="tk-biz">'+esc(NEGOCIO.nombre)+' '+esc(NEGOCIO.sucursal)+'<br>'+esc(NEGOCIO.dir1)+'<br>'+esc(NEGOCIO.dir2)+'<br>'+esc(NEGOCIO.wa)+'</div>'+
+    '<div class="tk-biz">'+(p.canal==='rappi'?'<b>PEDIDO RAPPI</b><br>':'')+esc(_nombreMarcaTicket(p))+' '+esc(NEGOCIO.sucursal)+'<br>'+esc(NEGOCIO.dir1)+'<br>'+esc(NEGOCIO.dir2)+'<br>'+esc(NEGOCIO.wa)+'</div>'+
     '<div class="tk-meta">Ticket '+esc(p.id)+' \u00b7 '+esc(p.hora||'')+'<br>'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' \u00b7 Mesa '+esc(p.mesa):'')+' \u00b7 '+esc(PAGO_LABEL[p.metodo]||p.metodo)+
     (_pagosConDetalle(p.pagos)?'<br>'+p.pagos.map(function(pg){return esc(PAGO_LABEL[pg.metodo]||pg.metodo)+(pg.usd?' ($'+pg.montoUSD.toFixed(2)+' USD)':'')+': '+money(pg.monto);}).join(' + '):'')+'</div>'+
     cli+
