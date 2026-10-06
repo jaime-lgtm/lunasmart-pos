@@ -146,7 +146,7 @@ exports.rappiAvisoProcesado = onValueUpdated(
     if (!pedido || !pedido.rappiOrderId) return;
 
     try {
-      const token = await obtenerTokenVigente(db, RAPPI_CLIENT_ID.value(), RAPPI_CLIENT_SECRET.value());
+      const token = await obtenerTokenVigente(db, RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim());
       if (aviso === 'accept') {
         await rappiApi.tomarPedido(token, pedido.rappiOrderId, pedido.rappiCookingTime);
       } else if (aviso === 'reject') {
@@ -184,8 +184,22 @@ exports.rappiAdminSolicitud = onValueCreated(
     const id = event.params.id;
     let resultado;
     try {
-      const token = await obtenerTokenVigente(db, RAPPI_CLIENT_ID.value(), RAPPI_CLIENT_SECRET.value());
-      if (sol.accion === 'probarAuth') {
+      const token = sol.accion === 'diagnostico' ? null : await obtenerTokenVigente(db, RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim());
+      if (sol.accion === 'diagnostico') {
+        // Solo longitudes y codigos HTTP -- nunca los valores de los secretos.
+        const idv = RAPPI_CLIENT_ID.value(), sv = RAPPI_CLIENT_SECRET.value();
+        const info = { idLen: idv.length, secretLen: sv.length, idEspacios: idv !== idv.trim(), secretEspacios: sv !== sv.trim(), idInicio: idv.slice(0, 4) };
+        const pruebas = {};
+        for (const h of ['https://api.dev.rappi.com', 'https://microservices.dev.rappi.com']) {
+          for (const ruta of ['/restaurants/auth/v1/token/login/integrations', '/restaurants/auth/v1/token/login/utils']) {
+            try {
+              const r = await fetch(h + ruta, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client_id: idv.trim(), client_secret: sv.trim() }) });
+              pruebas[(h.indexOf('microservices') >= 0 ? 'microservices' : 'api') + '_' + (ruta.indexOf('integrations') >= 0 ? 'integrations' : 'utils')] = r.status;
+            } catch (e) { pruebas[(h.indexOf('microservices') >= 0 ? 'microservices' : 'api') + '_' + (ruta.indexOf('integrations') >= 0 ? 'integrations' : 'utils')] = 'error de red'; }
+          }
+        }
+        resultado = { ok: true, info, pruebas };
+      } else if (sol.accion === 'probarAuth') {
         resultado = { ok: true, mensaje: 'Login con Rappi correcto' };
       } else if (sol.accion === 'listarWebhooks') {
         resultado = { ok: true, webhooks: await rappiApi.listarWebhooks(token) };

@@ -25,15 +25,36 @@ async function _rappiFetch(base, ruta, token, opciones) {
   try { return texto ? JSON.parse(texto) : null; } catch (e) { return texto; }
 }
 
+// Login. Las credenciales de DEV que entrego Rappi funcionan con su login de
+// Auth0 (el "anterior"); el endpoint "nuevo" de su documentacion
+// (/restaurants/auth/v1/token/login/integrations/) las rechazo con 401 --
+// se usa Auth0 primero y el nuevo solo como respaldo.
+const AUTH0_DOMINIO = process.env.RAPPI_AUTH0_DOMAIN || 'rests-integrations-dev.auth0.com';
+const AUTH0_AUDIENCE = process.env.RAPPI_AUTH0_AUDIENCE || 'https://int-public-api-v2/api';
+
 async function obtenerToken(clientId, clientSecret) {
-  const res = await fetch(AUTH_BASE + '/restaurants/auth/v1/token/login/integrations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
-  });
-  const texto = await res.text().catch(function () { return ''; });
-  if (!res.ok) throw new Error('Login Rappi -> ' + res.status + ': ' + texto.slice(0, 300));
-  return JSON.parse(texto); // { access_token, token_type, expires_in }
+  const errores = [];
+  try {
+    const res = await fetch('https://' + AUTH0_DOMINIO + '/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, audience: AUTH0_AUDIENCE, grant_type: 'client_credentials' }),
+    });
+    const texto = await res.text().catch(function () { return ''; });
+    if (res.ok) return JSON.parse(texto); // { access_token, expires_in, ... }
+    errores.push('Auth0 ' + res.status + ': ' + texto.slice(0, 150));
+  } catch (e) { errores.push('Auth0: ' + e.message); }
+  try {
+    const res = await fetch(AUTH_BASE + '/restaurants/auth/v1/token/login/integrations/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+    });
+    const texto = await res.text().catch(function () { return ''; });
+    if (res.ok) return JSON.parse(texto);
+    errores.push('login nuevo ' + res.status + ': ' + texto.slice(0, 150));
+  } catch (e) { errores.push('login nuevo: ' + e.message); }
+  throw new Error('Login Rappi fallo -- ' + errores.join(' | '));
 }
 
 // Aceptar un pedido (pasa a TAKEN). cookingTime = minutos de preparacion.
