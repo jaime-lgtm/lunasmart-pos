@@ -22,16 +22,32 @@ const RAPPI_CLIENT_SECRET = defineSecret('RAPPI_CLIENT_SECRET');
 // de PRUEBAS (DEV) que Rappi asigno; sus pedidos de prueba caen en la
 // sucursal "eventos" para no sonarle alarmas al mostrador real. Al pasar a
 // produccion se agrega aqui el store_id real de Casa de la Cultura -> 'cafeteria'.
-const SUCURSAL_POR_STORE_ID = {
-  '900175250': 'eventos',
+// store_id de Rappi -> { suc: sucursal del POS donde caen los pedidos y su
+// corte, marca: negocio con el que se vende (= id de su catalogo en Firebase) }.
+// Varias marcas pueden compartir sucursal (dark kitchen): Casa de la Cultura y
+// Helfy Fu salen de un mismo punto de venta con un solo corte, y la marca
+// distingue de cual tienda de Rappi llego cada pedido. prod:true = tiendas
+// reales (no se registran webhooks DEV sobre ellas).
+const TIENDAS_RAPPI = {
+  '900175250':  { suc: 'eventos',   marca: 'eventos' },                  // tienda de PRUEBAS (DEV)
+  '1923806519': { suc: 'cafeteria', marca: 'cafeteria', prod: true },    // Sueno de Luna Casa de la Cultura
+  '1930016459': { suc: 'cafeteria', marca: 'helfy',     prod: true },    // Helfy Fu
 };
 
 const URL_WEBHOOK = 'https://us-central1-luna-smart-pos.cloudfunctions.net/rappiWebhook';
 // Eventos que se registran en Rappi (cada uno lleva su propia URL y secreto).
 const EVENTOS_WEBHOOK = ['NEW_ORDER', 'ORDER_EVENT_CANCEL', 'ORDER_OTHER_EVENT', 'MENU_APPROVED', 'MENU_REJECTED', 'PING', 'STORE_CONNECTIVITY'];
 
-function _sucursalDeTienda(storeId) { return SUCURSAL_POR_STORE_ID[String(storeId)] || null; }
-function _tiendaDeSucursal(suc) { return Object.keys(SUCURSAL_POR_STORE_ID).find(function (k) { return SUCURSAL_POR_STORE_ID[k] === suc; }) || null; }
+function _infoDeTienda(storeId) { return TIENDAS_RAPPI[String(storeId)] || null; }
+function _sucursalDeTienda(storeId) { const t = _infoDeTienda(storeId); return t ? t.suc : null; }
+// Tienda de Rappi que vende el catalogo <id> (el "ojito" de Disponibilidad y el
+// envio de menu trabajan por catalogo, no por sucursal). Prefiere la real si hay dos.
+// Solo cuenta las tiendas del ambiente activo (DEV por defecto; RAPPI_AMBIENTE=prod
+// al pasar a produccion), para no usar un token DEV sobre una tienda real.
+const AMBIENTE_PROD = process.env.RAPPI_AMBIENTE === 'prod';
+function _tiendaDeSucursal(catalogoId) {
+  return Object.keys(TIENDAS_RAPPI).find(function (k) { return TIENDAS_RAPPI[k].marca === catalogoId && !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; }) || null;
+}
 async function _catalogoDe(suc) {
   const v = (await db.ref('catalogo/' + suc).once('value')).val() || {};
   return Object.keys(v).map(function (k) { return v[k]; });
@@ -99,17 +115,18 @@ exports.rappiWebhook = onRequest(async (req, res) => {
 
 async function _procesarNuevoPedido(cuerpo) {
   const store = cuerpo.store || {};
-  const suc = _sucursalDeTienda(store.internal_id) || _sucursalDeTienda(store.external_id);
-  if (!suc) { logger.warn('NEW_ORDER de una tienda sin sucursal asignada', { store }); return; }
+  const info = _infoDeTienda(store.internal_id) || _infoDeTienda(store.external_id);
+  if (!info) { logger.warn('NEW_ORDER de una tienda sin sucursal asignada', { store }); return; }
+  const suc = info.suc;
 
   const orderId = String((cuerpo.order_detail || {}).order_id || '');
   if (orderId && await _buscarPedido(suc, orderId)) { logger.info('NEW_ORDER duplicado, se ignora', { orderId }); return; }
 
-  const catSnap = await db.ref('catalogo/' + suc).once('value');
+  const catSnap = await db.ref('catalogo/' + info.marca).once('value');
   const catalogoVal = catSnap.val() || {};
   const catalogo = Object.keys(catalogoVal).map(function (k) { return catalogoVal[k]; });
 
-  const pedido = mapearPedidoRappi(cuerpo, catalogo);
+  const pedido = mapearPedidoRappi(cuerpo, catalogo, info.marca);
   await db.ref('pedidos/' + suc).push(pedido);
   logger.info('Pedido de Rappi creado en Firebase', { suc, rappiOrderId: pedido.rappiOrderId });
 }
@@ -244,7 +261,7 @@ exports.rappiAdminSolicitud = onValueCreated(
       } else if (sol.accion === 'crearHorario') {
         resultado = { ok: true, respuesta: await rappiApi.crearHorario(await rappiApi.obtenerTokenUtils(RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim()), sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos'), sol.dia, sol.inicio, sol.fin) };
       } else if (sol.accion === 'registrarWebhooks') {
-        const tiendas = Object.keys(SUCURSAL_POR_STORE_ID);
+        const tiendas = Object.keys(TIENDAS_RAPPI).filter(function (k) { return !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; });
         const detalle = {};
         for (const ev of EVENTOS_WEBHOOK) {
           try {

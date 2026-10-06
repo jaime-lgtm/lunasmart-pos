@@ -7,7 +7,7 @@ const SEIS_MINUTOS_MS = 6 * 60 * 1000;
 
 function _num(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 
-function mapearPedidoRappi(payload, catalogoSuc) {
+function mapearPedidoRappi(payload, catalogoSuc, marca) {
   payload = payload || {};
   const od = payload.order_detail || {};
   const cliente = payload.customer || {};
@@ -29,6 +29,7 @@ function mapearPedidoRappi(payload, catalogoSuc) {
     const subTxt = subitems.map(function (s) { return ((_num(s.quantity) || 1) > 1 ? s.quantity + 'x ' : '') + s.name; }).join(', ');
     return {
       id: prod ? skuBase : null,
+      marca: marca || null,
       name: it.name || (prod && prod.name) || 'Producto Rappi',
       qty: _num(it.quantity) || 1,
       price: precioBase + extras,
@@ -52,6 +53,7 @@ function mapearPedidoRappi(payload, catalogoSuc) {
     estado: 'pendienteRappi',
     tipo: 'domicilio',
     canal: 'rappi',
+    marca: marca || null,
     rappiOrderId: orderId,
     rappiDeadline: Date.now() + SEIS_MINUTOS_MS,
     rappiCookingTime: _num(od.cooking_time) || 15,

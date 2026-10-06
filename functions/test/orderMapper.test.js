@@ -81,3 +81,11 @@ test('motivos de rechazo: los de producto exigen indicar productos', () => {
   assert.strictEqual(MOTIVOS_RECHAZO.producto_agotado.requiereItems, true);
   assert.strictEqual(MOTIVOS_RECHAZO.info_incompleta.requiereItems, false);
 });
+
+test('el pedido lleva la marca de la tienda de Rappi que lo recibio', () => {
+  const payload = { order_detail: { order_id: '1', items: [{ id: 1, sku: 'hf1', name: 'Bao', quantity: 1, price: 50 }], totals: { total_order: 50 } }, store: {} };
+  const p = mapearPedidoRappi(payload, [{ id: 'hf1', name: 'Bao', area: 'cocina' }], 'helfy');
+  assert.strictEqual(p.marca, 'helfy');
+  assert.strictEqual(p.items[0].marca, 'helfy');
+  assert.strictEqual(p.items[0].area, 'cocina');
+});
