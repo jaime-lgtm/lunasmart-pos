@@ -1495,7 +1495,7 @@ function confirmarPedidoWeb(fbKey){
     fbRegistrarVentaLealtad(telCliente,puntosUsados,puntosGanados);
   }
 
-  var ventaRec={ts:Date.now(),metodo:p.metodo||null,total:p.total,puntosUsados:puntosUsados,pedidoId:fbKey,items:items};
+  var ventaRec={ts:Date.now(),metodo:p.metodo||null,total:p.total,puntosUsados:puntosUsados,pedidoId:fbKey,items:items,tipoOrden:p.tipo||null,marca:p.marca||state.sucursal};
   fbAgregarVenta(state.sucursal,ventaRec);
 
   closeModal();
@@ -2519,7 +2519,7 @@ function confirmSale(){
     puntosGanados=Math.round(baseDE*PUNTOS_TASA*100)/100;
     fbRegistrarVentaLealtad(telCliente,puntosUsadosMonto,puntosGanados);
   }
-  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosMonto,pedidoId:built.ref.key,items:state.cart.slice(),descuento:cartDescuentoMonto()};
+  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosMonto,pedidoId:built.ref.key,items:state.cart.slice(),descuento:cartDescuentoMonto(),tipoOrden:state.mesa?'aqui':state.tipoOrden,marca:state.sucursal};
   if(_pagosConDetalle(pagos)) ventaRec.pagos=pagos;
   fbAgregarVenta(state.sucursal,ventaRec);
   var change=Math.max(0,totalPagosDivididos()-total);
@@ -2615,7 +2615,7 @@ function confirmCobroPedido(){
   var suc=SUCURSALES.filter(function(s){return s.id===state.sucursal;})[0];
   procesarInventario((p.items||[]).map(function(l){return {id:l.id,name:l.name,qty:l.qty,size:l.size,modDeltas:l.modDeltas||[]};}), suc);
   var puntosUsadosPedido=p.puntosUsados||0;
-  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};}),descuento:_descuentoMontoDePedido(p)};
+  var ventaRec={ts:Date.now(),metodo:metodo,total:total,puntosUsados:puntosUsadosPedido,pedidoId:p._fbKey,items:(p.items||[]).map(function(l){return {name:l.name,qty:l.qty,price:l.price};}),descuento:_descuentoMontoDePedido(p),tipoOrden:p.tipo||null,marca:p.marca||state.sucursal};
   if(_pagosConDetalle(pagos)) ventaRec.pagos=pagos;
   fbAgregarVenta(state.sucursal,ventaRec);
   var telCliente=(p.cliente&&p.cliente.telefono)||'';
@@ -3571,7 +3571,7 @@ function confirmAjustePedido(){
   if(Math.abs(c.diff)>0.004){
     var itemsVenta=c.diff>0?resumen(d.add,1):resumen(d.rem,-1);
     if(!itemsVenta.length) itemsVenta=[{name:'Ajuste',qty:0,price:0}]; // turnoSales espera items siempre
-    var ventaRec={ts:Date.now(),metodo:metodoAjuste,total:c.diff,puntosUsados:0,pedidoId:p._fbKey,items:itemsVenta,ajuste:true};
+    var ventaRec={ts:Date.now(),metodo:metodoAjuste,total:c.diff,puntosUsados:0,pedidoId:p._fbKey,items:itemsVenta,ajuste:true,tipoOrden:p.tipo||null,marca:p.marca||state.sucursal};
     if(pagos && _pagosConDetalle(pagos)) ventaRec.pagos=pagos;
     fbAgregarVenta(state.sucursal,ventaRec);
   }
@@ -3754,6 +3754,44 @@ function configTiposDescuento(){
 }
 
 /* ============ CAJA / CORTE ============ */
+// Desglose del turno por marca y canal. Canal: comedor, para recoger,
+// domicilio propio o Rappi. Las ventas anteriores a este campo se clasifican
+// por el pedido al que pertenecen (si aun esta en pantalla).
+var CANALES_CORTE=[{id:'aqui',label:'Comedor'},{id:'llevar',label:'Para recoger'},{id:'domicilio',label:'Domicilio'},{id:'rappi',label:'Rappi'},{id:'otro',label:'Sin clasificar'}];
+function ventaCanal(v){
+  if(v.canal==='rappi' || v.metodo==='rappi') return 'rappi';
+  var t=v.tipoOrden;
+  if(!t){ var p=(state.pedidos||[]).filter(function(x){return x._fbKey===v.pedidoId;})[0]; t=p&&p.tipo; }
+  return (t==='aqui'||t==='llevar'||t==='domicilio')?t:'otro';
+}
+function desgloseTurno(sales){
+  var porMarca={}, orden=[];
+  (sales||[]).forEach(function(v){
+    var m=v.marca||state.sucursal;
+    if(!porMarca[m]){ porMarca[m]={marca:m,nombre:marcaNombre(m),total:0,canales:{}}; orden.push(m); }
+    var c=ventaCanal(v), r=porMarca[m];
+    if(!r.canales[c]) r.canales[c]={ventas:0,total:0};
+    r.canales[c].total+=v.total||0;
+    if(!v.ajuste) r.canales[c].ventas+=1;
+    r.total+=v.total||0;
+  });
+  return orden.map(function(m){ return porMarca[m]; });
+}
+function desgloseTexto(des){
+  return (des||[]).map(function(r){
+    return r.nombre+' '+money(r.total)+' ('+CANALES_CORTE.filter(function(c){return r.canales[c.id];}).map(function(c){ return c.label+' '+money(r.canales[c.id].total); }).join(', ')+')';
+  }).join(' | ');
+}
+function desgloseHtml(des){
+  if(!des||!des.length) return '';
+  return des.map(function(r){
+    return '<div style="margin:8px 0 4px;font-weight:800">'+marcaTag({marca:r.marca})+'<span style="float:right">'+money(r.total)+'</span></div>'+
+      CANALES_CORTE.filter(function(c){return r.canales[c.id];}).map(function(c){
+        var x=r.canales[c.id];
+        return '<div class="star-row"><span>'+c.label+' <span style="color:var(--gris);font-size:12px">('+x.ventas+')</span></span><b>'+money(x.total)+'</b></div>';
+      }).join('');
+  }).join('');
+}
 function totalesPorMetodo(){
   var t={efectivo:0,tarjeta:0,mercadopago:0,transferencia:0,rappi:0};
   state.turnoSales.forEach(function(v){
@@ -3797,7 +3835,8 @@ function renderCaja(){
       '<div class="pill"><div class="l">Rappi/Uber</div><div class="v">'+money(t.rappi)+'</div></div>'+
     '</div>'+
     (totalDescuentos>0?'<div class="row" style="display:flex;justify-content:space-between;padding:8px 0;color:var(--rojo);font-weight:700"><span>Descuentos aplicados en el turno</span><span>-'+money(totalDescuentos)+'</span></div>':'')+
-    '<div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'):'')+
+    '<div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'+
+    '<div class="card"><h3>Desglose por marca y canal</h3>'+(state.turnoSales.length?desgloseHtml(desgloseTurno(state.turnoSales)):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div>'):'')+
     '<div class="card"><h3>Art&iacute;culos estrella del turno</h3>'+(est.length?est.map(function(e){return '<div class="star-row"><span>'+esc(e.name)+'</span><b>'+e.qty+'</b></div>';}).join(''):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div></div>'+
     '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>'+
     '<div style="text-align:center;margin-top:8px"><button id="btnCerrarSinCorte" style="background:none;border:none;color:var(--rojo);font-size:13px;text-decoration:underline;cursor:pointer;padding:8px">&iquest;Caja de pruebas atorada o turno equivocado? Cerrar caja sin corte</button></div>';
@@ -4161,12 +4200,13 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   });
   var detalles = Object.keys(mapDet).map(function(k){ return mapDet[k]; });
   var puntosCanjeados = state.turnoSales.reduce(function(s,v){ return s+(v.puntosUsados||0); },0);
+  var __desg = desgloseTurno(state.turnoSales);
   var mov = cajaMovTotales();
   var movTxt = (state.cajaMovimientos||[]).map(function(m){ return (m.tipo==='retiro'?'Retiro ':'Depósito ')+money(m.monto)+(m.motivo?' ('+m.motivo+')':''); }).join('; ');
   // fecha capturada AQUI (momento real del cierre), no dejada al valor por
   // defecto del servidor -- si este corte se queda pendiente y se reenvia
   // dias despues, debe conservar la fecha real de la venta, no la del reenvio.
-  var payload = { corteId: (sucSheet||state.sucursal||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), sucursal: sucSheet, cliente: turno, fecha: fechaHoyDDMMYYYY(), inicioCaja: state.cajaInicial || 0, retiros: mov.retiros, depositos: mov.depositos, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart"+(movTxt?(" | "+movTxt):""), detalles: detalles };
+  var payload = { corteId: (sucSheet||state.sucursal||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), sucursal: sucSheet, cliente: turno, fecha: fechaHoyDDMMYYYY(), inicioCaja: state.cajaInicial || 0, retiros: mov.retiros, depositos: mov.depositos, efectivo: t.efectivo, tarjeta: t.tarjeta, mercadopago: t.mercadopago, transferencia: t.transferencia, rappi: t.rappi, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart"+(movTxt?(" | "+movTxt):"")+(__desg.length?(" | "+desgloseTexto(__desg)):""), desglose: __desg, detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
@@ -4302,6 +4342,7 @@ function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
       '<div class="card"><h3>Terminal (tarjeta física)</h3>'+filaMetodo(payload.terminalDeclarada, payload.terminalEsperada, payload.terminalDiferencia)+'</div>'+
       '<div class="card"><h3>Transferencia</h3>'+filaMetodo(payload.transferenciaDeclarada, payload.transferenciaEsperada, payload.transferenciaDiferencia)+'</div>'+
       (payload.mercadopago>0||payload.rappi>0?'<div class="card"><h3>Automático</h3>'+(payload.mercadopago>0?'<div class="star-row"><span>Mercado Pago</span><b>'+money(payload.mercadopago)+'</b></div>':'')+(payload.rappi>0?'<div class="star-row"><span>Rappi/Uber</span><b>'+money(payload.rappi)+'</b></div>':'')+'</div>':'')+
+      ((payload.desglose&&payload.desglose.length)?'<div class="card"><h3>Por marca y canal</h3>'+desgloseHtml(payload.desglose)+'</div>':'')+
       (top5.length?'<div class="card"><h3>Top 5 productos</h3>'+top5.map(function(p,i){return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.articulo)+'</span><b>'+p.cantidad+' pzas</b></div>';}).join('')+'</div>':'')+
       accHtml+
       '<div class="resumen-foot" style="flex-direction:column;gap:10px">'+
@@ -4348,6 +4389,14 @@ function _construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulad
   lineas.push('Transferencia: declarado '+money(payload.transferenciaDeclarada)+' / sistema '+money(payload.transferenciaEsperada)+' / dif '+(payload.transferenciaDiferencia>=0?'+':'')+money(payload.transferenciaDiferencia));
   if(payload.mercadopago>0) lineas.push('Mercado Pago (auto): '+money(payload.mercadopago));
   if(payload.rappi>0) lineas.push('Rappi/Uber: '+money(payload.rappi));
+  if(payload.desglose&&payload.desglose.length){
+    lineas.push('');
+    lineas.push('*Por marca y canal*');
+    payload.desglose.forEach(function(r){
+      lineas.push(r.nombre+': '+money(r.total));
+      CANALES_CORTE.forEach(function(c){ if(r.canales[c.id]) lineas.push('  · '+c.label+': '+money(r.canales[c.id].total)+' ('+r.canales[c.id].ventas+')'); });
+    });
+  }
   if(acumulado){
     lineas.push('');
     lineas.push('*Acumulado del día (mañana + tarde)*');
