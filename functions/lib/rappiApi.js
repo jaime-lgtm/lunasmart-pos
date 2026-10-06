@@ -85,4 +85,28 @@ function listarWebhooks(token) {
   return _rappiFetch(WEBHOOKS_BASE, '/webhook', token, { method: 'GET' });
 }
 
-module.exports = { obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, listarWebhooks };
+// ---- Menu ----
+function enviarMenu(token, menu) {
+  return _rappiFetch(ORDERS_BASE, '/menu', token, { method: 'POST', body: menu });
+}
+function estadoMenu(token, storeId) {
+  return _rappiFetch(ORDERS_BASE, '/menu/approved/' + storeId, token);
+}
+
+// ---- Disponibilidad ----
+// Prende/apaga items por SKU (los mismos SKU del menu).
+function disponibilidadItems(token, storeId, cambios) {
+  const body = [{ store_integration_id: String(storeId), items: { turn_on: cambios.turnOn || [], turn_off: cambios.turnOff || [] } }];
+  return _rappiFetch(ORDERS_BASE, '/availability/stores/items', token, { method: 'PUT', body: body });
+}
+// Abre/cierra la tienda completa en la app de Rappi.
+function habilitarTienda(token, storeId, habilitada) {
+  return _rappiFetch(ORDERS_BASE, '/availability/stores/enable', token, { method: 'PUT', body: { stores: [{ store_id: String(storeId), is_enabled: !!habilitada }] } });
+}
+
+// ---- Tiendas ----
+function listarTiendas(token) {
+  return _rappiFetch(WEBHOOKS_BASE, '/stores-pa', token);
+}
+
+module.exports = { obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };

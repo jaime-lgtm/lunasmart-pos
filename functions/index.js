@@ -1,5 +1,5 @@
 const { onRequest } = require('firebase-functions/v2/https');
-const { onValueUpdated, onValueCreated } = require('firebase-functions/v2/database');
+const { onValueUpdated, onValueCreated, onValueWritten } = require('firebase-functions/v2/database');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
@@ -8,6 +8,8 @@ const { getDatabase } = require('firebase-admin/database');
 const { firmaValida } = require('./lib/hmac');
 const { mapearPedidoRappi, MOTIVOS_RECHAZO } = require('./lib/orderMapper');
 const { obtenerTokenVigente } = require('./lib/token');
+const { construirMenuRappi } = require('./lib/menu');
+const { skusARappi, calcularDisponibilidadCompleta } = require('./lib/disponibilidad');
 const rappiApi = require('./lib/rappiApi');
 
 initializeApp();
@@ -29,6 +31,11 @@ const URL_WEBHOOK = 'https://us-central1-luna-smart-pos.cloudfunctions.net/rappi
 const EVENTOS_WEBHOOK = ['NEW_ORDER', 'ORDER_EVENT_CANCEL', 'ORDER_OTHER_EVENT', 'MENU_APPROVED', 'MENU_REJECTED', 'PING', 'STORE_CONNECTIVITY'];
 
 function _sucursalDeTienda(storeId) { return SUCURSAL_POR_STORE_ID[String(storeId)] || null; }
+function _tiendaDeSucursal(suc) { return Object.keys(SUCURSAL_POR_STORE_ID).find(function (k) { return SUCURSAL_POR_STORE_ID[k] === suc; }) || null; }
+async function _catalogoDe(suc) {
+  const v = (await db.ref('catalogo/' + suc).once('value')).val() || {};
+  return Object.keys(v).map(function (k) { return v[k]; });
+}
 
 async function _buscarPedido(suc, rappiOrderId) {
   const snap = await db.ref('pedidos/' + suc).orderByChild('rappiOrderId').equalTo(String(rappiOrderId)).once('value');
@@ -203,6 +210,24 @@ exports.rappiAdminSolicitud = onValueCreated(
         resultado = { ok: true, mensaje: 'Login con Rappi correcto' };
       } else if (sol.accion === 'listarWebhooks') {
         resultado = { ok: true, webhooks: await rappiApi.listarWebhooks(token) };
+      } else if (sol.accion === 'enviarMenu') {
+        const suc = sol.suc || 'eventos';
+        const tienda = _tiendaDeSucursal(suc);
+        if (!tienda) throw new Error('La sucursal ' + suc + ' no tiene tienda de Rappi asignada');
+        const menu = construirMenuRappi(await _catalogoDe(suc), { storeId: tienda });
+        if (!menu.items.length) throw new Error('Ningun producto de ' + suc + ' esta activado para Rappi en Catalogo POS');
+        resultado = { ok: true, productos: menu.items.length, respuesta: await rappiApi.enviarMenu(token, menu) };
+      } else if (sol.accion === 'estadoMenu') {
+        resultado = { ok: true, estado: await rappiApi.estadoMenu(token, _tiendaDeSucursal(sol.suc || 'eventos')) };
+      } else if (sol.accion === 'listarTiendas') {
+        resultado = { ok: true, tiendas: await rappiApi.listarTiendas(token) };
+      } else if (sol.accion === 'tiendaAbierta') {
+        resultado = { ok: true, respuesta: await rappiApi.habilitarTienda(token, _tiendaDeSucursal(sol.suc || 'eventos'), sol.abierta !== false) };
+      } else if (sol.accion === 'sincronizarDisponibilidad') {
+        const suc = sol.suc || 'eventos';
+        const agotados = (await db.ref('agotados/' + suc).once('value')).val() || {};
+        const cambios = calcularDisponibilidadCompleta(agotados, await _catalogoDe(suc));
+        resultado = { ok: true, apagados: cambios.turnOff.length, encendidos: cambios.turnOn.length, respuesta: await rappiApi.disponibilidadItems(token, _tiendaDeSucursal(suc), cambios) };
       } else if (sol.accion === 'registrarWebhooks') {
         const tiendas = Object.keys(SUCURSAL_POR_STORE_ID);
         const detalle = {};
@@ -224,5 +249,34 @@ exports.rappiAdminSolicitud = onValueCreated(
       resultado = { ok: false, error: String(e.message || e).slice(0, 500) };
     }
     await db.ref('rappiAdmin/resultados/' + id).set(Object.assign({ ts: Date.now(), accion: sol.accion || '' }, resultado));
+  }
+);
+
+/* ============================================================
+   Disponibilidad: el "ojito" de Configuracion > Disponibilidad del POS
+   (agotados/<suc>/<producto> = true) tambien oculta o muestra el producto en
+   Rappi. Solo aplica a sucursales con tienda de Rappi y a productos activados
+   para Rappi en Catalogo POS (los demas no existen en su menu).
+   ============================================================ */
+exports.rappiDisponibilidad = onValueWritten(
+  { ref: '/agotados/{suc}/{prodId}', secrets: [RAPPI_CLIENT_ID, RAPPI_CLIENT_SECRET] },
+  async (event) => {
+    const { suc, prodId } = event.params;
+    const tienda = _tiendaDeSucursal(suc);
+    if (!tienda) return;
+    const antes = event.data.before.exists(), ahora = event.data.after.exists();
+    if (antes === ahora) return;
+    const prod = (await db.ref('catalogo/' + suc + '/' + prodId).once('value')).val();
+    const skus = prod ? skusARappi(prod) : [];
+    if (!skus.length) return;
+    try {
+      const token = await obtenerTokenVigente(db, RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim());
+      await rappiApi.disponibilidadItems(token, tienda, ahora ? { turnOff: skus } : { turnOn: skus });
+      logger.info('Disponibilidad actualizada en Rappi', { suc, prodId, disponible: !ahora });
+    } catch (e) {
+      // Se puede reconciliar despues con la accion "sincronizarDisponibilidad".
+      logger.error('No se pudo actualizar la disponibilidad en Rappi', e);
+      await db.ref('rappiAuth/disponibilidadPendiente/' + suc).set({ ts: Date.now(), error: String(e.message || e).slice(0, 200) });
+    }
   }
 );

@@ -1,67 +1,66 @@
-// Convierte el catalogo de una sucursal (tal como vive en catalogo/<suc>
-// en Firebase, el mismo que llena el formulario "Nuevo producto" del
-// admin) al formato que espera el endpoint POST /menu de Rappi -- el
-// "mapeo automatico" que confirmaron en la reunion, sin pasar por el
-// portal a mano.
+// Convierte el catalogo de una sucursal (catalogo/<suc> en Firebase, el que
+// llena "Nuevo producto" del admin) al JSON de POST /menu de Rappi
+// (formato de dev-portal.rappi.com: { storeId, items:[{category, name,
+// description, sku, type:'PRODUCT', price, ...}] }).
 //
-// El SKU es el mismo id que ya usa Luna Smart POS (ej. "cc147"), asi no
-// hace falta inventar ni mantener un mapeo aparte en otro lado.
-//
-// OJO: solo se sube un producto si el merchant lo activo explicitamente
-// para Rappi (canales.rappi.activo === true) en el formulario de
-// Catalogo POS -- igual que ya pasa con Uber Eats/DiDi, por defecto un
-// producto nuevo NO se vende en delivery hasta que alguien lo prenda.
-//
-// Los nombres exactos de los campos del JSON de Rappi (sku, name, price,
-// etc.) son los documentados en su guia de mapeo automatico -- hay que
-// confirmarlos contra la respuesta real del sandbox en cuanto lleguen
-// las credenciales, por si Rappi cambio algo desde que se reviso la
-// documentacion.
+// El SKU es el id del producto en Luna Smart (ej. "cc147"); en productos con
+// tamanos, cada tamano es un producto aparte con SKU "<id>-<tamano>". Solo se
+// suben los productos que el merchant activo para Rappi en Catalogo POS
+// (canales.rappi.activo === true), igual que ya pasa con Uber/DiDi.
+function slug(s) {
+  return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function activoEnRappi(p) {
+  return !!(p && p.canales && p.canales.rappi && p.canales.rappi.activo === true);
+}
+
+// SKUs que existen en Rappi para un producto (1, o uno por tamano).
+function skusDeProducto(p) {
+  if (p.sized) return Object.keys(p.prices || {}).map(function (size) { return p.id + '-' + slug(size); });
+  return [p.id];
+}
+
 function construirMenuRappi(productos, opciones) {
   opciones = opciones || {};
-  const storeId = opciones.storeId || null;
+  const activos = (productos || []).filter(activoEnRappi);
 
-  const activos = (productos || []).filter(function (p) {
-    return !!(p && p.canales && p.canales.rappi && p.canales.rappi.activo === true);
-  });
+  // Posicion de cada categoria = orden de aparicion (alfabetico para que sea estable)
+  const nombreCategoria = function (p) { return (p.sub ? (p.menu ? p.menu + ' - ' + p.sub : p.sub) : (p.menu || 'General')); };
+  const categorias = Array.from(new Set(activos.map(nombreCategoria))).sort(function (a, b) { return a.localeCompare(b); });
 
-  const items = activos.map(function (p) {
-    const cfgRappi = p.canales.rappi;
+  const items = [];
+  activos.forEach(function (p, idx) {
+    const cfg = p.canales.rappi;
+    const nomCat = nombreCategoria(p);
+    const categoria = { id: 'cat-' + slug(nomCat), name: nomCat, minQty: 0, maxQty: 0, sortingPosition: categorias.indexOf(nomCat) };
+    const base = {
+      description: p.desc || p.name,
+      type: 'PRODUCT',
+      category: categoria,
+      children: [],
+      sortingPosition: idx,
+    };
+    if (p.img) base.imageUrl = p.img;
     if (p.sized) {
-      // Un producto con tamanos se manda como una variante por tamano,
-      // cada una con su propio SKU (id + sufijo del tamano), para que
-      // Rappi pueda ofrecer ambos tamanos por separado en su app.
-      return Object.keys(p.prices || {}).map(function (size) {
-        const precioCanal = cfgRappi.precios && cfgRappi.precios[size];
-        return {
-          sku: p.id + '-' + _slug(size),
+      Object.keys(p.prices || {}).forEach(function (size) {
+        const precioCanal = cfg.precios && cfg.precios[size];
+        items.push(Object.assign({}, base, {
+          sku: p.id + '-' + slug(size),
           name: p.name + ' (' + size + ')',
-          description: p.desc || '',
-          price: precioCanal != null ? precioCanal : p.prices[size],
-          available: true,
-          image_url: p.img || null,
-          category: p.menu || 'General',
-          subcategory: p.sub || null,
-        };
+          price: Number(precioCanal != null ? precioCanal : p.prices[size]),
+        }));
       });
+    } else {
+      items.push(Object.assign({}, base, {
+        sku: p.id,
+        name: p.name,
+        price: Number(cfg.precio != null ? cfg.precio : p.price),
+      }));
     }
-    return [{
-      sku: p.id,
-      name: p.name,
-      description: p.desc || '',
-      price: cfgRappi.precio != null ? cfgRappi.precio : p.price,
-      available: true,
-      image_url: p.img || null,
-      category: p.menu || 'General',
-      subcategory: p.sub || null,
-    }];
   });
 
-  return { store_id: storeId, products: [].concat.apply([], items) };
+  return { storeId: String(opciones.storeId || ''), items: items };
 }
 
-function _slug(s) {
-  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
-
-module.exports = { construirMenuRappi };
+module.exports = { construirMenuRappi, skusDeProducto, activoEnRappi, slug };
