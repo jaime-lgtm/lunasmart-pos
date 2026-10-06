@@ -120,6 +120,16 @@ async function _procesarCancelacion(cuerpo) {
   const hallado = await _buscarPedido(suc, cuerpo.order_id);
   if (!hallado) { logger.warn('Cancelacion de Rappi para un pedido que no se encontro', { order_id: cuerpo.order_id }); return; }
   await hallado.ref.update({ estado: 'cancelado', rappiCancelEvento: cuerpo.event || '', estadoBarra: 'listo', estadoCocina: 'listo' });
+  // Si ya se habia aceptado, su venta (turnoSales/<suc>/rappi_<pedido>) entro al
+  // corte: se quita para que el turno no cuente dinero que Rappi no va a pagar.
+  const ventaRef = db.ref('turnoSales/' + suc + '/rappi_' + hallado.id);
+  if ((await ventaRef.once('value')).exists()) {
+    await ventaRef.remove();
+  } else if (hallado.pedido.estado === 'pagado') {
+    // La venta ya salio en un corte cerrado: no hay turno del que restarla.
+    await hallado.ref.update({ rappiCancelDespuesDeCorte: true });
+    logger.warn('Rappi cancelo un pedido ya incluido en un corte cerrado', { suc, order_id: cuerpo.order_id });
+  }
   logger.info('Pedido de Rappi cancelado por Rappi', { suc, order_id: cuerpo.order_id });
 }
 

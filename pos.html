@@ -1556,7 +1556,14 @@ function aceptarPedidoRappi(fbKey){
   var estadoBarraVal=items.some(function(l){return (l.area||'barra')==='barra';})?'pendiente':'listo';
   var estadoCocinaVal=items.some(function(l){return (l.area||'barra')==='cocina';})?'pendiente':'listo';
   var upd={ estado:'pagado', items:items, estadoBarra:estadoBarraVal, estadoCocina:estadoCocinaVal, avisoRappi:'accept', avisoRappiTs:Date.now() };
+  // La venta entra al corte al aceptar (metodo 'rappi': no pasa por la caja).
+  // Clave fija por pedido: aceptar dos veces no la duplica, y si Rappi cancela
+  // despues el backend la quita (functions/index.js, _procesarCancelacion).
+  var ventaRappi={ts:Date.now(),metodo:'rappi',total:p.total,puntosUsados:0,pedidoId:fbKey,canal:'rappi',tipoOrden:'rappi',marca:p.marca||state.sucursal,
+    items:items.map(function(l){ return {name:l.name,qty:l.qty,price:l.price}; })};
   fbPedidosRef(state.sucursal).child(fbKey).update(upd).then(function(){
+    return fbTurnoSalesRef(state.sucursal).child('rappi_'+fbKey).set(ventaRappi);
+  }).then(function(){
     procesarInventario(items,suc);
     closeModal();
     showToast('Pedido de Rappi aceptado: '+p.id);
