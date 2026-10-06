@@ -78,6 +78,36 @@ function marcarListoParaRecoger(token, orderId) {
   return _rappiFetch(ORDERS_BASE, '/orders/' + orderId + '/ready-for-pickup', token, { method: 'POST' });
 }
 
+// La API de utilidades (horarios) usa su propio login.
+async function obtenerTokenUtils(clientId, clientSecret) {
+  const res = await fetch(AUTH_BASE + '/restaurants/auth/v1/token/login/utils/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+  });
+  const texto = await res.text().catch(function () { return ''; });
+  if (!res.ok) throw new Error('Login utils ' + res.status + ': ' + texto.slice(0, 200));
+  return JSON.parse(texto).access_token;
+}
+
+// Horarios de la tienda (API de utilidades de Rappi, otra ruta base que el resto).
+async function _utilsFetch(ruta, token, opciones) {
+  opciones = opciones || {};
+  const res = await fetch(WEBHOOKS_BASE + '/api/rest-ops-utils' + ruta, {
+    method: opciones.method || 'GET',
+    headers: { 'x-authorization': 'Bearer ' + token, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: opciones.body ? JSON.stringify(opciones.body) : undefined,
+  });
+  const texto = await res.text().catch(function () { return ''; });
+  if (!res.ok) throw new Error('Rappi ' + (opciones.method || 'GET') + ' ' + ruta + ' -> ' + res.status + ': ' + texto.slice(0, 400));
+  try { return texto ? JSON.parse(texto) : null; } catch (e) { return texto; }
+}
+function listarHorarios(token, storeId) { return _utilsFetch('/store/schedule/' + storeId, token); }
+// dia: mon,tue,wed,thu,fri,sat,sun,hol -- horas "HH:MM:SS"
+function crearHorario(token, storeId, dia, inicio, fin) {
+  return _utilsFetch('/store/schedule/' + storeId, token, { method: 'POST', body: { day: dia, starts_time: inicio, ends_time: fin } });
+}
+
 function registrarWebhook(token, evento, url, tiendas) {
   return _rappiFetch(WEBHOOKS_BASE, '/webhook', token, { method: 'POST', body: { event: evento, data: [{ url: url, stores: tiendas }] } });
 }
@@ -115,4 +145,4 @@ function listarTiendas(token) {
   return _rappiFetch(WEBHOOKS_BASE, '/stores-pa', token);
 }
 
-module.exports = { obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, cambiarUrlWebhook, resetSecretWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };
+module.exports = { obtenerTokenUtils, listarHorarios, crearHorario, obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, cambiarUrlWebhook, resetSecretWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };

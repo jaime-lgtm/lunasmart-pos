@@ -228,6 +228,10 @@ exports.rappiAdminSolicitud = onValueCreated(
         const agotados = (await db.ref('agotados/' + suc).once('value')).val() || {};
         const cambios = calcularDisponibilidadCompleta(agotados, await _catalogoDe(suc));
         resultado = { ok: true, apagados: cambios.turnOff.length, encendidos: cambios.turnOn.length, respuesta: await rappiApi.disponibilidadItems(token, sol.tienda || _tiendaDeSucursal(suc), cambios) };
+      } else if (sol.accion === 'listarHorarios') {
+        resultado = { ok: true, horarios: await rappiApi.listarHorarios(await rappiApi.obtenerTokenUtils(RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim()), sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos')) };
+      } else if (sol.accion === 'crearHorario') {
+        resultado = { ok: true, respuesta: await rappiApi.crearHorario(await rappiApi.obtenerTokenUtils(RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim()), sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos'), sol.dia, sol.inicio, sol.fin) };
       } else if (sol.accion === 'registrarWebhooks') {
         const tiendas = Object.keys(SUCURSAL_POR_STORE_ID);
         const detalle = {};
