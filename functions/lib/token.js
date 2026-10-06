@@ -10,12 +10,13 @@ async function obtenerTokenVigente(db, clientId, clientSecret) {
   const ref = db.ref('rappiAuth/token');
   const snap = await ref.once('value');
   const actual = snap.val();
-  if (actual && actual.expiresAt && actual.expiresAt - Date.now() > MARGEN_SEGURIDAD_MS) {
+  // Solo se reutiliza un token del sistema nuevo (los de Auth0 ya no sirven).
+  if (actual && actual.origen === 'nuevo' && actual.expiresAt && actual.expiresAt - Date.now() > MARGEN_SEGURIDAD_MS) {
     return actual.accessToken;
   }
   const nuevo = await obtenerToken(clientId, clientSecret);
   const expiresAt = Date.now() + (nuevo.expires_in || 604800) * 1000;
-  await ref.set({ accessToken: nuevo.access_token, expiresAt: expiresAt });
+  await ref.set({ accessToken: nuevo.access_token, expiresAt: expiresAt, origen: nuevo.origen });
   return nuevo.access_token;
 }
 

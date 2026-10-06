@@ -141,7 +141,7 @@ async function _procesarOtroEvento(cuerpo) {
    API de Rappi (no tiene el token), solo escribe aqui y esta funcion es
    quien de verdad le avisa a Rappi.
    ============================================================ */
-exports.rappiAvisoProcesado = onValueUpdated(
+exports.rappiAvisoProcesado = onValueWritten(
   { ref: '/pedidos/{suc}/{pedidoId}/avisoRappi', secrets: [RAPPI_CLIENT_ID, RAPPI_CLIENT_SECRET] },
   async (event) => {
     const aviso = event.data.after.val();
@@ -237,7 +237,19 @@ exports.rappiAdminSolicitud = onValueCreated(
             if (r && r.secret) await db.ref('rappiAuth/webhookSecrets/' + ev).set(r.secret);
             detalle[ev] = r && r.secret ? 'registrado (secreto guardado)' : 'respuesta sin secreto: ' + JSON.stringify(r).slice(0, 200);
           } catch (e) {
-            detalle[ev] = 'ERROR: ' + String(e.message || e).slice(0, 300);
+            const msg = String(e.message || e);
+            if (msg.indexOf('406') >= 0 && /already|aready/.test(msg)) {
+              // Ya estaba configurado (ej. desde el portal): se corrige la URL y se regenera el secreto.
+              try {
+                await rappiApi.cambiarUrlWebhook(token, ev, URL_WEBHOOK + '/' + ev, tiendas);
+                const r2 = await rappiApi.resetSecretWebhook(token, ev);
+                const secreto = r2 && (r2.secret || (r2.data && r2.data.secret));
+                if (secreto) await db.ref('rappiAuth/webhookSecrets/' + ev).set(secreto);
+                detalle[ev] = secreto ? 'ya existia: URL corregida y secreto regenerado' : 'URL corregida pero sin secreto en la respuesta: ' + JSON.stringify(r2).slice(0, 200);
+              } catch (e2) { detalle[ev] = 'ERROR al corregir: ' + String(e2.message || e2).slice(0, 300); }
+            } else {
+              detalle[ev] = 'ERROR: ' + msg.slice(0, 300);
+            }
           }
         }
         resultado = { ok: true, detalle };

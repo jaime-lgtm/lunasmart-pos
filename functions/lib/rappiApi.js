@@ -25,25 +25,15 @@ async function _rappiFetch(base, ruta, token, opciones) {
   try { return texto ? JSON.parse(texto) : null; } catch (e) { return texto; }
 }
 
-// Login. Las credenciales de DEV que entrego Rappi funcionan con su login de
-// Auth0 (el "anterior"); el endpoint "nuevo" de su documentacion
-// (/restaurants/auth/v1/token/login/integrations/) las rechazo con 401 --
-// se usa Auth0 primero y el nuevo solo como respaldo.
+// Login: el sistema NUEVO de Rappi (POST /restaurants/auth/v1/token/login/
+// integrations/ -- la diagonal final es obligatoria). El login anterior de
+// Auth0 queda solo como respaldo: sus tokens ya no sirven para la API
+// ("v1_disabled").
 const AUTH0_DOMINIO = process.env.RAPPI_AUTH0_DOMAIN || 'rests-integrations-dev.auth0.com';
 const AUTH0_AUDIENCE = process.env.RAPPI_AUTH0_AUDIENCE || 'https://int-public-api-v2/api';
 
 async function obtenerToken(clientId, clientSecret) {
   const errores = [];
-  try {
-    const res = await fetch('https://' + AUTH0_DOMINIO + '/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, audience: AUTH0_AUDIENCE, grant_type: 'client_credentials' }),
-    });
-    const texto = await res.text().catch(function () { return ''; });
-    if (res.ok) return JSON.parse(texto); // { access_token, expires_in, ... }
-    errores.push('Auth0 ' + res.status + ': ' + texto.slice(0, 150));
-  } catch (e) { errores.push('Auth0: ' + e.message); }
   try {
     const res = await fetch(AUTH_BASE + '/restaurants/auth/v1/token/login/integrations/', {
       method: 'POST',
@@ -51,9 +41,19 @@ async function obtenerToken(clientId, clientSecret) {
       body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
     });
     const texto = await res.text().catch(function () { return ''; });
-    if (res.ok) return JSON.parse(texto);
+    if (res.ok) return Object.assign(JSON.parse(texto), { origen: 'nuevo' });
     errores.push('login nuevo ' + res.status + ': ' + texto.slice(0, 150));
   } catch (e) { errores.push('login nuevo: ' + e.message); }
+  try {
+    const res = await fetch('https://' + AUTH0_DOMINIO + '/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, audience: AUTH0_AUDIENCE, grant_type: 'client_credentials' }),
+    });
+    const texto = await res.text().catch(function () { return ''; });
+    if (res.ok) return Object.assign(JSON.parse(texto), { origen: 'auth0' });
+    errores.push('Auth0 ' + res.status + ': ' + texto.slice(0, 150));
+  } catch (e) { errores.push('Auth0: ' + e.message); }
   throw new Error('Login Rappi fallo -- ' + errores.join(' | '));
 }
 
@@ -80,6 +80,12 @@ function marcarListoParaRecoger(token, orderId) {
 
 function registrarWebhook(token, evento, url, tiendas) {
   return _rappiFetch(WEBHOOKS_BASE, '/webhook', token, { method: 'POST', body: { event: evento, data: [{ url: url, stores: tiendas }] } });
+}
+function cambiarUrlWebhook(token, evento, url, tiendas) {
+  return _rappiFetch(WEBHOOKS_BASE, '/webhook/' + evento + '/change-url', token, { method: 'PUT', body: { url: url, stores: tiendas } });
+}
+function resetSecretWebhook(token, evento) {
+  return _rappiFetch(WEBHOOKS_BASE, '/webhook/' + evento + '/reset-secret', token, { method: 'PUT' });
 }
 function listarWebhooks(token) {
   return _rappiFetch(WEBHOOKS_BASE, '/webhook', token, { method: 'GET' });
@@ -109,4 +115,4 @@ function listarTiendas(token) {
   return _rappiFetch(WEBHOOKS_BASE, '/stores-pa', token);
 }
 
-module.exports = { obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };
+module.exports = { obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, cambiarUrlWebhook, resetSecretWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };
