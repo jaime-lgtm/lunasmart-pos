@@ -190,17 +190,20 @@ var fbDb = firebase.database();
 var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 
 // "inventario" es el nombre de sucursal tal como queda en la hoja INGRESOS
-// (SYNC.sucursalSheet en pos.html) -- cafeteria/grano/helfy comparten el
-// mismo corte de caja ("CASA DE LA CULTURA"), así que el histórico de esas
-// tres sucursales llega mezclado; el panel avisa cuando aplica.
+// (SYNC.sucursalSheet en pos.html). Helfy Fü sale desde la misma caja de Casa
+// de la Cultura pero su corte se registra aparte como "HELFY FU", asi que se
+// monitorea por separado; cafeteria y grano si comparten "CASA DE LA CULTURA".
 var SUCURSALES = [
   {id:'cafeteria', nombre:'Casa de la Cultura',   inventario:'CASA DE LA CULTURA'},
   {id:'grano',    nombre:'Venta café en grano',   inventario:'CASA DE LA CULTURA'},
-  {id:'helfy',    nombre:'Helfy Fü',              inventario:'CASA DE LA CULTURA'},
+  {id:'helfy',    nombre:'Helfy Fü',              inventario:'HELFY FU'},
   {id:'eventos',  nombre:'Sueño de Luna Eventos', inventario:'EVENTOS'},
   {id:'barbacoa', nombre:'Barbacoa y Menudo',      inventario:'BARBACOA Y MENUDO'}
 ];
-var METODO_LABEL = {efectivo:'Efectivo', tarjeta:'Tarjeta', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi', mixto:'Mixto', otro:'Otro'};
+var METODO_LABEL = {efectivo:'Efectivo', tarjeta:'Tarjeta', mercadopago:'Mercado Pago', transferencia:'Transferencia', rappi:'Rappi', uber:'Uber Eats', mixto:'Mixto', otro:'Otro'};
+// Marcas que se venden desde la caja (turnoSales/cajaEstado) de otra sucursal.
+var CAJA_DE_MARCA = {helfy:'cafeteria'};
+var MARCAS_DE_CAJA = {cafeteria:['helfy']};
 var PERIODO_LABEL = {hoy:'Hoy', semana:'la semana', mes:'el mes', ano:'el año'};
 
 function money(n){ return '$'+Number(n||0).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0}); }
@@ -313,6 +316,7 @@ function cargarHistorico(){
         tarjeta: parseFloat(r[8])||0,
         transferencia: parseFloat(r[9])||0,
         rappi: parseFloat(r[10])||0,
+        uber: parseFloat(r[24])||0,
         ventaTotal: parseFloat(r[12])||0,
         mercadopago: parseFloat(r[16])||0,
       };
@@ -326,13 +330,29 @@ function escucharTodo(){
   listeners = {};
   var suc = sucursalActual;
 
-  var pTurno = 'turnoSales/'+suc;
-  listeners[pTurno] = function(snap){
-    var val = snap.val()||{};
-    vivo.turnoSales = Object.keys(val).map(function(k){ return val[k]; });
-    renderTotales();
-  };
-  var pCaja = 'cajaEstado/'+suc;
+  // Ventas en vivo: las de la propia sucursal, menos las de marcas que se
+  // monitorean aparte (Helfy sale por la caja de Casa de la Cultura), mas, si
+  // esta sucursal ES una marca, las de su marca en la caja donde se vende.
+  var cajaSuc = CAJA_DE_MARCA[suc] || suc;
+  var nodosVenta = [suc]; if(cajaSuc!==suc) nodosVenta.push(cajaSuc);
+  var ventasPorNodo = {};
+  function _recalcVentas(){
+    var out = [];
+    nodosVenta.forEach(function(n){
+      (ventasPorNodo[n]||[]).forEach(function(v){
+        var m = v.marca || n;
+        if(n===cajaSuc && CAJA_DE_MARCA[suc]){ if(m===suc) out.push(v); }                       // soy una marca: solo lo mio
+        else if((MARCAS_DE_CAJA[n]||[]).indexOf(m)===-1 || m===suc) out.push(v);              // soy la caja: sin las marcas aparte
+      });
+    });
+    vivo.turnoSales = out; renderTotales();
+  }
+  var pTurnos = [];
+  nodosVenta.forEach(function(n){
+    var path = 'turnoSales/'+n; pTurnos.push(path);
+    listeners[path] = function(snap){ var val = snap.val()||{}; ventasPorNodo[n] = Object.keys(val).map(function(k){ return val[k]; }); _recalcVentas(); };
+  });
+  var pCaja = 'cajaEstado/'+cajaSuc;
   listeners[pCaja] = function(snap){ vivo.cajaEstado = snap.val()||{}; renderTotales(); };
   var pAgo = 'agotados/'+suc;
   listeners[pAgo] = function(snap){ vivo.agotados = snap.val()||{}; renderAgotados(); };
@@ -344,7 +364,7 @@ function escucharTodo(){
   };
 
   fbAuthReady.then(function(){
-    fbDb.ref(pTurno).on('value', listeners[pTurno]);
+    pTurnos.forEach(function(path){ fbDb.ref(path).on('value', listeners[path]); });
     fbDb.ref(pCaja).on('value', listeners[pCaja]);
     fbDb.ref(pAgo).on('value', listeners[pAgo]);
     fbDb.ref(pCat).on('value', listeners[pCat]);
@@ -378,8 +398,8 @@ function renderTotales(){
   document.getElementById('kpiCount').textContent = turnos;
   document.getElementById('kpiCountLbl').textContent = periodoActual==='hoy' ? 'Turnos hoy' : 'Turnos en '+PERIODO_LABEL[periodoActual];
 
-  var inv2 = (sucursalActual==='grano'||sucursalActual==='helfy'||sucursalActual==='cafeteria');
-  document.getElementById('metodosSub').textContent = inv2 ? 'Casa de la Cultura, Venta en grano y Helfy Fü comparten el mismo corte de caja' : ' ';
+  var inv2 = (sucursalActual==='grano'||sucursalActual==='cafeteria');
+  document.getElementById('metodosSub').textContent = inv2 ? 'Casa de la Cultura y Venta en grano comparten el mismo corte de caja (Helfy Fü se ve aparte)' : ' ';
 
   // Retiros: suma historica (sin detalle linea por linea) + detalle en vivo
   // del turno actual (que si trae proveedor/concepto por movimiento).
@@ -415,6 +435,7 @@ function renderTotales(){
     if(r.tarjeta) metMap.tarjeta=(metMap.tarjeta||0)+r.tarjeta;
     if(r.transferencia) metMap.transferencia=(metMap.transferencia||0)+r.transferencia;
     if(r.rappi) metMap.rappi=(metMap.rappi||0)+r.rappi;
+    if(r.uber) metMap.uber=(metMap.uber||0)+r.uber;
     if(r.mercadopago) metMap.mercadopago=(metMap.mercadopago||0)+r.mercadopago;
   });
   ventasVivas.forEach(function(v){
