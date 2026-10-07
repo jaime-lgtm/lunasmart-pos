@@ -4223,7 +4223,10 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
   var t = totalesPorMetodo();                       // TODO el turno (cuadre de caja)
   var __marcaPrincipal = state.sucursal;
   var __ventasPrincipal = state.turnoSales.filter(function(v){ return (v.marca||__marcaPrincipal)===__marcaPrincipal; });
-  var __otrasMarcas = [];
+  // Las marcas hermanas (Helfy Fu) SIEMPRE llevan su corte cuando se corta la
+  // sucursal -- aunque ese turno no hayan vendido (queda en $0) --, ademas de
+  // cualquier otra marca que haya aparecido en las ventas.
+  var __otrasMarcas = (MARCAS_POR_SUCURSAL[__marcaPrincipal]||[]).filter(function(m){ return m!==__marcaPrincipal; });
   state.turnoSales.forEach(function(v){ var m=v.marca||__marcaPrincipal; if(m!==__marcaPrincipal && __otrasMarcas.indexOf(m)===-1) __otrasMarcas.push(m); });
   var tp = totalesPorMetodo(__ventasPrincipal);     // solo la marca principal
   var total = tp.efectivo + tp.tarjeta + tp.mercadopago + tp.transferencia + tp.rappi + tp.uber;
