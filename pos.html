@@ -938,7 +938,7 @@ var SUCURSALES = [
    (functions/index.js, TIENDAS_RAPPI). Cada marca tiene su propio catalogo
    (catalogo/<marca>), por eso se escuchan tambien los de las marcas hermanas. */
 var MARCAS = {
-  cafeteria:{nombre:'Casa de la Cultura', color:'#6b3f23', hoja:'CASA DE LA CULTURA'},
+  cafeteria:{nombre:'Sue\u00f1o de Luna', color:'#6b3f23', hoja:'CASA DE LA CULTURA'},
   helfy:{nombre:'Helfy Fu', color:'#c2410c', hoja:'HELFY FU'},
   eventos:{nombre:'Sue\u00f1o de Luna Eventos', color:'#2b5d7a', hoja:'EVENTOS'}
 };
@@ -1589,7 +1589,7 @@ function aceptarPedidoRappi(fbKey){
   // La venta entra al corte al aceptar (metodo 'rappi': no pasa por la caja).
   // Clave fija por pedido: aceptar dos veces no la duplica, y si Rappi cancela
   // despues el backend la quita (functions/index.js, _procesarCancelacion).
-  var ventaRappi={ts:Date.now(),metodo:'rappi',total:p.total,puntosUsados:0,pedidoId:fbKey,canal:'rappi',tipoOrden:'rappi',marca:p.marca||state.sucursal,
+  var ventaRappi={ts:Date.now(),metodo:'rappi',total:p.total,puntosUsados:0,pedidoId:fbKey,canal:'rappi',tipoOrden:'rappi',marca:p.marca||state.sucursal,rappiStoreId:p.rappiStoreId||null,
     items:items.map(function(l){ return {name:l.name,qty:l.qty,price:l.price}; })};
   fbPedidosRef(state.sucursal).child(fbKey).update(upd).then(function(){
     return fbTurnoSalesRef(state.sucursal).child('rappi_'+fbKey).set(ventaRappi);
@@ -3774,6 +3774,27 @@ function ventaCanal(v){
   if(!t){ var p=(state.pedidos||[]).filter(function(x){return x._fbKey===v.pedidoId;})[0]; t=p&&p.tipo; }
   return (t==='aqui'||t==='llevar'||t==='domicilio')?t:'otro';
 }
+// Rappi por tienda (informativo): cuanto vendio cada tienda de Rappi en el
+// turno -- Sueno de Luna y Helfy Fu salen por la misma caja pero son tiendas
+// distintas. El ID de tienda viene en el pedido; si falta se usa el conocido.
+var TIENDA_RAPPI_DE_MARCA={cafeteria:'1923806519', helfy:'1930016459'};
+function rappiPorTienda(sales){
+  var por={}, orden=Object.keys(MARCAS);
+  (sales||[]).forEach(function(v){
+    if(ventaCanal(v)!=='rappi') return;
+    var m=v.marca||state.sucursal;
+    if(!por[m]) por[m]={marca:m,nombre:marcaNombre(m),tienda:v.rappiStoreId||TIENDA_RAPPI_DE_MARCA[m]||'',total:0};
+    if(!por[m].tienda && v.rappiStoreId) por[m].tienda=v.rappiStoreId;
+    por[m].total+=v.total||0;
+  });
+  return Object.keys(por).sort(function(a,b){ return orden.indexOf(a)-orden.indexOf(b); }).map(function(k){ return por[k]; });
+}
+function rappiTiendasHtml(lista){
+  if(!lista||!lista.length) return '';
+  var total=lista.reduce(function(a,x){return a+x.total;},0);
+  return lista.map(function(x,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(x.nombre)+(x.tienda?' <span style="color:var(--gris);font-size:12px">(tienda '+esc(x.tienda)+')</span>':'')+'</span><b>'+money(x.total)+'</b></div>'; }).join('')+
+    '<div class="star-row" style="font-weight:800"><span>Total Rappi</span><b>'+money(total)+'</b></div>';
+}
 function desgloseTurno(sales){
   var porMarca={}, orden=[];
   (sales||[]).forEach(function(v){
@@ -3847,7 +3868,8 @@ function renderCaja(){
     '</div>'+
     (totalDescuentos>0?'<div class="row" style="display:flex;justify-content:space-between;padding:8px 0;color:var(--rojo);font-weight:700"><span>Descuentos aplicados en el turno</span><span>-'+money(totalDescuentos)+'</span></div>':'')+
     '<div class="grand"><span>Venta total</span><span class="amt">'+money(total)+'</span></div></div>'+
-    '<div class="card"><h3>Desglose por marca y canal</h3>'+(state.turnoSales.length?desgloseHtml(desgloseTurno(state.turnoSales)):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div>'):'')+
+    '<div class="card"><h3>Desglose por marca y canal</h3>'+(state.turnoSales.length?desgloseHtml(desgloseTurno(state.turnoSales)):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div>'+
+    (rappiPorTienda(state.turnoSales).length?'<div class="card"><h3>Rappi por tienda</h3>'+rappiTiendasHtml(rappiPorTienda(state.turnoSales))+'</div>':'')):'')+
     '<div class="card"><h3>Art&iacute;culos estrella del turno</h3>'+(est.length?est.map(function(e){return '<div class="star-row"><span>'+esc(e.name)+'</span><b>'+e.qty+'</b></div>';}).join(''):'<div class="cart-empty">A&uacute;n no hay ventas</div>')+'</div></div>'+
     '<div class="caja-actions"><button class="btn-print" id="btnPrint">Imprimir / PDF</button><button class="btn-cerrar" id="btnCerrarTurno">Cerrar turno (cierre de d&iacute;a)</button></div>'+
     '<div style="text-align:center;margin-top:8px"><button id="btnCerrarSinCorte" style="background:none;border:none;color:var(--rojo);font-size:13px;text-decoration:underline;cursor:pointer;padding:8px">&iquest;Caja de pruebas atorada o turno equivocado? Cerrar caja sin corte</button></div>';
@@ -4236,12 +4258,14 @@ function closeTurno(declarado,esperado,declaradoTerminal,esperadoTerminal,declar
       desglose: desgloseTurno(vs), detalles: _detallesDe(vs), marca: m };
   });
   var __efectivoOtras = __payloadsExtra.reduce(function(a,x){ return a+x.efectivo; },0);
+  var __ventaTotalTurno = t.efectivo + t.tarjeta + t.mercadopago + t.transferencia + t.rappi + t.uber;
+  var __rappiTiendas = rappiPorTienda(state.turnoSales);
   var mov = cajaMovTotales();
   var movTxt = (state.cajaMovimientos||[]).map(function(m){ return (m.tipo==='retiro'?'Retiro ':'Depósito ')+money(m.monto)+(m.motivo?' ('+m.motivo+')':''); }).join('; ');
   // fecha capturada AQUI (momento real del cierre), no dejada al valor por
   // defecto del servidor -- si este corte se queda pendiente y se reenvia
   // dias despues, debe conservar la fecha real de la venta, no la del reenvio.
-  var payload = { corteId: __corteBase, sucursal: sucSheet, cliente: turno, fecha: fechaCorte, inicioCaja: state.cajaInicial || 0, retiros: mov.retiros, depositos: mov.depositos, efectivo: tp.efectivo, tarjeta: tp.tarjeta, mercadopago: tp.mercadopago, transferencia: tp.transferencia, rappi: tp.rappi, uber: tp.uber, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart"+(movTxt?(" | "+movTxt):"")+(__desg.length?(" | "+desgloseTexto(__desg)):"")+(__payloadsExtra.length?(" | "+__payloadsExtra.map(function(x){return marcaNombre(x.marca)+" registrada aparte en "+x.sucursal;}).join(', ')+(__efectivoOtras>0?" (su efectivo, "+money(__efectivoOtras)+", esta en esta caja)":"")):""), desglose: __desg, marcasAparte: __payloadsExtra.map(function(x){return {marca:x.marca,sucursal:x.sucursal,ventaTotal:x.ventaTotal};}), detalles: detalles };
+  var payload = { corteId: __corteBase, sucursal: sucSheet, cliente: turno, fecha: fechaCorte, inicioCaja: state.cajaInicial || 0, retiros: mov.retiros, depositos: mov.depositos, efectivo: tp.efectivo, tarjeta: tp.tarjeta, mercadopago: tp.mercadopago, transferencia: tp.transferencia, rappi: tp.rappi, uber: tp.uber, ventaTotal: total, puntosCanjeados: puntosCanjeados, observaciones: "POS LunaSmart"+(movTxt?(" | "+movTxt):"")+(__desg.length?(" | "+desgloseTexto(__desg)):"")+(__payloadsExtra.length?(" | "+__payloadsExtra.map(function(x){return marcaNombre(x.marca)+" registrada aparte en "+x.sucursal;}).join(', ')+(__efectivoOtras>0?" (su efectivo, "+money(__efectivoOtras)+", esta en esta caja)":"")):""), desglose: __desg, ventaTotalTurno: __ventaTotalTurno, rappiTiendas: __rappiTiendas, marcasAparte: __payloadsExtra.map(function(x){return {marca:x.marca,sucursal:x.sucursal,ventaTotal:x.ventaTotal};}), detalles: detalles };
   if(typeof declarado==='number'){ payload.cajaDeclarada = declarado; payload.cajaEsperada = (typeof esperado==='number')?esperado:(state.cajaInicial||0)+t.efectivo+mov.depositos-mov.retiros; payload.cajaDiferencia = declarado-payload.cajaEsperada; }
   if(typeof declaradoTerminal==='number'){ payload.terminalDeclarada = declaradoTerminal; payload.terminalEsperada = (typeof esperadoTerminal==='number')?esperadoTerminal:t.tarjeta; payload.terminalDiferencia = declaradoTerminal-payload.terminalEsperada; }
   if(typeof declaradoTransferencia==='number'){ payload.transferenciaDeclarada = declaradoTransferencia; payload.transferenciaEsperada = (typeof esperadoTransferencia==='number')?esperadoTransferencia:t.transferencia; payload.transferenciaDiferencia = declaradoTransferencia-payload.transferenciaEsperada; }
@@ -4330,6 +4354,7 @@ function abrirResumenCierre(finalDelDia){
     '<div class="card"><h3>Métodos de pago</h3>'+
       ['efectivo','tarjeta','mercadopago','transferencia','rappi','uber'].map(function(m){ return '<div class="star-row"><span>'+esc(PAGO_LABEL[m])+((m==='mercadopago')&&t[m]>0?' (auto)':'')+'</span><b>'+money(t[m])+' · '+pct(t[m])+'%</b></div>'; }).join('')+
     '</div>'+
+    (rappiPorTienda(state.turnoSales).length?'<div class="card"><h3>Rappi por tienda</h3>'+rappiTiendasHtml(rappiPorTienda(state.turnoSales))+'</div>':'')+
     (puntosCanjeados>0?'<div class="card"><h3>🌙 Puntos de Lealtad</h3><div class="star-row"><span>Canjeados este turno</span><b>-'+money(puntosCanjeados)+'</b></div></div>':'')+
     '<div class="card"><h3>Top 5 productos</h3>'+(top5.length?top5.map(function(p,i){ return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.name)+'</span><b>'+p.qty+' pzas · '+money(p.total)+'</b></div>'; }).join(''):'<div class="cart-empty">Sin ventas</div>')+
     '</div>'
@@ -4372,7 +4397,7 @@ function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
   function _pintarReporte(acumulado){
     var accHtml='';
     if(acumulado){
-      accHtml='<div class="card"><h3>📅 Acumulado del día (mañana + tarde)</h3>'+
+      accHtml='<div class="card"><h3>📅 Acumulado del día (mañana + tarde)'+((payload.marcasAparte&&payload.marcasAparte.length&&suc)?' — '+esc(suc.nombre):'')+'</h3>'+
         '<div class="star-row"><span>Venta total del día</span><b>'+money(acumulado.ventaTotal)+'</b></div>'+
         '<div class="star-row"><span>Efectivo</span><b>'+money(acumulado.efectivo)+'</b></div>'+
         '<div class="star-row"><span>Terminal</span><b>'+money(acumulado.tarjeta)+'</b></div>'+
@@ -4385,11 +4410,12 @@ function mostrarReporteFinal(payload, finalDelDia, turno, turnoLabel, suc){
     var textoWA=_construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulado);
     host.innerHTML='<div class="resumen-overlay"><div class="resumen-wrap">'+
       '<div class="resumen-head"><h2>'+(finalDelDia?'Cierre del día completado':'Corte completado')+'</h2>'+(suc?'<div class="sub">'+esc(suc.nombre)+' · '+esc(turnoLabel)+'</div>':'')+'</div>'+
-      '<div class="resumen-venta"><div class="rv-lbl">Venta total del turno</div><div class="rv-total">'+money(payload.ventaTotal)+'</div></div>'+
+      '<div class="resumen-venta"><div class="rv-lbl">Venta total del turno</div><div class="rv-total">'+money(payload.ventaTotalTurno!=null?payload.ventaTotalTurno:payload.ventaTotal)+'</div></div>'+
       '<div class="card"><h3>Efectivo</h3>'+filaMetodo(payload.cajaDeclarada, payload.cajaEsperada, payload.cajaDiferencia)+'</div>'+
       '<div class="card"><h3>Terminal (tarjeta física)</h3>'+filaMetodo(payload.terminalDeclarada, payload.terminalEsperada, payload.terminalDiferencia)+'</div>'+
       '<div class="card"><h3>Transferencia</h3>'+filaMetodo(payload.transferenciaDeclarada, payload.transferenciaEsperada, payload.transferenciaDiferencia)+'</div>'+
       (payload.mercadopago>0||payload.rappi>0||payload.uber>0?'<div class="card"><h3>Automático</h3>'+(payload.mercadopago>0?'<div class="star-row"><span>Mercado Pago</span><b>'+money(payload.mercadopago)+'</b></div>':'')+(payload.rappi>0?'<div class="star-row"><span>Rappi</span><b>'+money(payload.rappi)+'</b></div>':'')+(payload.uber>0?'<div class="star-row"><span>Uber Eats</span><b>'+money(payload.uber)+'</b></div>':'')+'</div>':'')+
+      ((payload.rappiTiendas&&payload.rappiTiendas.length)?'<div class="card"><h3>Rappi por tienda</h3>'+rappiTiendasHtml(payload.rappiTiendas)+'</div>':'')+
       ((payload.desglose&&payload.desglose.length)?'<div class="card"><h3>Por marca y canal</h3>'+desgloseHtml(payload.desglose)+((payload.marcasAparte&&payload.marcasAparte.length)?'<div class="sub" style="margin-top:8px">'+payload.marcasAparte.map(function(x){return esc(marcaNombre(x.marca))+' se registr\u00f3 aparte en INGRESOS como '+esc(x.sucursal)+' ('+money(x.ventaTotal)+')';}).join('<br>')+'</div>':'')+'</div>':'')+
       (top5.length?'<div class="card"><h3>Top 5 productos</h3>'+top5.map(function(p,i){return '<div class="star-row"><span>'+(i+1)+'. '+esc(p.articulo)+'</span><b>'+p.cantidad+' pzas</b></div>';}).join('')+'</div>':'')+
       accHtml+
@@ -4431,13 +4457,17 @@ function _construirTextoWhatsApp(payload, finalDelDia, turnoLabel, suc, acumulad
   lineas.push('*'+(finalDelDia?'Cierre del día':'Corte de caja')+' — Turno '+turnoLabel+'*');
   lineas.push(fechaCorta(new Date()));
   lineas.push('');
-  lineas.push('Venta total: '+money(payload.ventaTotal));
+  lineas.push('Venta total: '+money(payload.ventaTotalTurno!=null?payload.ventaTotalTurno:payload.ventaTotal));
   lineas.push('');
   lineas.push('Efectivo: declarado '+money(payload.cajaDeclarada)+' / sistema '+money(payload.cajaEsperada)+' / dif '+(payload.cajaDiferencia>=0?'+':'')+money(payload.cajaDiferencia));
   lineas.push('Terminal: declarado '+money(payload.terminalDeclarada)+' / sistema '+money(payload.terminalEsperada)+' / dif '+(payload.terminalDiferencia>=0?'+':'')+money(payload.terminalDiferencia));
   lineas.push('Transferencia: declarado '+money(payload.transferenciaDeclarada)+' / sistema '+money(payload.transferenciaEsperada)+' / dif '+(payload.transferenciaDiferencia>=0?'+':'')+money(payload.transferenciaDiferencia));
   if(payload.mercadopago>0) lineas.push('Mercado Pago (auto): '+money(payload.mercadopago));
-  if(payload.rappi>0) lineas.push('Rappi: '+money(payload.rappi));
+  if(payload.rappiTiendas&&payload.rappiTiendas.length){
+    lineas.push('*Rappi por tienda*');
+    payload.rappiTiendas.forEach(function(x,i){ lineas.push((i+1)+'. '+x.nombre+(x.tienda?' (tienda '+x.tienda+')':'')+': '+money(x.total)); });
+    lineas.push('Total Rappi: '+money(payload.rappiTiendas.reduce(function(a,x){return a+x.total;},0)));
+  } else if(payload.rappi>0) lineas.push('Rappi: '+money(payload.rappi));
   if(payload.uber>0) lineas.push('Uber Eats: '+money(payload.uber));
   if(payload.desglose&&payload.desglose.length){
     lineas.push('');

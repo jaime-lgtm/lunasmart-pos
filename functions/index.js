@@ -127,6 +127,7 @@ async function _procesarNuevoPedido(cuerpo) {
   const catalogo = Object.keys(catalogoVal).map(function (k) { return catalogoVal[k]; });
 
   const pedido = mapearPedidoRappi(cuerpo, catalogo, info.marca);
+  pedido.rappiStoreId = String(store.internal_id || store.external_id || '');
   await db.ref('pedidos/' + suc).push(pedido);
   logger.info('Pedido de Rappi creado en Firebase', { suc, rappiOrderId: pedido.rappiOrderId });
 }
