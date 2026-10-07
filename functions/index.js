@@ -11,6 +11,8 @@ const { obtenerTokenVigente } = require('./lib/token');
 const { construirMenuRappi } = require('./lib/menu');
 const { skusARappi, calcularDisponibilidadCompleta } = require('./lib/disponibilidad');
 const rappiApi = require('./lib/rappiApi');
+const pkce = require('./lib/pkce');
+const crypto = require('crypto');
 
 initializeApp();
 const db = getDatabase();
@@ -99,6 +101,10 @@ exports.rappiWebhook = onRequest(async (req, res) => {
       case 'MENU_APPROVED':
       case 'MENU_REJECTED':
         await db.ref('rappiAuth/menuEstado/' + (cuerpo.store_id || 'x')).set({ evento, detalle: cuerpo, ts: Date.now() });
+        break;
+      case 'STORE_PROVISIONING_STATUS':
+        // Resultado (asincrono) de aprovisionar/dar de baja tiendas por Self Onboarding.
+        await db.ref('rappiAuth/onboarding/resultados/' + String(cuerpo.batchId || Date.now()).replace(/[.#$\[\]\/]/g, '_')).set(Object.assign({ recibido: Date.now() }, cuerpo));
         break;
       case 'STORE_CONNECTIVITY':
         await db.ref('rappiAuth/conectividad/' + (cuerpo.external_store_id || 'x')).set({ enabled: cuerpo.enabled, message: cuerpo.message || '', ts: Date.now() });
@@ -257,6 +263,28 @@ exports.rappiAdminSolicitud = onValueCreated(
         const agotados = (await db.ref('agotados/' + suc).once('value')).val() || {};
         const cambios = calcularDisponibilidadCompleta(agotados, await _catalogoDe(suc));
         resultado = { ok: true, apagados: cambios.turnOff.length, encendidos: cambios.turnOn.length, respuesta: await rappiApi.disponibilidadItems(token, sol.tienda || _tiendaDeSucursal(suc), cambios) };
+      } else if (sol.accion === 'configurarWebhookOnboarding') {
+        // Un secreto propio para firmar los avisos de aprovisionamiento; se guarda antes de
+        // registrarlo para no perder un aviso que llegue de inmediato.
+        const secreto = crypto.randomBytes(24).toString('hex');
+        const refSecreto = db.ref('rappiAuth/webhookSecrets/STORE_PROVISIONING_STATUS');
+        const anterior = (await refSecreto.once('value')).val();
+        await refSecreto.set(secreto);
+        try {
+          resultado = { ok: true, respuesta: await rappiApi.configurarWebhookOnboarding(token, RAPPI_CLIENT_ID.value().trim(), URL_WEBHOOK + '/STORE_PROVISIONING_STATUS', secreto) };
+        } catch (e) { if (anterior) await refSecreto.set(anterior); else await refSecreto.remove(); throw e; }
+      } else if (sol.accion === 'onboardingTiendas' || sol.accion === 'onboardingProvisionar') {
+        const tokenCom = await _tokenComerciante();
+        if (sol.accion === 'onboardingTiendas') {
+          resultado = { ok: true, tiendas: await rappiApi.estadoTiendasOnboarding(token, tokenCom) };
+        } else {
+          // Sin store_integration_id: Rappi usa el store_id, que es el que ya mapeamos en TIENDAS_RAPPI.
+          const tiendas = (sol.tiendas || []).map(function (t) { return { store_id: String(t.store_id), name: String(t.name), status: t.status || 'ACTIVE' }; });
+          if (!tiendas.length) throw new Error('Falta la lista de tiendas');
+          const r = await rappiApi.provisionarTiendas(token, tokenCom, tiendas);
+          await db.ref('rappiAuth/onboarding/solicitudes/' + String((r && r.batch_id) || Date.now())).set({ ts: Date.now(), tiendas: tiendas, respuesta: r });
+          resultado = { ok: true, respuesta: r };
+        }
       } else if (sol.accion === 'listarHorarios') {
         resultado = { ok: true, horarios: await rappiApi.listarHorarios(await rappiApi.obtenerTokenUtils(RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim()), sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos')) };
       } else if (sol.accion === 'crearHorario') {
@@ -325,3 +353,65 @@ exports.rappiDisponibilidad = onValueWritten(
     }
   }
 );
+
+/* ============================================================
+   Self Onboarding -- autorizacion del comerciante (OAuth2 + PKCE).
+   1) /rappiOnboardingInicio  -> manda al comerciante al login de Portal Partners.
+   2) /rappiOnboardingCallback -> Rappi regresa aqui con ?code; se cambia por el
+      id_token del comerciante (JWT) y se guarda SOLO en el servidor
+      (rappiAuth/merchantToken, sin acceso desde navegadores segun las reglas).
+   La direccion de callback debe estar registrada con Rappi (su TAM).
+   ============================================================ */
+const PARTNERS_BASE = process.env.RAPPI_PARTNERS_BASE || 'https://login.partners.dev.rappi.com';
+const URL_ONBOARDING_CALLBACK = 'https://us-central1-luna-smart-pos.cloudfunctions.net/rappiOnboardingCallback';
+
+async function _clienteOauth() {
+  // El client_id del flujo del comerciante (publico, PKCE) puede ser distinto al de la
+  // integracion: Rappi lo registra aparte. Si no se configura, se prueba con el de la integracion.
+  const cfg = (await db.ref('rappiAuth/onboardingConfig').once('value')).val() || {};
+  return cfg.clientId || RAPPI_CLIENT_ID.value().trim();
+}
+async function _tokenComerciante() {
+  const t = (await db.ref('rappiAuth/merchantToken').once('value')).val();
+  if (!t || !t.idToken) throw new Error('Falta autorizar al comerciante: abre /rappiOnboardingInicio e inicia sesion con la cuenta de Portal Partners');
+  if (t.exp && t.exp - Date.now() < 60 * 1000) throw new Error('La autorizacion del comerciante expiro: repite /rappiOnboardingInicio');
+  return t.idToken;
+}
+
+exports.rappiOnboardingInicio = onRequest({ secrets: [RAPPI_CLIENT_ID] }, async (req, res) => {
+  const verifier = pkce.nuevoVerifier();
+  const state = pkce.nuevoState();
+  await db.ref('rappiAuth/onboarding/pkce/' + state).set({ verifier: verifier, ts: Date.now() });
+  const clientId = await _clienteOauth();
+  const url = PARTNERS_BASE + '/authorize?' + new URLSearchParams({
+    client_id: clientId, redirect_uri: URL_ONBOARDING_CALLBACK, response_type: 'code', scope: 'openid profile email',
+    code_challenge: pkce.desafioDe(verifier), code_challenge_method: 'S256', state: state,
+  }).toString();
+  res.redirect(302, url);
+});
+
+exports.rappiOnboardingCallback = onRequest({ secrets: [RAPPI_CLIENT_ID] }, async (req, res) => {
+  const pagina = function (titulo, texto) { res.status(200).set('Content-Type', 'text/html; charset=utf-8').send('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;max-width:480px;margin:12vh auto;padding:0 20px"><h2>' + titulo + '</h2><p>' + texto + '</p>'); };
+  try {
+    if (req.query.error) { pagina('No se autorizo', 'Rappi respondio: ' + String(req.query.error_description || req.query.error).replace(/[<>&]/g, '')); return; }
+    const state = String(req.query.state || ''), code = String(req.query.code || '');
+    if (!state || !code) { res.status(400).send('Faltan datos'); return; }
+    const ref = db.ref('rappiAuth/onboarding/pkce/' + state.replace(/[.#$\[\]\/]/g, '_'));
+    const guardado = (await ref.once('value')).val();
+    await ref.remove(); // un solo uso
+    if (!guardado || Date.now() - guardado.ts > 15 * 60 * 1000) { res.status(400).send('Solicitud no valida o vencida: vuelve a empezar'); return; }
+
+    const r = await fetch(PARTNERS_BASE + '/oauth/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: code, client_id: await _clienteOauth(), code_verifier: guardado.verifier, redirect_uri: URL_ONBOARDING_CALLBACK }).toString(),
+    });
+    const cuerpo = await r.json().catch(function () { return {}; });
+    if (!r.ok || !cuerpo.id_token) { logger.error('Intercambio de codigo fallo', { status: r.status, error: cuerpo.error }); pagina('No se pudo completar', 'Rappi no entrego el token (' + r.status + '). Avisa a quien configuro la integracion.'); return; }
+    if (!pkce.esJwtFirmado(cuerpo.id_token)) { pagina('Token inesperado', 'El token recibido no tiene el formato esperado.'); return; }
+    await db.ref('rappiAuth/merchantToken').set({ idToken: cuerpo.id_token, exp: pkce.expDeJwt(cuerpo.id_token), ts: Date.now() });
+    pagina('Listo', 'Rappi autorizo la conexion de tus tiendas. Ya puedes cerrar esta ventana.');
+  } catch (e) {
+    logger.error('Callback de onboarding', e);
+    res.status(500).send('Error interno');
+  }
+});

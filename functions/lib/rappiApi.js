@@ -108,6 +108,27 @@ function crearHorario(token, storeId, dia, inicio, fin) {
   return _utilsFetch('/store/schedule/' + storeId, token, { method: 'POST', body: { day: dia, starts_time: inicio, ends_time: fin } });
 }
 
+// ---- Self Onboarding (autoaprovisionamiento de tiendas) ----
+// Webhook a nivel de integracion que avisa el resultado (solo token de integracion).
+function configurarWebhookOnboarding(token, clientId, url, secret) {
+  return _rappiFetch(WEBHOOKS_BASE, '/clients/' + clientId + '/webhooks', token, { method: 'POST', body: { event: 'STORE_PROVISIONING_STATUS', url: url, secret: secret } });
+}
+// Estas dos llevan DOS tokens: el de la integracion (x-authorization) y el id_token
+// del comerciante (Authorization-Partners).
+async function _onboardingFetch(ruta, tokenInt, tokenComerciante, opciones) {
+  opciones = opciones || {};
+  const res = await fetch(WEBHOOKS_BASE + RUTA + ruta, {
+    method: opciones.method || 'GET',
+    headers: { 'x-authorization': 'Bearer ' + tokenInt, 'Authorization-Partners': 'Bearer ' + tokenComerciante, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: opciones.body ? JSON.stringify(opciones.body) : undefined,
+  });
+  const texto = await res.text().catch(function () { return ''; });
+  if (!res.ok) throw new Error('Rappi ' + (opciones.method || 'GET') + ' ' + ruta + ' -> ' + res.status + ': ' + texto.slice(0, 400));
+  try { return texto ? JSON.parse(texto) : null; } catch (e) { return texto; }
+}
+function estadoTiendasOnboarding(tokenInt, tokenComerciante) { return _onboardingFetch('/stores/integration-status', tokenInt, tokenComerciante); }
+function provisionarTiendas(tokenInt, tokenComerciante, tiendas) { return _onboardingFetch('/stores/provisioning', tokenInt, tokenComerciante, { method: 'POST', body: { stores: tiendas } }); }
+
 function registrarWebhook(token, evento, url, tiendas) {
   return _rappiFetch(WEBHOOKS_BASE, '/webhook', token, { method: 'POST', body: { event: evento, data: [{ url: url, stores: tiendas }] } });
 }
@@ -145,4 +166,4 @@ function listarTiendas(token) {
   return _rappiFetch(WEBHOOKS_BASE, '/stores-pa', token);
 }
 
-module.exports = { obtenerTokenUtils, listarHorarios, crearHorario, obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, cambiarUrlWebhook, resetSecretWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };
+module.exports = { configurarWebhookOnboarding, estadoTiendasOnboarding, provisionarTiendas, obtenerTokenUtils, listarHorarios, crearHorario, obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, cambiarUrlWebhook, resetSecretWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };
