@@ -241,6 +241,11 @@ exports.rappiAdminSolicitud = onValueCreated(
           }
         }
         resultado = { ok: true, info, pruebas };
+      } else if (sol.accion === 'estadoIntegracion') {
+        // Para el panel del admin: ambiente activo y las tiendas que le corresponden.
+        const tiendas = Object.keys(TIENDAS_RAPPI).filter(function (k) { return !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; })
+          .map(function (k) { return { tienda: k, suc: TIENDAS_RAPPI[k].suc, marca: TIENDAS_RAPPI[k].marca }; });
+        resultado = { ok: true, ambiente: amb.NOMBRE, tiendas: tiendas, login: true };
       } else if (sol.accion === 'probarAuth') {
         resultado = { ok: true, mensaje: 'Login con Rappi correcto' };
       } else if (sol.accion === 'listarWebhooks') {
