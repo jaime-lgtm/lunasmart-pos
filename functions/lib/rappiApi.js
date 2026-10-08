@@ -2,11 +2,11 @@
 // - Login:    POST {AUTH}/restaurants/auth/v1/token/login/integrations
 // - Todo lo demas lleva el header  x-authorization: Bearer <token>
 // - Pedidos / webhooks / menu viven bajo  {HOST}/api/v2/restaurants-integrations-public-api
-// Hoy solo esta configurado el ambiente DEV (credenciales de pruebas); los
-// dominios de produccion de Mexico se agregan al pasar a produccion.
-const AUTH_BASE = process.env.RAPPI_AUTH_BASE || 'https://api.dev.rappi.com';
-const ORDERS_BASE = process.env.RAPPI_API_BASE || 'https://microservices.dev.rappi.com';
-const WEBHOOKS_BASE = process.env.RAPPI_WEBHOOKS_BASE || 'https://api.dev.rappi.com';
+// DEV o produccion segun lib/ambiente.js (RAPPI_AMBIENTE).
+const amb = require('./ambiente');
+const AUTH_BASE = amb.AUTH_BASE;
+const ORDERS_BASE = amb.ORDERS_BASE;
+const WEBHOOKS_BASE = amb.WEBHOOKS_BASE;
 const RUTA = '/api/v2/restaurants-integrations-public-api';
 
 async function _rappiFetch(base, ruta, token, opciones) {

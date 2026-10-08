@@ -12,6 +12,7 @@ const { construirMenuRappi } = require('./lib/menu');
 const { skusARappi, calcularDisponibilidadCompleta } = require('./lib/disponibilidad');
 const rappiApi = require('./lib/rappiApi');
 const pkce = require('./lib/pkce');
+const amb = require('./lib/ambiente');
 const crypto = require('crypto');
 
 initializeApp();
@@ -46,7 +47,7 @@ function _sucursalDeTienda(storeId) { const t = _infoDeTienda(storeId); return t
 // envio de menu trabajan por catalogo, no por sucursal). Prefiere la real si hay dos.
 // Solo cuenta las tiendas del ambiente activo (DEV por defecto; RAPPI_AMBIENTE=prod
 // al pasar a produccion), para no usar un token DEV sobre una tienda real.
-const AMBIENTE_PROD = process.env.RAPPI_AMBIENTE === 'prod';
+const AMBIENTE_PROD = amb.PROD;
 function _tiendaDeSucursal(catalogoId) {
   return Object.keys(TIENDAS_RAPPI).find(function (k) { return TIENDAS_RAPPI[k].marca === catalogoId && !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; }) || null;
 }
@@ -362,7 +363,7 @@ exports.rappiDisponibilidad = onValueWritten(
       (rappiAuth/merchantToken, sin acceso desde navegadores segun las reglas).
    La direccion de callback debe estar registrada con Rappi (su TAM).
    ============================================================ */
-const PARTNERS_BASE = process.env.RAPPI_PARTNERS_BASE || 'https://login.partners.dev.rappi.com';
+const PARTNERS_BASE = amb.PARTNERS_BASE;
 const URL_ONBOARDING_CALLBACK = 'https://us-central1-luna-smart-pos.cloudfunctions.net/rappiOnboardingCallback';
 
 async function _clienteOauth() {

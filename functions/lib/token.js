@@ -3,6 +3,7 @@
 // valido por ~1 semana, pero aqui se refresca con margen de seguridad
 // para nunca usarlo ya vencido a medio webhook.
 const { obtenerToken } = require('./rappiApi');
+const amb = require('./ambiente');
 
 const MARGEN_SEGURIDAD_MS = 10 * 60 * 1000; // renovar 10 min antes de que expire
 
@@ -11,12 +12,13 @@ async function obtenerTokenVigente(db, clientId, clientSecret) {
   const snap = await ref.once('value');
   const actual = snap.val();
   // Solo se reutiliza un token del sistema nuevo (los de Auth0 ya no sirven).
-  if (actual && actual.origen === 'nuevo' && actual.expiresAt && actual.expiresAt - Date.now() > MARGEN_SEGURIDAD_MS) {
+  // Solo se reutiliza un token del mismo ambiente: nunca un token DEV contra produccion.
+  if (actual && actual.origen === 'nuevo' && actual.ambiente === amb.NOMBRE && actual.expiresAt && actual.expiresAt - Date.now() > MARGEN_SEGURIDAD_MS) {
     return actual.accessToken;
   }
   const nuevo = await obtenerToken(clientId, clientSecret);
   const expiresAt = Date.now() + (nuevo.expires_in || 604800) * 1000;
-  await ref.set({ accessToken: nuevo.access_token, expiresAt: expiresAt, origen: nuevo.origen });
+  await ref.set({ accessToken: nuevo.access_token, expiresAt: expiresAt, origen: nuevo.origen, ambiente: amb.NOMBRE });
   return nuevo.access_token;
 }
 

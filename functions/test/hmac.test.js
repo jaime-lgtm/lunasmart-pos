@@ -39,3 +39,21 @@ test('sin header o sin secreto se rechaza', () => {
 test('parsearFirma separa t y sign', () => {
   assert.deepStrictEqual(parsearFirma('t=123456,sign=abc'), { t: '123456', sign: 'abc' });
 });
+
+test('ambiente: DEV por defecto y produccion con RAPPI_AMBIENTE=prod', () => {
+  const ruta = require.resolve('../lib/ambiente');
+  const antes = process.env.RAPPI_AMBIENTE;
+  try {
+    delete process.env.RAPPI_AMBIENTE; delete require.cache[ruta];
+    assert.strictEqual(require('../lib/ambiente').PROD, false);
+    assert.match(require('../lib/ambiente').ORDERS_BASE, /dev\.rappi\.com/);
+    process.env.RAPPI_AMBIENTE = 'prod'; delete require.cache[ruta];
+    const p = require('../lib/ambiente');
+    assert.strictEqual(p.PROD, true);
+    assert.match(p.ORDERS_BASE, /mxgrability/);
+    assert.match(p.PARTNERS_BASE, /login\.partners\.rappi\.com/);
+  } finally {
+    if (antes === undefined) delete process.env.RAPPI_AMBIENTE; else process.env.RAPPI_AMBIENTE = antes;
+    delete require.cache[ruta];
+  }
+});
