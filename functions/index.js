@@ -8,7 +8,7 @@ const { getDatabase } = require('firebase-admin/database');
 const { firmaValida } = require('./lib/hmac');
 const { mapearPedidoRappi, MOTIVOS_RECHAZO } = require('./lib/orderMapper');
 const { obtenerTokenVigente } = require('./lib/token');
-const { construirMenuRappi } = require('./lib/menu');
+const { construirMenuRappi, validarMenu } = require('./lib/menu');
 const { skusARappi, calcularDisponibilidadCompleta } = require('./lib/disponibilidad');
 const rappiApi = require('./lib/rappiApi');
 const pkce = require('./lib/pkce');
@@ -51,6 +51,7 @@ const AMBIENTE_PROD = amb.PROD;
 function _tiendaDeSucursal(catalogoId) {
   return Object.keys(TIENDAS_RAPPI).find(function (k) { return TIENDAS_RAPPI[k].marca === catalogoId && !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; }) || null;
 }
+async function _bibliotecaDe(suc) { return (await db.ref('modificadores/' + suc).once('value')).val() || {}; }
 async function _catalogoDe(suc) {
   const v = (await db.ref('catalogo/' + suc).once('value')).val() || {};
   return Object.keys(v).map(function (k) { return v[k]; });
@@ -133,7 +134,7 @@ async function _procesarNuevoPedido(cuerpo) {
   const catalogoVal = catSnap.val() || {};
   const catalogo = Object.keys(catalogoVal).map(function (k) { return catalogoVal[k]; });
 
-  const pedido = mapearPedidoRappi(cuerpo, catalogo, info.marca);
+  const pedido = mapearPedidoRappi(cuerpo, catalogo, info.marca, await _bibliotecaDe(info.marca));
   pedido.rappiStoreId = String(store.internal_id || store.external_id || '');
   await db.ref('pedidos/' + suc).push(pedido);
   logger.info('Pedido de Rappi creado en Firebase', { suc, rappiOrderId: pedido.rappiOrderId });
@@ -250,14 +251,22 @@ exports.rappiAdminSolicitud = onValueCreated(
         resultado = { ok: true, mensaje: 'Login con Rappi correcto' };
       } else if (sol.accion === 'listarWebhooks') {
         resultado = { ok: true, webhooks: await rappiApi.listarWebhooks(token) };
-      } else if (sol.accion === 'enviarMenu') {
+      } else if (sol.accion === 'enviarMenu' || sol.accion === 'previsualizarMenu') {
         const suc = sol.suc || 'eventos';
         const tienda = sol.tienda || _tiendaDeSucursal(suc);
         if (!tienda) throw new Error('La sucursal ' + suc + ' no tiene tienda de Rappi asignada');
-        const menu = construirMenuRappi(await _catalogoDe(suc), { storeId: tienda });
+        const menu = construirMenuRappi(await _catalogoDe(suc), { storeId: tienda, biblioteca: await _bibliotecaDe(suc) });
         if (sol.limite) menu.items = menu.items.slice(0, Number(sol.limite));
         if (!menu.items.length) throw new Error('Ningun producto de ' + suc + ' esta activado para Rappi en Catalogo POS');
-        resultado = { ok: true, productos: menu.items.length, respuesta: await rappiApi.enviarMenu(token, menu) };
+        const val = validarMenu(menu);
+        const resumen = { productos: menu.items.length, modificadores: menu.items.reduce(function (a, i) { return a + i.children.length; }, 0), categorias: Array.from(new Set(menu.items.map(function (i) { return i.category.name; }))).length, advertencias: val.advertencias.slice(0, 20) };
+        if (val.errores.length) {
+          resultado = { ok: false, error: 'El menu tiene ' + val.errores.length + ' problema(s): ' + val.errores.slice(0, 8).join(' | '), errores: val.errores };
+        } else if (sol.accion === 'previsualizarMenu') {
+          resultado = Object.assign({ ok: true, soloVista: true }, resumen);
+        } else {
+          resultado = Object.assign({ ok: true }, resumen, { respuesta: await rappiApi.enviarMenu(token, menu) });
+        }
       } else if (sol.accion === 'estadoMenu') {
         resultado = { ok: true, estado: await rappiApi.estadoMenu(token, sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos')) };
       } else if (sol.accion === 'listarTiendas') {

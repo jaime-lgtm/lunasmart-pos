@@ -3,11 +3,12 @@
 // interno de Luna Smart POS (pedidos/<suc>/<id>) -- el mismo que ya produce
 // pedidos.suenodeluna.com.mx, para que el POS solo necesite saber que
 // canal es 'rappi' (ver pos.html, seccion "PEDIDOS DE RAPPI").
+const { gruposDe, tamanosDe, resolverSubitems } = require('./modificadores');
 const SEIS_MINUTOS_MS = 6 * 60 * 1000;
 
 function _num(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 
-function mapearPedidoRappi(payload, catalogoSuc, marca) {
+function mapearPedidoRappi(payload, catalogoSuc, marca, biblioteca) {
   payload = payload || {};
   const od = payload.order_detail || {};
   const cliente = payload.customer || {};
@@ -23,10 +24,14 @@ function mapearPedidoRappi(payload, catalogoSuc, marca) {
     const skuBase = String(it.sku || '').split('-')[0];
     const prod = catalogoPorId[skuBase];
     const subitems = it.subitems || [];
-    const extras = subitems.reduce(function (a, s) { return a + _num(s.price) * (_num(s.quantity) || 1); }, 0);
     const precioBase = it.unit_price_with_discount != null ? _num(it.unit_price_with_discount) : _num(it.price);
     const comentario = Array.isArray(it.comments) ? it.comments.join(' ') : (it.comments || '');
-    const subTxt = subitems.map(function (s) { return ((_num(s.quantity) || 1) > 1 ? s.quantity + 'x ' : '') + s.name; }).join(', ');
+    // Tamano y opciones -> mismos datos que una venta de mostrador (inventario por opcion).
+    const res = prod
+      ? resolverSubitems(subitems, prod, gruposDe(prod, biblioteca, 'rappi'), tamanosDe(prod, 'rappi'))
+      : { size: null, partes: subitems.map(function (x) { return ((_num(x.quantity) || 1) > 1 ? x.quantity + 'x ' : '') + x.name; }), modDeltas: [], extras: subitems.reduce(function (a, x) { return a + _num(x.price) * (_num(x.quantity) || 1); }, 0), sinResolver: [] };
+    const extras = res.extras;
+    const subTxt = res.partes.join(' · ');
     return {
       id: prod ? skuBase : null,
       marca: marca || null,
@@ -36,7 +41,8 @@ function mapearPedidoRappi(payload, catalogoSuc, marca) {
       note: comentario,
       mods: subTxt,
       area: (prod && prod.area) || 'barra',
-      size: null,
+      size: res.size,
+      modDeltas: res.modDeltas,
       rappiItemId: it.id != null ? String(it.id) : null,
       rappiSku: it.sku != null ? String(it.sku) : null,
       listo: false,
