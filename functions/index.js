@@ -3,7 +3,7 @@ const { onValueUpdated, onValueCreated, onValueWritten } = require('firebase-fun
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
-const { getDatabase } = require('firebase-admin/database');
+const { getDatabase, ServerValue } = require('firebase-admin/database');
 
 const { firmaValida } = require('./lib/hmac');
 const { mapearPedidoRappi, MOTIVOS_RECHAZO } = require('./lib/orderMapper');
@@ -12,6 +12,7 @@ const { construirMenuRappi, validarMenu } = require('./lib/menu');
 const { skusARappi, calcularDisponibilidadCompleta } = require('./lib/disponibilidad');
 const rappiApi = require('./lib/rappiApi');
 const pkce = require('./lib/pkce');
+const publico = require('./lib/publico');
 const amb = require('./lib/ambiente');
 const crypto = require('crypto');
 
@@ -430,3 +431,36 @@ exports.rappiOnboardingCallback = onRequest({ secrets: [RAPPI_CLIENT_ID] }, asyn
     res.status(500).send('Error interno');
   }
 });
+
+
+// =====================================================================
+// API PUBLICA del sitio de pedidos (clientes de lealtad y pedidos web).
+// El sitio ya no toca clientesLealtad ni la lista de pedidos: ver lib/publico.js.
+// =====================================================================
+const ORIGENES_SITIO = [
+  'https://pedidos.suenodeluna.com.mx', 'https://suenodeluna.com.mx', 'https://www.suenodeluna.com.mx',
+  /^https:\/\/[a-z0-9-]+--[a-z0-9-]+\.netlify\.app$/, /^https:\/\/[a-z0-9-]+\.netlify\.app$/,
+  'http://localhost:3739',
+];
+function ipDe(req) {
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : (req.ip || 'sin-ip');   // el ultimo lo agrega Google: no se puede falsificar
+}
+function endpointPublico(nombre, manejador) {
+  return onRequest({ cors: ORIGENES_SITIO, maxInstances: 10, invoker: 'public' }, async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'metodo' }); return; }
+    try {
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      res.json(await manejador({ body, ip: ipDe(req), db, ahora: Date.now(), sv: ServerValue.TIMESTAMP }));
+    } catch (e) {
+      if (e instanceof publico.ErrorPublico) { res.status(e.status).json({ ok: false, error: e.codigo }); return; }
+      logger.error('API publica ' + nombre, e);
+      res.status(500).json({ ok: false, error: 'interno' });
+    }
+  });
+}
+exports.lealtadExiste = endpointPublico('lealtadExiste', publico.lealtadExiste);
+exports.lealtadVerificar = endpointPublico('lealtadVerificar', publico.lealtadVerificar);
+exports.lealtadRegistrar = endpointPublico('lealtadRegistrar', publico.lealtadRegistrar);
+exports.pedidoCrear = endpointPublico('pedidoCrear', publico.pedidoCrear);
+exports.cuentaMesa = endpointPublico('cuentaMesa', publico.cuentaMesa);

@@ -3,129 +3,148 @@
     "pedidos": {
       "$sucursal": {
         ".indexOn": [
-          "rappiOrderId"
+          "rappiOrderId",
+          "mesa",
+          "referenciaMP"
         ],
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        "$pedidoId": {
+          ".read": "auth != null"
+        }
       }
     },
     "cajaEstado": {
       "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "cajaLive": {
       "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "displayConfig": {
       "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
-    },
-    "horarioTienda": {
-      ".read": true,
-      ".write": "auth != null"
     },
     "negocioInfo": {
       "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "tiposDescuento": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "metasTiempo": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "terminalesMP": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "comisionesDelivery": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "usuariosPOS": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "mesasConfig": {
       "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "mesasEstado": {
       "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "turnoSales": {
       "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
+    },
+    "clientesLealtad": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+    },
+    "repartidores": {
+      "$sucursal": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+      }
+    },
+    "categoriasOrden": {
+      "$sucursal": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+      }
+    },
+    "alarmasConfig": {
+      "$sucursal": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+      }
+    },
+    "tipoCambioUSD": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+    },
+    "asistenciaActiva": {
+      "$sucursal": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+      }
+    },
+    "checklistPlantillas": {
+      "$sucursal": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+      }
+    },
+    "checklistTurnos": {
+      "$sucursal": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+      }
+    },
+    "rappiAdmin": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "catalogo": {
       "$sucursal": {
         ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    "clientesLealtad": {
-      "$telefono": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    "repartidores": {
-      "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "modificadores": {
       "$sucursal": {
         ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    "categoriasOrden": {
-      "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "agotados": {
       "$sucursal": {
         ".read": "auth != null",
-        ".write": "auth != null"
+        ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
-    "alarmasConfig": {
-      "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    "tipoCambioUSD": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "asistenciaActiva": {
-      "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
+    "horarioTienda": {
+      ".read": true,
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "eventos": {
       ".read": "auth != null",
@@ -140,20 +159,6 @@
         }
       }
     },
-    "checklistPlantillas": {
-      "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    "checklistTurnos": {
-      "$sucursal": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    ".read": false,
-    ".write": false,
     "eventosCupo": {
       "$eventoId": {
         ".read": "auth != null",
@@ -161,9 +166,7 @@
         ".validate": "newData.isNumber() && newData.val() >= 0"
       }
     },
-    "rappiAdmin": {
-      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
-      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
-    }
+    ".read": false,
+    ".write": false
   }
 }

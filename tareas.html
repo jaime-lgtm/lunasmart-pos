@@ -154,6 +154,7 @@ select.chip-btn option{background:var(--cafe);color:var(--beige-claro);}
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="staff-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
 /* Portal móvil de tareas del turno (/tareas).
@@ -185,7 +186,7 @@ var firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var fbDb = firebase.database();
-var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
+var fbAuthReady = staffAuthReady();  // sesion del personal (correo/contrasena), ver staff-auth.js
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function hoyISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
