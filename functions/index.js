@@ -481,3 +481,18 @@ exports.analiticaVisita = onRequest({ cors: ORIGENES_SITIO, maxInstances: 10, in
   } catch (e) { logger.error('analiticaVisita', e); }
   res.status(204).send('');
 });
+
+// Conversion del sitio: cuando la caja cobra (estado 'pagado') un pedido que vino del sitio, cuenta como venta real
+// en analitica/ (y deja de contar si luego se cancela). Ver lib/analitica.js.
+exports.analiticaVentaWeb = onValueWritten({ ref: '/pedidos/{suc}/{pedidoId}' }, async (event) => {
+  try {
+    const antes = event.data.before.val(), despues = event.data.after.val();
+    if (!despues || !despues.origenWeb) return;
+    const eraPagado = !!antes && antes.estado === 'pagado';
+    if (despues.estado === 'pagado' && !eraPagado) {
+      await analitica.registrarVenta(db, ServerValue, event.params.pedidoId, despues._ts, despues.total);
+    } else if (eraPagado && despues.estado === 'cancelado') {
+      await analitica.anularVenta(db, ServerValue, event.params.pedidoId);
+    }
+  } catch (e) { logger.error('analiticaVentaWeb', e); }
+});

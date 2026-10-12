@@ -79,6 +79,38 @@ async function registrarPedido(db, sv, ahora, monto) {
   await db.ref().update(up);
 }
 
+// Venta REAL: un pedido del sitio que la caja cobro (estado 'pagado'). Se atribuye al dia en que se hizo el pedido
+// (igual que sus visitas) y se cuenta una sola vez por pedido aunque el aviso llegue repetido.
+async function registrarVenta(db, sv, pedidoId, tsPedido, monto) {
+  const m = Math.round((Number(monto) || 0) * 100) / 100, ts = Number(tsPedido) || Date.now();
+  const r = await db.ref('analitica/ventasContadas/' + pedidoId).transaction(function (cur) { return cur ? undefined : { ts: ts, monto: m }; });
+  if (!r.committed) return false;
+  const c = claves(ts), up = {};
+  ['dias', 'semanas', 'meses', 'anios'].forEach(function (t) {
+    up['analitica/' + t + '/' + c[t] + '/ventas'] = sv.increment(1);
+    up['analitica/' + t + '/' + c[t] + '/ventasMonto'] = sv.increment(m);
+  });
+  await db.ref().update(up);
+  return true;
+}
+// Si un pedido ya cobrado se cancela, deja de contar como venta.
+async function anularVenta(db, sv, pedidoId) {
+  const ref = db.ref('analitica/ventasContadas/' + pedidoId);
+  const cur = (await ref.once('value')).val();
+  if (!cur) return false;
+  // la primera pasada de una transaccion recibe null aunque haya dato: se devuelve null (sin cambio) para que Firebase la repita con el dato real
+  let existia = false;
+  await ref.transaction(function (x) { existia = !!x; return x ? null : x; });
+  if (!existia) return false;                                  // otro aviso ya la anulo
+  const c = claves(cur.ts), up = {};
+  ['dias', 'semanas', 'meses', 'anios'].forEach(function (t) {
+    up['analitica/' + t + '/' + c[t] + '/ventas'] = sv.increment(-1);
+    up['analitica/' + t + '/' + c[t] + '/ventasMonto'] = sv.increment(-(Number(cur.monto) || 0));
+  });
+  await db.ref().update(up);
+  return true;
+}
+
 // Cuenta una visita (sesion). Devuelve false si se descarto (bot, limite, datos invalidos).
 async function registrarVisita(db, sv, d) {
   const ahora = d.ahora;
@@ -122,4 +154,4 @@ async function registrarVisita(db, sv, d) {
   return { ok: true, primeraDelDia: primeraDelDia };
 }
 
-module.exports = { ZONA, claves, semanaISO, partesLocales, clasificaUA, clasificaOrigen, registrarVisita, registrarPedido, hash };
+module.exports = { ZONA, claves, semanaISO, partesLocales, clasificaUA, clasificaOrigen, registrarVisita, registrarPedido, registrarVenta, anularVenta, hash };
