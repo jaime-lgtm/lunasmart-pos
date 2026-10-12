@@ -171,6 +171,21 @@
     "analitica": {
       ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
       ".write": false
+    },
+    "clientesAuditoria": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".indexOn": [
+        "tel"
+      ]
+    },
+    "cumpleFelicitados": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
+    },
+    "clientesConfig": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     }
   }
 }

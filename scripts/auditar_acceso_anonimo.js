@@ -8,7 +8,7 @@
 const API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM';
 const DB = 'https://luna-smart-pos-default-rtdb.firebaseio.com';
 const PRIVADO = ['clientesLealtad', 'pedidos/cafeteria', 'pedidos/helfy', 'usuariosPOS', 'turnoSales/cafeteria', 'cajaEstado/cafeteria', 'negocioInfo/cafeteria', 'repartidores/cafeteria', 'tiposDescuento', 'terminalesMP', 'comisionesDelivery', 'metasTiempo', 'tipoCambioUSD', 'mesasEstado/cafeteria',
-  'asistenciaActiva/cafeteria', 'checklistTurnos/cafeteria', 'eventosInscripciones', 'rappiAdmin', '_limites'];
+  'asistenciaActiva/cafeteria', 'checklistTurnos/cafeteria', 'eventosInscripciones', 'rappiAdmin', '_limites', 'analitica', 'clientesAuditoria', 'cumpleFelicitados', 'clientesConfig'];
 const PUBLICO = ['cajaLive/cafeteria', 'displayConfig/cafeteria', 'catalogo/cafeteria', 'modificadores/cafeteria', 'agotados/cafeteria', 'horarioTienda', 'eventos'];
 (async () => {
   const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + API_KEY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ returnSecureToken: true }) });
