@@ -15,6 +15,10 @@ podia abrirla, iniciar sesion anonima y leer: pedidos (nombre, telefono y direcc
   (`functions/lib/publico.js`): `lealtadExiste`, `lealtadVerificar`, `lealtadRegistrar`, `pedidoCrear`, `cuentaMesa`.
   Solo devuelven lo minimo, comprueban el cumpleanos (dia y mes) para dar datos/puntos, y limitan intentos
   (5 fallos por telefono = bloqueo 24 h; limites por IP; contadores en `_limites/`, que solo ve el servidor).
+- **Pantalla del cliente** (`display.html`, app Android en `android-display/` con la URL fija y sin teclado): no puede iniciar
+  sesion, asi que entra anonima y SOLO lee `cajaLive` y `displayConfig` (el POS escribe ahi; solo personal). La caja transmite
+  solo el primer nombre del cliente. Quien conozca la ruta puede ver el pedido en curso. Para cerrarlo del todo hay que
+  recompilar la app con una llave en la URL (cambio futuro).
 - Lo unico que sigue de lectura publica: menu (`catalogo`, `modificadores`, `agotados`), `horarioTienda`, `eventos`
   y `eventosCupo`. Los pedidos solo se pueden leer por su clave (seguimiento del cliente), nunca listarlos.
 - Apps del personal: `staff-auth.js` muestra una pantalla de acceso (correo/contrasena) **una vez por dispositivo**.
@@ -39,3 +43,6 @@ podia abrirla, iniciar sesion anonima y leer: pedidos (nombre, telefono y direcc
 - Quien tenga la cuenta del personal ve todo (incluidos PIN en `usuariosPOS`). Rotar PIN tras este cambio (estuvieron expuestos).
 - `catalogo`/`modificadores` son publicos (el menu los necesita) y pueden incluir costos/recetas.
 - El sitio publico no valida precios contra el catalogo en el servidor (solo recalcula el total y limita rangos).
+
+## Direcciones cortas
+`/delivery`, `/repartidor` y `/repartidores` abren `repartidor.html` (ver `_redirects`). En el dominio de la caja: https://pos.lunasmart.suenodeluna.com.mx/delivery

@@ -22,13 +22,13 @@
     },
     "cajaLive": {
       "$sucursal": {
-        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".read": "auth != null",
         ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },
     "displayConfig": {
       "$sucursal": {
-        ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
+        ".read": "auth != null",
         ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
       }
     },

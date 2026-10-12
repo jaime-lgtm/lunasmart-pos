@@ -106,7 +106,6 @@ body{background:var(--beige-claro);color:var(--cafe);overflow:hidden;user-select
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="staff-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
 var firebaseConfig = {
@@ -120,7 +119,9 @@ var firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var fbDb = firebase.database();
-var fbAuthReady = staffAuthReady();  // sesion del personal (correo/contrasena), ver staff-auth.js
+// Esta pantalla corre en una app Android sin teclado ni touch: no puede pedir correo/contrasena.
+// Entra como anonima y SOLO lee (cajaLive y displayConfig); no escribe nada.
+var fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 
 var NOMBRES = {cafeteria:'Casa de la Cultura', grano:'Venta café en grano', helfy:'Helfy Fu', barbacoa:'Barbacoa'};
 var TIPO_LABEL={domicilio:'Servicio a domicilio', llevar:'Para llevar', aqui:'Comer aquí'};
