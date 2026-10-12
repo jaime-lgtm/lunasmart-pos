@@ -193,6 +193,11 @@ input,select,textarea{font-family:inherit;font-size:16px;}
 .pest.pagado{background:#eef6ef;color:var(--verde-ok);}
 .pest.abierto{background:#fdf3e7;color:var(--terracota);}
 .pest.cancelado{background:#fbeeea;color:var(--rojo);}
+.pdel{display:inline-block;margin-top:4px;font-size:12.5px;font-weight:800;padding:3px 10px;border-radius:12px;}
+.pdel.espera{background:#fdf3e7;color:var(--terracota);}
+.pdel.asignado{background:#eef1fb;color:#3b4ea3;}
+.pdel.camino{background:#e8f1fd;color:#1a5fb4;}
+.pdel.entregado{background:#eef6ef;color:var(--verde-ok);}
 /* Config */
 .cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;}
 .cfg-card{background:#fff;border:1px solid var(--linea);border-radius:16px;padding:26px 16px;text-align:center;box-shadow:var(--sombra);transition:.12s;}
@@ -3136,10 +3141,24 @@ function confirmarLiberarMesa(n){
 }
 
 /* ============ PEDIDOS (historial) ============ */
+/* ==== Reparto propio: estado del pedido a domicilio segun lo que hace el repartidor (repartidor.html)
+   disponible -> asignado (acepto) -> entregado. "En camino" = ya tiene repartidor y el pedido esta listo.
+   Solo se muestra como entregado cuando el repartidor lo marca. ==== */
+function _horaTs(ts){ return ts?new Date(ts).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}):''; }
+function infoReparto(p){
+  if(!p || p.tipo!=='domicilio' || !p.estadoReparto || p.estado==='cancelado') return null;
+  var quien=p.repartidorNombre||'repartidor';
+  var listo=(!p.estadoBarra||p.estadoBarra==='listo')&&(!p.estadoCocina||p.estadoCocina==='listo');
+  if(p.estadoReparto==='entregado') return {cls:'entregado', txt:'\u2705 Entregado por '+quien+(p.entregadoTs?' \u00b7 '+_horaTs(p.entregadoTs):'')};
+  if(p.estadoReparto==='asignado') return listo
+    ? {cls:'camino', txt:'\ud83d\udef5 En camino \u00b7 '+quien}
+    : {cls:'asignado', txt:'\ud83d\udef5 Asignado a '+quien+' \u00b7 preparando pedido'};
+  return {cls:'espera', txt:'\ud83d\udef5 Esperando repartidor'};
+}
 function renderPedidos(){
   var html='<h2>Historial de pedidos</h2><div class="sub">Toca un pedido para ver el detalle</div><div class="card">';
   if(!state.pedidos.length){ html+='<div class="cart-empty">Sin pedidos</div>'; }
-  else{ html+=state.pedidos.map(function(p,ix){ var mt=p.metodo?(PAGO_LABEL[p.metodo]||p.metodo):(p.estado==='cancelado'?'Cancelado':'Pendiente de cobro'); var nombreCliente=(p.cliente&&p.cliente.nombre)||''; return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+marcaTag(p)+(p.canal==='rappi'?'<b>Rappi</b> &middot; ':'')+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+(p.programado?' &middot; <span style="color:var(--terra,#b14618);font-weight:800">📅 Programado '+esc(p.entregaProgramadaFecha||'')+' '+esc(p.entregaProgramadaHora||'')+'</span>':'')+'</div>'+(nombreCliente?'<div class="pnombre">'+esc(nombreCliente)+'</div>':'')+'<div class="pm">'+esc(mt)+' &middot; '+esc(p.hora)+'</div></div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
+  else{ html+=state.pedidos.map(function(p,ix){ var mt=p.metodo?(PAGO_LABEL[p.metodo]||p.metodo):(p.estado==='cancelado'?'Cancelado':'Pendiente de cobro'); var nombreCliente=(p.cliente&&p.cliente.nombre)||''; return '<div class="ped-row" style="cursor:pointer;" onclick="verPedido('+ix+')"><div class="pid">'+esc(p.id)+'</div><div class="pinfo"><div class="pt">'+marcaTag(p)+(p.canal==='rappi'?'<b>Rappi</b> &middot; ':'')+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+(p.programado?' &middot; <span style="color:var(--terra,#b14618);font-weight:800">📅 Programado '+esc(p.entregaProgramadaFecha||'')+' '+esc(p.entregaProgramadaHora||'')+'</span>':'')+'</div>'+(nombreCliente?'<div class="pnombre">'+esc(nombreCliente)+'</div>':'')+'<div class="pm">'+esc(mt)+' &middot; '+esc(p.hora)+'</div>'+(function(){ var ir=infoReparto(p); return ir?'<div class="pdel '+ir.cls+'">'+ir.txt+'</div>':''; })()+'</div><div class="ptot">'+money(p.total)+'</div><span class="pest '+p.estado+'">'+esc(p.estado)+'</span></div>'; }).join(''); }
   html+='</div>';
   document.getElementById('pedidosContent').innerHTML=html;
 }
@@ -3400,6 +3419,7 @@ function verPedido(ix){
     '<div class="sub">'+esc(TIPO_LABEL[p.tipo]||p.tipo)+(p.mesa?' &middot; Mesa '+esc(p.mesa):'')+' &middot; '+metodoTxt+' &middot; '+esc(p.hora)+'</div>'+
     (p.programado?'<div style="display:flex;align-items:center;gap:8px;background:rgba(177,70,24,0.08);border:1px solid var(--terra);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-weight:800;color:var(--terra)">📅 Pedido programado para '+esc(p.entregaProgramadaFecha||'')+' a las '+esc(p.entregaProgramadaHora||'')+'</div>':'')+
     (p.cliente&&(p.cliente.telefono||p.cliente.direccion)?'<div class="det-cliente"><div class="dc-t">Datos de entrega</div>'+'<div class="dc-l"><b>'+esc(p.cliente.nombre||'')+'</b>'+(p.cliente.telefono?' \u00b7 '+esc(p.cliente.telefono):'')+'</div>'+(p.cliente.direccion?'<div class="dc-l">'+esc(p.cliente.direccion)+'</div>':'')+(p.cliente.referencia?'<div class="dc-l dc-ref">Ref: '+esc(p.cliente.referencia)+'</div>':'')+'</div>':(p.cliente&&p.cliente.nombre?'<div class="det-cliente"><div class="dc-t">Cliente</div><div class="dc-l"><b>'+esc(p.cliente.nombre)+'</b></div></div>':''))+'<div class="det-list">'+rows+'</div>'+
+    (function(){ var ir=infoReparto(p); if(!ir) return ''; return '<div class="det-cliente"><div class="dc-t">Reparto</div><div class="dc-l"><span class="pdel '+ir.cls+'">'+ir.txt+'</span></div>'+(p.asignadoTs?'<div class="dc-l">Acept\u00f3: '+_horaTs(p.asignadoTs)+'</div>':'')+(p.entregadoTs?'<div class="dc-l">Entregado: '+_horaTs(p.entregadoTs)+'</div>':'')+'</div>'; })()+
     '<div class="det-tot"><span>Subtotal</span><span>'+money(subtotal)+'</span></div>'+
     (desc>0?'<div class="det-tot"><span>Descuento'+(p.descuento.nombreTipo?' ('+esc(p.descuento.nombreTipo)+')':'')+'</span><span>-'+money(desc)+'</span></div>':'')+
     (desc>0&&p.descuento.autorizadoPor?'<div class="sub" style="margin:-8px 0 10px;font-weight:700">Autoriz&oacute; '+esc(p.descuento.autorizadoPor)+'</div>':'')+
