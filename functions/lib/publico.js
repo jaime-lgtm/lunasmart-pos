@@ -237,6 +237,7 @@ async function pedidoCrear({ body, ip, db, ahora, sv }) {
       if (Object.keys(cambios).length) await db.ref('clientesLealtad/' + tel).update(cambios);
     }
   } catch (e) { /* el pedido ya quedo guardado; la cuenta no debe tumbarlo */ }
+  try { await require('./analitica').registrarPedido(db, sv, ahora, pedido.total); } catch (e) { /* la analitica nunca debe tumbar un pedido */ }
   return { ok: true, key: ref.key, tipo: pedido.tipo, id: nid };
 }
 

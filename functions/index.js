@@ -13,6 +13,7 @@ const { skusARappi, calcularDisponibilidadCompleta } = require('./lib/disponibil
 const rappiApi = require('./lib/rappiApi');
 const pkce = require('./lib/pkce');
 const publico = require('./lib/publico');
+const analitica = require('./lib/analitica');
 const amb = require('./lib/ambiente');
 const crypto = require('crypto');
 
@@ -464,3 +465,19 @@ exports.lealtadVerificar = endpointPublico('lealtadVerificar', publico.lealtadVe
 exports.lealtadRegistrar = endpointPublico('lealtadRegistrar', publico.lealtadRegistrar);
 exports.pedidoCrear = endpointPublico('pedidoCrear', publico.pedidoCrear);
 exports.cuentaMesa = endpointPublico('cuentaMesa', publico.cuentaMesa);
+
+// Aviso de visita del sitio de pedidos (1 por sesion de navegador). Siempre responde 204: el sitio no espera nada.
+exports.analiticaVisita = onRequest({ cors: ORIGENES_SITIO, maxInstances: 10, invoker: 'public' }, async (req, res) => {
+  try {
+    if (req.method === 'POST') {
+      let body = req.body;
+      if (!body || typeof body !== 'object') { try { body = JSON.parse(req.rawBody ? req.rawBody.toString('utf8') : '{}'); } catch (e) { body = {}; } }   // sendBeacon manda text/plain
+      await analitica.registrarVisita(db, ServerValue, {
+        ahora: Date.now(), ip: ipDe(req), ua: req.headers['user-agent'] || '',
+        vid: String(body.vid || '').slice(0, 64), ref: String(body.ref || '').slice(0, 300),
+        utm: String(body.utm || '').slice(0, 60), mesa: !!body.mesa,
+      });
+    }
+  } catch (e) { logger.error('analiticaVisita', e); }
+  res.status(204).send('');
+});

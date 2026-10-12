@@ -102,3 +102,40 @@ test('lealtadRegistrar crea cuenta nueva con 0 puntos', async () => {
   const c = db.raiz.clientesLealtad['8781234567'];
   assert.strictEqual(c.nombre, 'Ana García'); assert.strictEqual(c.puntos, 0); assert.strictEqual(c.cumpleanos, '1990-07-22');
 });
+
+const A = require('../lib/analitica');
+test('claves: fecha local de Piedras Negras y semana ISO', () => {
+  // 2026-10-13 03:30 UTC = 12 oct 22:30 hora local (CDT, UTC-5)
+  const c = A.claves(Date.UTC(2026, 9, 13, 3, 30));
+  assert.strictEqual(c.dias, '2026-10-12'); assert.strictEqual(c.meses, '2026-10'); assert.strictEqual(c.anios, '2026'); assert.strictEqual(c.hora, '22');
+  assert.strictEqual(c.semanas, '2026-W42');           // lunes 12 oct 2026
+});
+test('semanaISO en los bordes del año', () => {
+  assert.strictEqual(A.semanaISO(2026, 1, 1), '2026-W01');    // jueves
+  assert.strictEqual(A.semanaISO(2025, 12, 29), '2026-W01');  // lunes de esa semana
+  assert.strictEqual(A.semanaISO(2027, 1, 1), '2026-W53');    // viernes: aun semana 53 de 2026
+  assert.strictEqual(A.semanaISO(2026, 10, 18), '2026-W42');  // domingo cierra la semana
+  assert.strictEqual(A.semanaISO(2026, 10, 19), '2026-W43');
+});
+test('clasificaUA separa bots y tipos de dispositivo', () => {
+  assert.strictEqual(A.clasificaUA('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit Mobile/15E148 Safari/604.1').dispositivo, 'movil');
+  assert.strictEqual(A.clasificaUA('Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit Chrome/120 Mobile Safari/537.36').dispositivo, 'movil');
+  assert.strictEqual(A.clasificaUA('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit Safari').dispositivo, 'tablet');
+  assert.strictEqual(A.clasificaUA('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit Chrome/120 Safari/537.36').dispositivo, 'escritorio');
+  assert.strictEqual(A.clasificaUA('Mozilla/5.0 (Linux; Android 11) Chrome-Lighthouse').bot, true);
+  assert.strictEqual(A.clasificaUA('facebookexternalhit/1.1').bot, true);
+  assert.strictEqual(A.clasificaUA('WhatsApp/2.23 A').bot, true);
+  assert.strictEqual(A.clasificaUA('').bot, true);
+  assert.strictEqual(A.clasificaUA('Mozilla/5.0 (Windows NT 10.0) HeadlessChrome/120').bot, true);
+});
+test('clasificaOrigen', () => {
+  assert.strictEqual(A.clasificaOrigen({ ref: 'https://l.instagram.com/?u=x' }), 'instagram');
+  assert.strictEqual(A.clasificaOrigen({ ref: 'https://m.facebook.com/' }), 'facebook');
+  assert.strictEqual(A.clasificaOrigen({ ref: 'https://www.google.com/' }), 'google');
+  assert.strictEqual(A.clasificaOrigen({ ref: 'https://wa.me/528781333237' }), 'whatsapp');
+  assert.strictEqual(A.clasificaOrigen({ ref: '', utm: 'instagram' }), 'instagram');
+  assert.strictEqual(A.clasificaOrigen({ ref: 'https://pedidos.suenodeluna.com.mx/' }), 'directo');
+  assert.strictEqual(A.clasificaOrigen({}), 'directo');
+  assert.strictEqual(A.clasificaOrigen({ mesa: true, ref: 'https://google.com' }), 'qr_mesa');
+  assert.strictEqual(A.clasificaOrigen({ ref: 'https://blog.ejemplo.com/post' }), 'otro');
+});
