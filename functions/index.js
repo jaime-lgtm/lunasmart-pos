@@ -307,7 +307,10 @@ exports.rappiAdminSolicitud = onValueCreated(
       } else if (sol.accion === 'crearHorario') {
         resultado = { ok: true, respuesta: await rappiApi.crearHorario(await rappiApi.obtenerTokenUtils(RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim()), sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos'), sol.dia, sol.inicio, sol.fin) };
       } else if (sol.accion === 'registrarWebhooks') {
-        const tiendas = Object.keys(TIENDAS_RAPPI).filter(function (k) { return !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; });
+        // Por defecto, todas las tiendas del ambiente; con { tiendas:[...] } solo esas (util si una tienda sigue con otro proveedor).
+        const delAmbiente = Object.keys(TIENDAS_RAPPI).filter(function (k) { return !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; });
+        const tiendas = Array.isArray(sol.tiendas) && sol.tiendas.length ? sol.tiendas.map(String).filter(function (k) { return delAmbiente.indexOf(k) >= 0; }) : delAmbiente;
+        if (!tiendas.length) throw new Error('Ninguna de las tiendas pedidas es de este ambiente');
         const detalle = {};
         for (const ev of EVENTOS_WEBHOOK) {
           try {
