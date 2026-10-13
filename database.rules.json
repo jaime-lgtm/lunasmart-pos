@@ -151,6 +151,7 @@
       ".write": "auth != null && auth.token.firebase.sign_in_provider === 'password'"
     },
     "eventosInscripciones": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
       "$eventoId": {
         ".read": "auth != null && auth.token.firebase.sign_in_provider === 'password'",
         "$regId": {
