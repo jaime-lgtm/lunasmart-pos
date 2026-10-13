@@ -306,6 +306,17 @@ exports.rappiAdminSolicitud = onValueCreated(
         resultado = { ok: true, horarios: await rappiApi.listarHorarios(await rappiApi.obtenerTokenUtils(RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim()), sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos')) };
       } else if (sol.accion === 'crearHorario') {
         resultado = { ok: true, respuesta: await rappiApi.crearHorario(await rappiApi.obtenerTokenUtils(RAPPI_CLIENT_ID.value().trim(), RAPPI_CLIENT_SECRET.value().trim()), sol.tienda || _tiendaDeSucursal(sol.suc || 'eventos'), sol.dia, sol.inicio, sol.fin) };
+      } else if (sol.accion === 'agregarTiendasWebhooks') {
+        // Suma tiendas a los avisos ya registrados (ej. una tienda que se aprovisiono despues).
+        const delAmbiente = Object.keys(TIENDAS_RAPPI).filter(function (k) { return !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; });
+        const tiendas = (Array.isArray(sol.tiendas) ? sol.tiendas.map(String) : []).filter(function (k) { return delAmbiente.indexOf(k) >= 0; });
+        if (!tiendas.length) throw new Error('Indica { tiendas:[...] } de este ambiente');
+        const detalle = {};
+        for (const ev of EVENTOS_WEBHOOK) {
+          try { const r = await rappiApi.agregarTiendasWebhook(token, ev, URL_WEBHOOK + '/' + ev, tiendas); detalle[ev] = 'ok ' + JSON.stringify(r).slice(0, 120); }
+          catch (e) { detalle[ev] = 'ERROR: ' + String(e.message || e).slice(0, 300); }
+        }
+        resultado = { ok: true, detalle };
       } else if (sol.accion === 'registrarWebhooks') {
         // Por defecto, todas las tiendas del ambiente; con { tiendas:[...] } solo esas (util si una tienda sigue con otro proveedor).
         const delAmbiente = Object.keys(TIENDAS_RAPPI).filter(function (k) { return !!TIENDAS_RAPPI[k].prod === AMBIENTE_PROD; });

@@ -135,6 +135,11 @@ function registrarWebhook(token, evento, url, tiendas) {
 function cambiarUrlWebhook(token, evento, url, tiendas) {
   return _rappiFetch(WEBHOOKS_BASE, '/webhook/' + evento + '/change-url', token, { method: 'PUT', body: { url: url, stores: tiendas } });
 }
+// Agrega tiendas a un aviso que ya existe (cambiarUrlWebhook solo cambia la direccion).
+function agregarTiendasWebhook(token, evento, url, tiendas) {
+  // el cuerpo es un ARREGLO con un objeto { url, stores } (segun el portal de desarrolladores de Rappi)
+  return _rappiFetch(WEBHOOKS_BASE, '/webhook/' + evento + '/add-stores', token, { method: 'PUT', body: [{ url: url, stores: tiendas }] });
+}
 function resetSecretWebhook(token, evento) {
   return _rappiFetch(WEBHOOKS_BASE, '/webhook/' + evento + '/reset-secret', token, { method: 'PUT' });
 }
@@ -166,4 +171,4 @@ function listarTiendas(token) {
   return _rappiFetch(WEBHOOKS_BASE, '/stores-pa', token);
 }
 
-module.exports = { configurarWebhookOnboarding, estadoTiendasOnboarding, provisionarTiendas, obtenerTokenUtils, listarHorarios, crearHorario, obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, cambiarUrlWebhook, resetSecretWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };
+module.exports = { configurarWebhookOnboarding, estadoTiendasOnboarding, provisionarTiendas, obtenerTokenUtils, listarHorarios, crearHorario, obtenerToken, tomarPedido, rechazarPedido, marcarListoParaRecoger, registrarWebhook, cambiarUrlWebhook, agregarTiendasWebhook, resetSecretWebhook, listarWebhooks, enviarMenu, estadoMenu, disponibilidadItems, habilitarTienda, listarTiendas };
