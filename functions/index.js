@@ -496,3 +496,11 @@ exports.analiticaVentaWeb = onValueWritten({ ref: '/pedidos/{suc}/{pedidoId}' },
     }
   } catch (e) { logger.error('analiticaVentaWeb', e); }
 });
+
+// Registros a eventos del sitio -> analitica/ (cuantas personas se registran por dia/semana/mes/año).
+exports.analiticaInscripcionEvento = onValueCreated({ ref: '/eventosInscripciones/{eventoId}/{regId}' }, async (event) => {
+  try {
+    const r = event.data.val() || {};
+    await analitica.registrarInscripcion(db, ServerValue, r.ts);
+  } catch (e) { logger.error('analiticaInscripcionEvento', e); }
+});

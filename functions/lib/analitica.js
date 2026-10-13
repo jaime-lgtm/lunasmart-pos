@@ -111,6 +111,13 @@ async function anularVenta(db, sv, pedidoId) {
   return true;
 }
 
+// Registro a un evento del sitio (cuenta en los 4 periodos, en la fecha en que se registro la persona)
+async function registrarInscripcion(db, sv, ts) {
+  const c = claves(Number(ts) || Date.now()), up = {};
+  ['dias', 'semanas', 'meses', 'anios'].forEach(function (t) { up['analitica/' + t + '/' + c[t] + '/inscripciones'] = sv.increment(1); });
+  await db.ref().update(up);
+}
+
 // Cuenta una visita (sesion). Devuelve false si se descarto (bot, limite, datos invalidos).
 async function registrarVisita(db, sv, d) {
   const ahora = d.ahora;
@@ -154,4 +161,4 @@ async function registrarVisita(db, sv, d) {
   return { ok: true, primeraDelDia: primeraDelDia };
 }
 
-module.exports = { ZONA, claves, semanaISO, partesLocales, clasificaUA, clasificaOrigen, registrarVisita, registrarPedido, registrarVenta, anularVenta, hash };
+module.exports = { ZONA, claves, semanaISO, partesLocales, clasificaUA, clasificaOrigen, registrarVisita, registrarPedido, registrarVenta, anularVenta, registrarInscripcion, hash };
