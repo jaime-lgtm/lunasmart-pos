@@ -38,18 +38,22 @@
         '<img src="logo-badge.png" alt="" style="width:84px;height:84px;margin:0 auto;border-radius:20px;object-fit:contain" onerror="this.remove()">' +
         '<div style="font-size:24px;font-weight:800;letter-spacing:.02em">Luna Smart</div>' +
         '<div style="font-size:14.5px;line-height:1.5;opacity:.75;margin-bottom:6px">Inicia sesión con la cuenta del personal. Solo se pide una vez en este dispositivo.</div>' +
-        '<input id="staffEmail" type="email" name="username" autocomplete="username" inputmode="email" placeholder="Correo" required style="padding:15px 18px;border-radius:14px;border:2px solid rgba(245,234,216,.2);background:#2b2420;color:#f5ead8;font-size:16px;outline:none">' +
-        '<input id="staffPass" type="password" name="password" autocomplete="current-password" placeholder="Contraseña" required style="padding:15px 18px;border-radius:14px;border:2px solid rgba(245,234,216,.2);background:#2b2420;color:#f5ead8;font-size:16px;outline:none">' +
+        '<input id="staffEmail" type="email" name="username" autocomplete="username" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Correo (ej. hola@suenodeluna.com.mx)" required style="padding:15px 18px;border-radius:14px;border:2px solid rgba(245,234,216,.2);background:#2b2420;color:#f5ead8;font-size:16px;outline:none">' +
+        '<div style="position:relative"><input id="staffPass" type="password" name="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Contraseña" required style="width:100%;box-sizing:border-box;padding:15px 84px 15px 18px;border-radius:14px;border:2px solid rgba(245,234,216,.2);background:#2b2420;color:#f5ead8;font-size:16px;outline:none">' +
+          '<button type="button" id="staffVer" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);padding:8px 12px;border:0;border-radius:10px;background:rgba(245,234,216,.12);color:#f5ead8;font-size:13px;font-weight:700;cursor:pointer">VER</button></div>' +
         '<div id="staffErr" role="alert" style="min-height:20px;font-size:14px;font-weight:700;color:#ff9b8a"></div>' +
         '<button id="staffBtn" type="submit" style="padding:16px;border:0;border-radius:14px;background:#b14618;color:#f5ead8;font-size:16px;font-weight:800;letter-spacing:.04em;cursor:pointer">ENTRAR</button>' +
       '</form>';
     document.body.appendChild(overlay);
     var form = overlay.querySelector('#staffLoginForm'), err = overlay.querySelector('#staffErr'), btn = overlay.querySelector('#staffBtn');
     overlay.querySelector('#staffEmail').focus();
+    // "VER" muestra la contraseña para comprobar que se escribio bien (en tablets el teclado a veces cambia mayusculas o agrega espacios)
+    var ver = overlay.querySelector('#staffVer'), pw = overlay.querySelector('#staffPass');
+    ver.addEventListener('click', function () { var oculto = pw.type === 'password'; pw.type = oculto ? 'text' : 'password'; ver.textContent = oculto ? 'OCULTAR' : 'VER'; });
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
       err.textContent = ''; btn.disabled = true; btn.textContent = 'ENTRANDO…';
-      firebase.auth().signInWithEmailAndPassword(overlay.querySelector('#staffEmail').value.trim(), overlay.querySelector('#staffPass').value)
+      firebase.auth().signInWithEmailAndPassword(overlay.querySelector('#staffEmail').value.trim().toLowerCase(), overlay.querySelector('#staffPass').value)
         .then(function (cred) {
           if (overlay) { overlay.remove(); overlay = null; }
           alEntrar(cred.user);
