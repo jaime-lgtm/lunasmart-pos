@@ -29,8 +29,8 @@ test('formato de POST /menu: storeId e items con category, sku, type, price y ch
   assert.strictEqual(p.price, 265);
   assert.strictEqual(p.imageUrl, 'https://x/y.jpg');
   assert.deepStrictEqual(p.children, []);
-  assert.strictEqual(p.category.name, 'Bebidas - Combos');
-  assert.strictEqual(p.category.id, 'cat-bebidas-combos');
+  assert.strictEqual(p.category.name, 'Combos');
+  assert.strictEqual(p.category.id, 'cat-combos');
 });
 
 test('producto con tamanos: UN producto, precio del tamano chico y grupo "Elige Tamano" con la diferencia', () => {
@@ -101,4 +101,22 @@ test('mapearPedidoRappi usa la biblioteca para tamano, texto y precio', () => {
   assert.strictEqual(p.items[0].mods, 'El Mayor · Espresso');
   assert.strictEqual(p.items[0].price, 120);
   assert.strictEqual(p.total, 240);
+});
+
+test('las categorias van sin el prefijo del menu y las repetidas se unen en una sola', () => {
+  const prods = [
+    { id: 'a1', name: 'Chilaquiles', menu: 'Alimentos', sub: 'Desayuno', price: 90, canales: { rappi: { activo: true } } },
+    { id: 'a2', name: 'Combo comida', menu: 'Alimentos', sub: 'Combos', price: 150, canales: { rappi: { activo: true } } },
+    { id: 'b1', name: 'Latte', menu: 'Bebidas', sub: 'Cafés Calientes', price: 60, canales: { rappi: { activo: true } } },
+    { id: 'b2', name: 'Combo cafe', menu: 'Bebidas', sub: 'Combos', price: 99, canales: { rappi: { activo: true } } },
+    { id: 'h1', name: 'Wrap', menu: 'Helfy Wraps', sub: '', price: 80, canales: { rappi: { activo: true } } },
+  ];
+  const m = construirMenuRappi(prods, { storeId: '1' });
+  const cat = id => m.items.find(i => i.sku === id).category;
+  assert.strictEqual(cat('a1').name, 'Desayuno');
+  assert.strictEqual(cat('b1').name, 'Cafés Calientes');
+  assert.strictEqual(cat('h1').name, 'Helfy Wraps');             // sin subcategoria: queda el nombre del menu
+  assert.strictEqual(cat('a2').id, cat('b2').id);                  // "Combos" de los dos menus = una categoria
+  assert.strictEqual(cat('a2').sortingPosition, cat('b2').sortingPosition);
+  assert.ok(cat('a2').sortingPosition < cat('b1').sortingPosition); // Alimentos antes que Bebidas
 });

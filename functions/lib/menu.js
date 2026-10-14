@@ -48,9 +48,15 @@ function construirMenuRappi(productos, opciones) {
   const biblioteca = opciones.biblioteca || {};
   const activos = (productos || []).filter(activoEnRappi);
 
-  // Posicion de cada categoria = orden de aparicion (alfabetico para que sea estable)
-  const nombreCategoria = function (p) { return (p.sub ? (p.menu ? p.menu + ' - ' + p.sub : p.sub) : (p.menu || 'General')); };
-  const categorias = Array.from(new Set(activos.map(nombreCategoria))).sort(function (a, b) { return a.localeCompare(b); });
+  // La categoria en Rappi se llama como la subcategoria del POS ("Desayuno", "Postres", "Cafés Calientes"...),
+  // sin el prefijo del menu ("Alimentos - ..."). Si una subcategoria se repite en dos menus (ej. "Combos") queda
+  // una sola categoria. El ORDEN sigue agrupado por menu y luego alfabetico, para que sea estable.
+  const nombreCategoria = function (p) { return p.sub ? p.sub : (p.menu || 'General'); };
+  const claveOrden = function (p) { return (p.menu || '') + ' - ' + (p.sub || ''); };
+  const categorias = [];
+  activos.slice().sort(function (a, b) { return claveOrden(a).localeCompare(claveOrden(b)); }).forEach(function (p) {
+    const n = nombreCategoria(p); if (categorias.indexOf(n) < 0) categorias.push(n);
+  });
 
   const items = activos.map(function (p, idx) {
     const cfg = p.canales.rappi;

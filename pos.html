@@ -1759,17 +1759,18 @@ function selectTipoOrden(tipo){
 /* ============ CATALOGO 2 NIVELES ============ */
 function menusOf(prods){
   var s=[]; var hasFav=false;
-  prods.forEach(function(p){ if(p.fav===true)hasFav=true; if(s.indexOf(p.menu)<0) s.push(p.menu); });
+  // un producto sin menu (nombre vacio) no genera boton: antes salia un chip en blanco entre Alimentos y Favoritos
+  prods.forEach(function(p){ if(p.fav===true)hasFav=true; if(String(p.menu||'').trim() && s.indexOf(p.menu)<0) s.push(p.menu); });
   var orden=(CATEGORIAS_ORDEN_CACHE[state.sucursal]||{}).categorias;
   s=_ordenarConGuardado(s,orden);
   if(hasFav) s.push('Favoritos');
   return s;
 }
-// Al entrar, se sigue mostrando Favoritos primero (acceso rapido a lo mas
-// vendido) aunque el chip ya no se dibuje al inicio de la fila.
+// Al entrar siempre se muestra Bebidas (si la sucursal tiene ese menu); si no, el primero de la fila.
 function menuInicial(prods){
   var menus=menusOf(prods);
-  return menus.indexOf('Favoritos')>=0 ? 'Favoritos' : (menus[0]||null);
+  var beb=menus.filter(function(m){ return String(m).trim().toLowerCase()==='bebidas'; })[0];
+  return beb || menus.filter(function(m){ return m!=='Favoritos'; })[0] || menus[0] || null;
 }
 function subsOf(prods,menu){
   var s=[];
