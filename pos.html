@@ -1688,9 +1688,15 @@ function pedirDatosDomicilio(){
     '<div class="field"><label>Tel\u00e9fono *</label><input id="dTel" type="tel" inputmode="tel" value="'+esc(c.telefono||'')+'" placeholder="10 d\u00edgitos"></div>'+
     '<div class="sub" id="dTelStatus" style="margin:-6px 0 12px;min-height:16px;"></div>'+
     '<div class="field"><label>Nombre *</label><input id="dNombre" value="'+esc(c.nombre||'')+'" placeholder="Nombre del cliente"></div>'+
+    '<div class="field"><label>Cumplea\u00f1os *</label><div style="display:flex;gap:6px">'+
+      '<select id="clienteCumpleDia" style="flex:0 0 72px">'+_cumpleOpcionesDia()+'</select>'+
+      '<select id="clienteCumpleMes" style="flex:1.6">'+_cumpleOpcionesMes()+'</select>'+
+      '<select id="clienteCumpleAnio" style="flex:0 0 84px">'+_cumpleOpcionesAnio()+'</select>'+
+    '</div></div>'+
     '<div class="field"><label>Direcci\u00f3n</label><input id="dDir" value="'+esc(c.direccion||'')+'" placeholder="Calle, n\u00famero, colonia"></div>'+
     '<div class="field"><label>Referencia</label><input id="dRef" value="'+esc(c.referencia||'')+'" placeholder="Entre calles, color de casa..."></div>'+
     '<div class="modal-actions"><button class="btn-cancel" id="mCancel">Cancelar</button><button class="btn-confirm" id="mOk">Continuar</button></div></div></div>';
+  _pintarCumpleSelects(c.cumpleanos||'');
   var telInput=document.getElementById('dTel'), telStatus=document.getElementById('dTelStatus');
   function fmtTel(v){ var d=String(v).replace(/\D/g,'').slice(0,10); if(d.length<=3) return d.length? '('+d : ''; return '('+d.slice(0,3)+')'+d.slice(3); }
   telInput.value=fmtTel(telInput.value);
@@ -1707,6 +1713,7 @@ function pedirDatosDomicilio(){
         if(res && res.cliente){
           var cl=res.cliente; state._clienteEncontrado=cl;
           if(cl.nombre && !document.getElementById('dNombre').value.trim()) document.getElementById('dNombre').value=cl.nombre;
+          if(cl.cumpleanos && !_leerCumpleSelects()) _pintarCumpleSelects(cl.cumpleanos);
           if(cl.direccion && !document.getElementById('dDir').value.trim()) document.getElementById('dDir').value=cl.direccion;
           if(cl.referencia && !document.getElementById('dRef').value.trim()) document.getElementById('dRef').value=cl.referencia;
           if(res.origen==='lealtad'){
@@ -1725,16 +1732,18 @@ function pedirDatosDomicilio(){
     var tel=document.getElementById('dTel').value.replace(/\D/g,'');
     var nombre=document.getElementById('dNombre').value.trim();
     if(tel.length!==10){ showToast('Captura los 10 d\u00edgitos del tel\u00e9fono'); return; }
-    if(!nombre){ showToast('Captura el nombre del cliente'); return; }
+    if(nombre.length<2){ showToast('Captura el nombre del cliente'); return; }
+    var cumple=_leerCumpleSelects();
+    if(!cumple){ showToast('Captura el cumplea\u00f1os del cliente'); return; }
     var dir=document.getElementById('dDir').value.trim();
     var ref=document.getElementById('dRef').value.trim();
-    state.cliente={nombre:nombre,telefono:tel,direccion:dir,referencia:ref};
+    state.cliente={nombre:nombre,telefono:tel,direccion:dir,referencia:ref,cumpleanos:cumple};
     state.tipoOrden='domicilio';
     var cl=state._clienteEncontrado;
     state.puntosDisponibles=cl?(cl.puntos||0):0; state.usarPuntos=false; state.puntosUsados=0;
-    fbGuardarCliente(tel,{nombre:nombre,direccion:dir,referencia:ref}).catch(function(){});
+    fbGuardarCliente(tel,{nombre:nombre,direccion:dir,referencia:ref,cumpleanos:cumple}).catch(function(){});
     var prods=CATALOG[state.sucursal]||[];
-    state.menu=prods.length?menuInicial(prods):null; state.sub=null; state.search='';
+    state.menu=prods.length?menuInicial(prods):null; state.sub=prods.length?subInicial(prods,state.menu):null; state.search='';
     closeModal(); showAppView('pos'); renderPos();
   });
 }
@@ -1752,7 +1761,7 @@ function selectTipoOrden(tipo){
   }
   state.tipoOrden=tipo;
   var prods=CATALOG[state.sucursal]||[];
-  state.menu = prods.length? menuInicial(prods) : null; state.sub=null; state.search='';
+  state.menu = prods.length? menuInicial(prods) : null; state.sub = prods.length? subInicial(prods,state.menu) : null; state.search='';
   showAppView('pos'); renderPos();
 }
 
@@ -1771,6 +1780,14 @@ function menuInicial(prods){
   var menus=menusOf(prods);
   var beb=menus.filter(function(m){ return String(m).trim().toLowerCase()==='bebidas'; })[0];
   return beb || menus.filter(function(m){ return m!=='Favoritos'; })[0] || menus[0] || null;
+}
+// Al abrir Bebidas se muestra directo la subcategoria Frappes (si existe en la sucursal); en las demas, todas las subcategorias.
+function _sinAcentosSub(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase(); }
+function subInicial(prods,menu){
+  if(_sinAcentosSub(menu)!=='bebidas') return null;
+  var subs=subsOf(prods,menu);
+  for(var i=0;i<subs.length;i++){ if(_sinAcentosSub(subs[i])==='frappes') return subs[i]; }
+  return null;
 }
 function subsOf(prods,menu){
   var s=[];
@@ -2042,7 +2059,7 @@ function _descuentoMontoDePedido(p){
 }
 function renderPos(){
   var prods=CATALOG[state.sucursal]||[]; var menus=menusOf(prods);
-  if(!state.menu&&menus.length) state.menu=menuInicial(prods);
+  if(!state.menu&&menus.length){ state.menu=menuInicial(prods); state.sub=subInicial(prods,state.menu); }
   var mc=document.getElementById('menuChips');
   mc.innerHTML=menus.map(function(m){return '<button class="chip'+(m===state.menu?' active':'')+'" data-m="'+esc(m)+'">'+esc(m)+'</button>';}).join('');
   mc.querySelectorAll('.chip').forEach(function(b){ b.addEventListener('click',function(){ selectMenu(b.dataset.m); }); });
@@ -2159,11 +2176,11 @@ function openNota(){
   var telActual=(state.cliente&&state.cliente.telefono)||'';
   var cumpleActual=(state.cliente&&state.cliente.cumpleanos)||'';
   document.getElementById('modalHost').innerHTML='<div class="modal-bg" id="mbg"><div class="modal"><h2>Cliente</h2>'+
-    '<div class="sub" style="margin-bottom:12px">Nombre para llamarlo, y tel&eacute;fono para Puntos de Lealtad</div>'+
-    '<div class="field"><label>Tel&eacute;fono (opcional)</label><input id="clienteTelTxt" type="tel" inputmode="tel" value="'+esc(telActual)+'" placeholder="10 d&iacute;gitos"></div>'+
+    '<div class="sub" style="margin-bottom:12px">Nombre para llamarlo. Para registrarlo en Puntos de Lealtad se necesitan <b>tel&eacute;fono, nombre y cumplea&ntilde;os</b> (los tres).</div>'+
+    '<div class="field"><label>Tel&eacute;fono (si lo da, nombre y cumplea&ntilde;os son obligatorios)</label><input id="clienteTelTxt" type="tel" inputmode="tel" value="'+esc(telActual)+'" placeholder="10 d&iacute;gitos"></div>'+
     '<div class="sub" id="clienteLealtadStatus" style="margin:-6px 0 12px;min-height:16px;"></div>'+
     '<div class="field"><label>Nombre</label><input id="clienteNombreTxt" value="'+esc(nombreActual)+'" placeholder="Nombre y apellido"></div>'+
-    '<div class="field"><label>Cumplea&ntilde;os (opcional)</label><div style="display:flex;gap:6px">'+
+    '<div class="field"><label>Cumplea&ntilde;os (obligatorio con tel&eacute;fono)</label><div style="display:flex;gap:6px">'+
       '<select id="clienteCumpleDia" style="flex:0 0 72px">'+_cumpleOpcionesDia()+'</select>'+
       '<select id="clienteCumpleMes" style="flex:1.6">'+_cumpleOpcionesMes()+'</select>'+
       '<select id="clienteCumpleAnio" style="flex:0 0 84px">'+_cumpleOpcionesAnio()+'</select>'+
@@ -2207,6 +2224,12 @@ function openNota(){
     var nombre=document.getElementById('clienteNombreTxt').value.trim();
     var tel=document.getElementById('clienteTelTxt').value.replace(/\D/g,'');
     var cumple=_leerCumpleSelects();
+    // Datos importantes: con telefono (registro/puntos) el nombre y el cumpleanos son obligatorios -- asi no quedan clientes sin nombre
+    if(tel.length>0 && tel.length!==10){ showToast('El tel&eacute;fono debe tener 10 d&iacute;gitos'); return; }
+    if(tel.length===10){
+      if(nombre.length<2){ showToast('Falta el nombre del cliente'); return; }
+      if(!cumple){ showToast('Falta el cumplea&ntilde;os del cliente'); return; }
+    } else if(cumple){ showToast('Captura el tel&eacute;fono para registrar el cumplea&ntilde;os'); return; }
     state.cliente=state.cliente||{};
     state.cliente.nombre=nombre;
     state.cliente.telefono=tel||state.cliente.telefono||'';
@@ -3128,7 +3151,7 @@ function selectMesa(n){
   liberarMesa(state.sucursal,n);
   state.mesa=n; state.tipoOrden='aqui'; state.view='menu'; state.cart=[];
   state._editandoPedidoKey=null; state._editandoPedidoId=null; state._editandoPagado=false;
-  var prods=CATALOG[state.sucursal]||[]; state.menu=menuInicial(prods); state.sub=null;
+  var prods=CATALOG[state.sucursal]||[]; state.menu=menuInicial(prods); state.sub=subInicial(prods,state.menu);
   renderTopbar(); showAppView('pos'); renderPos(); showToast('Mesa '+n+' seleccionada');
 }
 function confirmarLiberarMesa(n){
@@ -3509,7 +3532,7 @@ function editarPedido(ix){
   state._editandoPagado=esPagado;
   if(esPagado){ state.cargoDomicilio=p.cargoDomicilio||0; state.cargoDomicilioPreguntado=true; }
   var prods=CATALOG[state.sucursal]||[];
-  state.menu=prods.length?menuInicial(prods):null; state.sub=null; state.search='';
+  state.menu=prods.length?menuInicial(prods):null; state.sub=prods.length?subInicial(prods,state.menu):null; state.search='';
   showAppView('pos'); renderPos(); renderCart(); renderTopbar();
   showToast(esPagado?('Editando pedido '+p.id+' (ya pagado) -- al guardar se cobra o devuelve la diferencia'):('Editando pedido '+p.id+' -- agrega o quita artículos y guarda'));
 }
